@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "includeCoAuthoredBy": true,
+  "permissions": {
+    "allow": [
+      "Bash(pytest*)",
+      "Bash(ruff check*)",
+      "Bash(alembic *)",
+      "Bash(npm run lint*)",
+      "Bash(npm run test*)",
+      "Bash(npm run build*)",
+      "Bash(npm install*)",
+      "Bash(git status)",
+      "Bash(git diff*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git log*)",
+      "Bash(git checkout -b*)",
+      "Read(./**)",
+      "Edit(./backend/**)",
+      "Edit(./frontend/**)",
+      "Edit(./docs/**)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./**/secrets/**)",
+      "Bash(git push --force*)",
+      "Bash(git push origin main)",
+      "Bash(rm -rf*)",
+      "Bash(curl *)",
+      "Bash(psql * DROP*)",
+      "Bash(alembic downgrade*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Edit(./backend/migrations/**)"
+    ]
+  },
+  "sandbox": {
+    "credentials": {
+      "files": [
+        { "path": ".env", "mode": "deny" },
+        { "path": ".env.production", "mode": "deny" }
+      ]
+    }
+  },
+  "cleanupPeriodDays": 30
+}

@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; background:#F6F7F9; }
+  * { box-sizing: border-box; }
+  a { color:#1D4ED8; text-decoration:none; }
+  a:hover { color:#1740B0; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#D9DEE6; border-radius:6px; }
+  input::placeholder { color:#9AA4B2; }
+</style>
+</helmet>
+<div style="font-family:'Manrope','Helvetica Neue',Helvetica,Arial,sans-serif; color:#10224A; background:#F6F7F9; min-height:100vh; display:flex; flex-direction:column;">
+
+  <div style="display:flex; align-items:center; gap:18px; padding:14px 28px; background:#FFFFFF; border-bottom:1px solid #E5E8EC;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="width:30px; height:30px; border-radius:8px; background:#1D4ED8; display:flex; align-items:center; justify-content:center; color:#fff; font-family:Poppins,sans-serif; font-weight:700; font-size:13px;">SF</div>
+      <div style="line-height:1.05;">
+        <div style="font-family:Poppins,sans-serif; font-weight:700; font-size:13.5px; letter-spacing:.02em; color:#1D4ED8;">SCREEN FACTORY</div>
+        <div style="font-size:8.5px; letter-spacing:.16em; color:#D32436; font-weight:600;">MODERN SOLUTION <span style="background:#1D4ED8; color:#fff; padding:1px 4px; border-radius:2px; letter-spacing:.1em;">FLORIDA</span></div>
+      </div>
+    </div>
+    <div style="width:1px; height:26px; background:#E5E8EC;"></div>
+    <div style="display:flex; gap:22px; font-size:13.5px; font-weight:500; color:#64748B;">
+      <span>Закупки</span>
+      <span style="color:#10224A; font-weight:700;">Импорт прайс-листов</span>
+      <span>Материалы</span>
+      <span>Поставщики</span>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex; gap:6px; align-items:center; background:#F1F2F4; padding:4px; border-radius:10px;">
+      <button onClick="{{ viewReview }}" style="background:none; border:none; color:#64748B; font:inherit; font-size:12px; font-weight:600; padding:6px 12px; border-radius:7px; cursor:pointer;" style-hover="background:#E7EAEF;">Ревью</button>
+      <button onClick="{{ viewDone }}" style="background:none; border:none; color:#64748B; font:inherit; font-size:12px; font-weight:600; padding:6px 12px; border-radius:7px; cursor:pointer;" style-hover="background:#E7EAEF;">Всё обработано</button>
+      <button onClick="{{ viewEmpty }}" style="background:none; border:none; color:#64748B; font:inherit; font-size:12px; font-weight:600; padding:6px 12px; border-radius:7px; cursor:pointer;" style-hover="background:#E7EAEF;">Пусто</button>
+    </div>
+  </div>
+
+  <div style="display:flex; align-items:center; gap:28px; padding:22px 28px 20px;">
+    <div>
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:#94A3B8; font-weight:700; margin-bottom:7px;">Импорт прайс-листа</div>
+      <div style="display:flex; align-items:baseline; gap:14px;">
+        <div style="font-family:Poppins,sans-serif; font-size:27px; font-weight:600; letter-spacing:-.015em; color:#12306B;">Alutex Supply Co.</div>
+        <div style="font-size:13px; color:#64748B;">PDF · 12 стр. · загружен 14 авг 2026, 09:41 · А. Мартин</div>
+      </div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex; align-items:center; gap:24px;">
+      <div style="text-align:right;">
+        <div style="font-family:Poppins,sans-serif; font-size:20px; font-weight:600; font-variant-numeric:tabular-nums; color:#12306B;">{{ approvedCount }} <span style="color:#94A3B8; font-weight:500;">из {{ total }}</span></div>
+        <div style="font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:#94A3B8; font-weight:700;">строк одобрено</div>
+      </div>
+      <div style="width:150px; height:8px; background:#E7EAEF; border-radius:99px; overflow:hidden;">
+        <div style="height:100%; background:#12855A; border-radius:99px; width:{{ progressPct }};"></div>
+      </div>
+      <sc-if value="{{ hasApproved }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ applyApproved }}" style="background:#1D4ED8; color:#fff; border:none; font:inherit; font-size:14px; font-weight:700; padding:13px 22px; border-radius:9px; cursor:pointer; display:flex; align-items:center; gap:9px; box-shadow:0 6px 16px rgba(29,78,216,.22);" style-hover="background:#1740B0;">Применить одобренные ({{ approvedCount }}) <span style="opacity:.75;">»</span></button>
+      </sc-if>
+      <sc-if value="{{ noneApproved }}">
+        <button disabled="{{ true }}" style="background:#E7EAEF; color:#A7B0BE; border:none; font:inherit; font-size:14px; font-weight:700; padding:13px 22px; border-radius:9px; cursor:not-allowed; display:flex; align-items:center; gap:9px;">Применить одобренные <span style="opacity:.7;">»</span></button>
+      </sc-if>
+    </div>
+  </div>
+
+  <sc-if value="{{ isEmpty }}">
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:40px 28px 80px;">
+      <div style="max-width:520px; text-align:center; background:#fff; border:1px solid #E5E8EC; border-radius:16px; padding:48px 44px; box-shadow:0 10px 30px rgba(16,34,74,.05);">
+        <div style="width:104px; height:132px; margin:0 auto 26px; border:2px dashed #CBD5E1; border-radius:10px; background:repeating-linear-gradient(135deg,#F1F4F9 0 8px,#FAFBFD 8px 16px);"></div>
+        <div style="font-family:Poppins,sans-serif; font-size:20px; font-weight:600; margin-bottom:10px; color:#12306B;">Нет прайс-листов на ревью</div>
+        <div style="font-size:14px; line-height:1.6; color:#64748B; margin-bottom:24px;">Загрузите PDF прайс-листа поставщика — распознавание и сопоставление с базой материалов займёт около минуты.</div>
+        <button style="background:#1D4ED8; color:#fff; border:none; font:inherit; font-size:14px; font-weight:700; padding:13px 24px; border-radius:9px; cursor:pointer;" style-hover="background:#1740B0;">Загрузить PDF »</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isDone }}">
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; padding:40px 28px 80px;">
+      <div style="max-width:560px; text-align:center; background:#fff; border:1px solid #E5E8EC; border-radius:16px; padding:48px 44px; box-shadow:0 10px 30px rgba(16,34,74,.05);">
+        <div style="width:60px; height:60px; margin:0 auto 22px; border-radius:50%; background:#E8F5EF; color:#12855A; font-size:28px; font-weight:700; line-height:60px;">✓</div>
+        <div style="font-family:Poppins,sans-serif; font-size:20px; font-weight:600; margin-bottom:10px; color:#12306B;">Все 137 строк обработаны</div>
+        <div style="font-size:14px; line-height:1.6; color:#64748B; margin-bottom:26px;">124 цены обновлены, 9 строк отклонены, 4 материала созданы. Прайс Alutex Supply Co. действует с 14 авг 2026.</div>
+        <div style="display:flex; gap:10px; justify-content:center;">
+          <button style="background:#1D4ED8; color:#fff; border:none; font:inherit; font-size:14px; font-weight:700; padding:12px 22px; border-radius:9px; cursor:pointer;" style-hover="background:#1740B0;">Журнал изменений »</button>
+          <button style="background:#F1F2F4; color:#12306B; border:none; font:inherit; font-size:14px; font-weight:700; padding:12px 22px; border-radius:9px; cursor:pointer;" style-hover="background:#E7EAEF;">Загрузить следующий PDF</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isReview }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:1; display:flex; align-items:stretch; gap:20px; min-height:0; padding:0 28px 28px;">
+
+    <div style="flex:1; min-width:0; display:flex; flex-direction:column; background:#fff; border:1px solid #E5E8EC; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px rgba(16,34,74,.05);">
+
+      <div style="display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid #E5E8EC;">
+        <button onClick="{{ approveHighConf }}" style="background:#E8F5EF; color:#0E6B49; border:none; font:inherit; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:8px; cursor:pointer;" style-hover="background:#D8EDE2;">Одобрить все с уверенностью &gt;95% ({{ highConfCount }})</button>
+        <div style="width:1px; height:22px; background:#E5E8EC;"></div>
+        <div style="font-size:12.5px; color:#64748B;">Выделено: <span style="font-weight:700; color:#10224A; font-variant-numeric:tabular-nums;">{{ selectedCount }}</span></div>
+        <button onClick="{{ approveSelected }}" style="background:#F1F2F4; border:none; color:#12306B; font:inherit; font-size:12.5px; font-weight:600; padding:9px 13px; border-radius:8px; cursor:pointer;" style-hover="background:#E7EAEF;">Одобрить выделенные</button>
+        <button onClick="{{ rejectSelected }}" style="background:#F1F2F4; border:none; color:#12306B; font:inherit; font-size:12.5px; font-weight:600; padding:9px 13px; border-radius:8px; cursor:pointer;" style-hover="background:#E7EAEF;">Отклонить</button>
+        <div style="flex:1;"></div>
+        <div style="display:flex; align-items:center; gap:14px; font-size:11.5px; color:#64748B; font-weight:500;">
+          <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#12855A; display:inline-block;"></span>&gt;90%</span>
+          <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#B7791F; display:inline-block;"></span>70–90%</span>
+          <span style="display:flex; align-items:center; gap:5px;"><span style="width:9px; height:9px; border-radius:3px; background:#D32436; display:inline-block;"></span>&lt;70%</span>
+          <span style="color:#CBD5E1;">·</span>
+          <span>сначала низкая уверенность</span>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:34px minmax(240px,1.35fr) minmax(230px,1.2fr) 78px 132px 116px 176px 34px; align-items:center; padding:0 18px; background:#FAFBFC; border-bottom:1px solid #E5E8EC; font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#94A3B8; font-weight:700; height:38px; position:sticky; top:0; z-index:5;">
+        <div><input type="checkbox" checked="{{ allSelected }}" onChange="{{ toggleAll }}" style="cursor:pointer; width:14px; height:14px; accent-color:#1D4ED8;" /></div>
+        <div>Строка из PDF</div>
+        <div>Материал в базе</div>
+        <div style="text-align:center;">Увер.</div>
+        <div style="text-align:right; padding-right:14px;">Цена / дельта</div>
+        <div>Наличие</div>
+        <div>Действие</div>
+        <div></div>
+      </div>
+
+      <div style="flex:1; overflow:auto;">
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="12">
+          <div style="display:grid; grid-template-columns:34px minmax(240px,1.35fr) minmax(230px,1.2fr) 78px 132px 116px 176px 34px; align-items:center; padding:0 18px; border-bottom:1px solid #EEF1F5; min-height:48px; font-size:13px; background:{{ r.bg }}; box-shadow:{{ r.leftBar }};">
+            <div><input type="checkbox" checked="{{ r.selected }}" onChange="{{ r.toggle }}" style="cursor:pointer; width:14px; height:14px; accent-color:#1D4ED8;" /></div>
+
+            <div style="padding-right:16px; min-width:0;">
+              <div style="font-family:'SFMono-Regular',Menlo,Consolas,monospace; font-size:11.5px; color:#38455C; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.raw }}</div>
+              <div style="font-size:10.5px; color:#9AA4B2; margin-top:3px; font-weight:500;">стр. {{ r.page }} · арт. {{ r.sku }}</div>
+            </div>
+
+            <div style="padding-right:16px; min-width:0; position:relative;">
+              <button onClick="{{ r.openPicker }}" style="width:100%; text-align:left; background:#F1F2F4; border:1px solid transparent; border-radius:8px; padding:8px 10px; font:inherit; font-size:12.5px; font-weight:500; cursor:pointer; display:flex; align-items:center; gap:6px; color:#10224A; border-color:{{ r.pickerBorder }};" style-hover="border-color:#1D4ED8;">
+                <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ r.materialLabel }}</span>
+                <span style="color:#94A3B8; font-size:10px;">▾</span>
+              </button>
+              <sc-if value="{{ r.pickerOpen }}">
+                <div style="position:absolute; z-index:40; top:42px; left:0; width:340px; background:#fff; border:1px solid #E5E8EC; border-radius:12px; box-shadow:0 18px 40px rgba(16,34,74,.16); padding:10px;">
+                  <input value="{{ query }}" onChange="{{ setQuery }}" placeholder="Поиск по базе материалов…" autoFocus="{{ true }}" style="width:100%; background:#F1F2F4; border:1px solid transparent; border-radius:8px; padding:9px 11px; font:inherit; font-size:12.5px; outline:none; margin-bottom:8px;" style-focus="border-color:#1D4ED8;background:#fff;" />
+                  <div style="max-height:214px; overflow:auto;">
+                    <sc-for list="{{ options }}" as="o" hint-placeholder-count="5">
+                      <div onClick="{{ o.pick }}" style="padding:8px 10px; border-radius:8px; cursor:pointer; font-size:12.5px; display:flex; gap:8px; align-items:center;" style-hover="background:#F1F5FE;">
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.name }}</span>
+                        <span style="font-family:Menlo,monospace; font-size:10.5px; color:#9AA4B2;">{{ o.code }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div onClick="{{ r.createNew }}" style="margin-top:8px; border-top:1px solid #EEF1F5; padding:10px 10px 4px; font-size:12.5px; color:#1D4ED8; font-weight:700; cursor:pointer;">+ Создать новый материал из строки PDF</div>
+                </div>
+              </sc-if>
+            </div>
+
+            <div style="display:flex; justify-content:center;">
+              <span style="font-size:11px; font-weight:700; padding:4px 8px; border-radius:99px; font-variant-numeric:tabular-nums; min-width:46px; text-align:center; background:{{ r.confBg }}; color:{{ r.confFg }};">{{ r.confText }}</span>
+            </div>
+
+            <div style="text-align:right; padding-right:14px; font-variant-numeric:tabular-nums;">
+              <div style="font-weight:700; font-size:13.5px;">{{ r.priceText }}</div>
+              <div style="font-size:10.5px; margin-top:2px; font-weight:600; color:{{ r.deltaColor }};">{{ r.deltaText }}</div>
+            </div>
+
+            <div style="min-width:0;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="width:7px; height:7px; border-radius:50%; flex:none; background:{{ r.stockDot }};"></span>
+                <span style="font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500;">{{ r.stock }}</span>
+              </div>
+              <div style="font-size:10.5px; color:#9AA4B2; margin-left:13px; font-weight:500;">{{ r.lead }}</div>
+            </div>
+
+            <div style="display:flex; gap:4px;">
+              <button onClick="{{ r.approve }}" title="Одобрить" style="flex:1; border:none; font:inherit; font-size:11.5px; font-weight:700; padding:8px 0; border-radius:7px; cursor:pointer; background:{{ r.aBg }}; color:{{ r.aFg }};">Одобр.</button>
+              <button onClick="{{ r.reject }}" title="Отклонить" style="flex:1; border:none; font:inherit; font-size:11.5px; font-weight:700; padding:8px 0; border-radius:7px; cursor:pointer; background:{{ r.rBg }}; color:{{ r.rFg }};">Откл.</button>
+              <button onClick="{{ r.markNew }}" title="Новый материал" style="flex:1; border:none; font:inherit; font-size:11.5px; font-weight:700; padding:8px 0; border-radius:7px; cursor:pointer; background:{{ r.nBg }}; color:{{ r.nFg }};">Новый</button>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end;">
+              <button onClick="{{ r.preview }}" title="Показать в PDF" style="width:28px; height:28px; border:none; background:#F1F2F4; border-radius:8px; cursor:pointer; font-size:11px; color:#64748B; padding:0;" style-hover="background:#E2E9FB;color:#1D4ED8;">⤢</button>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="padding:16px 18px 40px; font-size:12px; color:#94A3B8; display:flex; gap:10px; align-items:center; font-weight:500;">
+          <span>Показано 16 из 137 строк</span>
+          <button style="background:#F1F2F4; border:none; color:#12306B; font:inherit; font-size:12px; font-weight:700; padding:8px 14px; border-radius:8px; cursor:pointer;" style-hover="background:#E7EAEF;">Показать ещё 50</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="width:376px; flex:none; background:#fff; border:1px solid #E5E8EC; border-radius:16px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 30px rgba(16,34,74,.05);">
+      <div style="padding:16px 18px 14px; border-bottom:1px solid #E5E8EC;">
+        <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.12em; color:#94A3B8; font-weight:700; margin-bottom:7px;">Оригинал PDF · стр. {{ activePage }}</div>
+        <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; line-height:1.45; color:#38455C;">{{ activeRaw }}</div>
+      </div>
+
+      <div style="flex:1; overflow:auto; padding:16px; background:#FAFBFC;">
+        <div style="background:#fff; border:1px solid #E5E8EC; border-radius:10px; box-shadow:0 4px 14px rgba(16,34,74,.07); padding:22px 18px;">
+          <div style="font-size:9px; letter-spacing:.16em; color:#9AA4B2; text-transform:uppercase; margin-bottom:16px; font-weight:700;">Alutex Supply Co. — 2026 Dealer Price List</div>
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <div style="height:7px; border-radius:2px; background:repeating-linear-gradient(90deg,#E8ECF3 0 44px,transparent 44px 52px);"></div>
+            <div style="height:7px; border-radius:2px; background:repeating-linear-gradient(90deg,#E8ECF3 0 62px,transparent 62px 70px);"></div>
+            <div style="height:7px; border-radius:2px; background:repeating-linear-gradient(90deg,#E8ECF3 0 38px,transparent 38px 46px); width:80%;"></div>
+            <div style="margin:4px -8px; padding:9px; border:2px solid #1D4ED8; background:rgba(29,78,216,.06); border-radius:8px;">
+              <div style="font-family:Menlo,Consolas,monospace; font-size:10px; color:#10224A; line-height:1.45;">{{ activeRaw }}</div>
+              <div style="font-family:Menlo,Consolas,monospace; font-size:10px; color:#10224A; margin-top:3px;">{{ activePdfPrice }}</div>
+            </div>
+            <div style="height:7px; border-radius:2px; background:repeating-linear-gradient(90deg,#E8ECF3 0 52px,transparent 52px 60px);"></div>
+            <div style="height:7px; border-radius:2px; background:repeating-linear-gradient(90deg,#E8ECF3 0 30px,transparent 30px 38px); width:68%;"></div>
+            <div style="height:7px; border-radius:2px; background:repeating-linear-gradient(90deg,#E8ECF3 0 58px,transparent 58px 66px);"></div>
+            <div style="height:7px; border-radius:2px; background:repeating-linear-gradient(90deg,#E8ECF3 0 44px,transparent 44px 52px); width:88%;"></div>
+            <div style="height:7px; border-radius:2px; background:repeating-linear-gradient(90deg,#E8ECF3 0 36px,transparent 36px 44px); width:74%;"></div>
+          </div>
+          <div style="margin-top:20px; font-family:Menlo,monospace; font-size:9px; color:#B9C2CE; text-align:center;">скан страницы прайса — область строки выделена</div>
+        </div>
+      </div>
+
+      <div style="padding:16px 18px; border-top:1px solid #E5E8EC;">
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:8px;"><span style="color:#64748B;">Цена в PDF</span><span style="font-weight:700; font-variant-numeric:tabular-nums;">{{ activePriceText }}</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:8px;"><span style="color:#64748B;">Предыдущая в базе</span><span style="font-weight:600; font-variant-numeric:tabular-nums;">{{ activePrevText }}</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:16px;"><span style="color:#64748B;">Изменение</span><span style="font-weight:700; font-variant-numeric:tabular-nums; color:{{ activeDeltaColor }};">{{ activeDeltaText }}</span></div>
+        <div style="display:flex; gap:8px;">
+          <button onClick="{{ activeApprove }}" style="flex:1; background:#12855A; color:#fff; border:none; font:inherit; font-size:13px; font-weight:700; padding:11px 0; border-radius:9px; cursor:pointer;" style-hover="background:#0E6B49;">Одобрить строку</button>
+          <button onClick="{{ activeReject }}" style="background:#F1F2F4; border:none; color:#12306B; font:inherit; font-size:13px; font-weight:700; padding:11px 16px; border-radius:9px; cursor:pointer;" style-hover="background:#E7EAEF;">Отклонить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1560,&quot;height&quot;:940}}">
+const CATALOG = [
+  { name: "Уголок алюминиевый 6063-T5 50×50×3", code: "AL-ANG-5050" },
+  { name: "Сетка Fiberglass 18×14, charcoal", code: "MSH-FG-1814" },
+  { name: "Сетка Super Screen 17×14, black", code: "MSH-SS-1714" },
+  { name: "Шпонка (spline) 0.160\", чёрная", code: "SPL-160-BLK" },
+  { name: "Профиль рамный 2×2 SMB, белый", code: "AL-SMB-22W" },
+  { name: "Сетка No-See-Um 20×20, charcoal", code: "MSH-NSU-2020" },
+  { name: "Саморез Tek #10×3/4 нерж.", code: "FAS-TEK-1034" },
+  { name: "Дверная фурнитура, комплект", code: "HRD-DOOR-KIT" },
+  { name: "Профиль Chair Rail 2×2, бронза", code: "AL-CHR-22B" },
+  { name: "Сетка Phifer 20×20, серебро", code: "MSH-PH-2020" },
+  { name: "Клипса рамная универсальная", code: "HRD-CLIP-UNI" },
+  { name: "Уплотнитель EPDM 6 мм", code: "SEA-EPDM-6" }
+];
+
+const DATA = [
+  { id:1,  raw:"ALUM EXTR 6063T5 ANG 2X2X1/8 24FT STK", sku:"AE-2020-24", page:3, conf:0.54, material:"Уголок алюминиевый 6063-T5 50×50×3", price:42.80, prev:33.90, stock:"На складе", lead:"2–3 дня" },
+  { id:2,  raw:"SPLN .160 BLK HD 500FT SPOOL", sku:"SP-160-500", page:7, conf:0.61, material:null, price:24.90, prev:null, stock:"Под заказ", lead:"14 дней" },
+  { id:3,  raw:"CHR RAIL 2X2 BRZ MILL FIN 21FT", sku:"CR-22-BRZ", page:4, conf:0.63, material:"Профиль Chair Rail 2×2, бронза", price:58.40, prev:44.10, stock:"На складе", lead:"2–3 дня" },
+  { id:4,  raw:"SCRN 18/14 FBRGLS CHRCL 96IN X 100FT RL", sku:"FG-1814-96", page:1, conf:0.68, material:"Сетка Fiberglass 18×14, charcoal", price:168.00, prev:159.50, stock:"На складе", lead:"1 день" },
+  { id:5,  raw:"TEK SCR #10 X 3/4 SS 500CT BX", sku:"TS-1034SS", page:9, conf:0.72, material:"Саморез Tek #10×3/4 нерж.", price:31.20, prev:29.80, stock:"На складе", lead:"1 день" },
+  { id:6,  raw:"SUPER SCRN 17/14 PET BLK 72IN X 100FT", sku:"SS-1714-72", page:2, conf:0.77, material:"Сетка Super Screen 17×14, black", price:214.00, prev:205.00, stock:"Мало (3 рул.)", lead:"5 дней" },
+  { id:7,  raw:"NO-SEE-UM 20X20 CHRCL 60IN X 100FT", sku:"NS-2020-60", page:2, conf:0.83, material:"Сетка No-See-Um 20×20, charcoal", price:196.50, prev:151.00, stock:"На складе", lead:"2–3 дня" },
+  { id:8,  raw:"DOOR HRDW KIT SLD LATCH+HNG WHT", sku:"DH-KIT-W", page:10, conf:0.86, material:"Дверная фурнитура, комплект", price:47.90, prev:46.20, stock:"На складе", lead:"1 день" },
+  { id:9,  raw:"SMB FRAME 2X2 WHT 24FT STK", sku:"SM-22-W24", page:4, conf:0.89, material:"Профиль рамный 2×2 SMB, белый", price:51.75, prev:49.90, stock:"На складе", lead:"2–3 дня" },
+  { id:10, raw:"EPDM GLZ SEAL 6MM 250FT COIL", sku:"EP-6-250", page:8, conf:0.91, material:"Уплотнитель EPDM 6 мм", price:38.00, prev:37.10, stock:"На складе", lead:"1 день" },
+  { id:11, raw:"PHIFER 20X20 SLV 48IN X 100FT RL", sku:"PH-2020-48", page:1, conf:0.94, material:"Сетка Phifer 20×20, серебро", price:142.30, prev:139.00, stock:"На складе", lead:"1 день" },
+  { id:12, raw:"FRAME CLIP UNIV ALUM 100CT", sku:"FC-UNI-100", page:8, conf:0.96, material:"Клипса рамная универсальная", price:18.40, prev:17.90, stock:"На складе", lead:"1 день" },
+  { id:13, raw:"SPLN .160 BLK HD 250FT SPOOL", sku:"SP-160-250", page:7, conf:0.97, material:"Шпонка (spline) 0.160\", чёрная", price:13.60, prev:13.20, stock:"На складе", lead:"1 день" },
+  { id:14, raw:"SCRN 18/14 FBRGLS CHRCL 60IN X 100FT RL", sku:"FG-1814-60", page:1, conf:0.98, material:"Сетка Fiberglass 18×14, charcoal", price:112.00, prev:108.60, stock:"На складе", lead:"1 день" },
+  { id:15, raw:"SMB FRAME 2X2 BRZ 24FT STK", sku:"SM-22-B24", page:4, conf:0.98, material:"Профиль рамный 2×2 SMB, белый", price:53.10, prev:52.00, stock:"Мало (8 шт.)", lead:"4 дня" },
+  { id:16, raw:"TEK SCR #10 X 3/4 SS 1000CT BX", sku:"TS-1034SS-1K", page:9, conf:0.99, material:"Саморез Tek #10×3/4 нерж.", price:58.90, prev:57.40, stock:"На складе", lead:"1 день" }
+];
+
+const money = n => "$" + n.toFixed(2);
+
+class Component extends DCLogic {
+  state = {
+    view: "review",
+    rows: DATA.map(r => ({ ...r, action: null, selected: false })).sort((a,b) => a.conf - b.conf),
+    activeId: 1,
+    pickerId: null,
+    query: ""
+  };
+
+  setAction(id, action) {
+    this.setState(s => ({ rows: s.rows.map(r => r.id === id ? { ...r, action: r.action === action ? null : action } : r) }));
+  }
+  bulk(pred, action) {
+    this.setState(s => ({ rows: s.rows.map(r => pred(r) ? { ...r, action } : r) }));
+  }
+
+  renderVals() {
+    const { rows, view, activeId, pickerId, query } = this.state;
+    const approvedCount = rows.filter(r => r.action === "approve" || r.action === "new").length;
+    const selectedCount = rows.filter(r => r.selected).length;
+    const active = rows.find(r => r.id === activeId) || rows[0];
+    const q = query.trim().toLowerCase();
+    const options = CATALOG.filter(o => !q || o.name.toLowerCase().includes(q) || o.code.toLowerCase().includes(q))
+      .map(o => ({ ...o, pick: () => this.setState(s => ({ rows: s.rows.map(r => r.id === s.pickerId ? { ...r, material: o.name } : r), pickerId: null, query: "" })) }));
+
+    const deltaOf = r => {
+      if (r.prev == null) return { text: "новая позиция", color: "#1D4ED8" };
+      const d = (r.price - r.prev) / r.prev * 100;
+      const sign = d >= 0 ? "+" : "−";
+      const txt = sign + Math.abs(d).toFixed(1) + "% · было " + money(r.prev);
+      return { text: txt, color: d > 20 ? "#D32436" : d > 0 ? "#B7791F" : "#0E6B49" };
+    };
+
+    const mapped = rows.map((r, i) => {
+      const d = deltaOf(r);
+      const on = a => r.action === a;
+      const conf = Math.round(r.conf * 100);
+      const cBg = conf > 90 ? "#E8F5EF" : conf >= 70 ? "#FCF3E2" : "#FCE7E9";
+      const cFg = conf > 90 ? "#0E6B49" : conf >= 70 ? "#95601A" : "#B21F2C";
+      const bar = r.id === active.id ? "inset 3px 0 0 #1D4ED8" : (conf < 70 ? "inset 3px 0 0 #D32436" : "none");
+      let bg = i % 2 ? "#FAFBFC" : "#FFFFFF";
+      if (on("approve") || on("new")) bg = "#F3FAF6";
+      if (on("reject")) bg = "#FEF7F7";
+      if (r.id === active.id) bg = "#F2F6FE";
+      return {
+        ...r,
+        bg, leftBar: bar,
+        confText: conf + "%", confBg: cBg, confFg: cFg,
+        materialLabel: r.material || "— не сопоставлено —",
+        pickerBorder: r.material ? "transparent" : "#D32436",
+        pickerOpen: pickerId === r.id,
+        priceText: money(r.price),
+        deltaText: d.text, deltaColor: d.color,
+        stockDot: r.stock.indexOf("Мало") === 0 ? "#B7791F" : r.stock === "Под заказ" ? "#D32436" : "#12855A",
+        aBg: on("approve") ? "#12855A" : "#F1F2F4", aFg: on("approve") ? "#fff" : "#475569",
+        rBg: on("reject") ? "#D32436" : "#F1F2F4", rFg: on("reject") ? "#fff" : "#475569",
+        nBg: on("new") ? "#1D4ED8" : "#F1F2F4", nFg: on("new") ? "#fff" : "#475569",
+        approve: () => this.setAction(r.id, "approve"),
+        reject: () => this.setAction(r.id, "reject"),
+        markNew: () => this.setAction(r.id, "new"),
+        toggle: () => this.setState(s => ({ rows: s.rows.map(x => x.id === r.id ? { ...x, selected: !x.selected } : x) })),
+        preview: () => this.setState({ activeId: r.id }),
+        openPicker: () => this.setState(s => ({ pickerId: s.pickerId === r.id ? null : r.id, query: "", activeId: r.id })),
+        createNew: () => this.setState(s => ({ rows: s.rows.map(x => x.id === r.id ? { ...x, material: "Новый: " + x.raw, action: "new" } : x), pickerId: null }))
+      };
+    });
+
+    const ad = deltaOf(active);
+
+    return {
+      rows: mapped, options, query,
+      total: rows.length,
+      approvedCount,
+      hasApproved: approvedCount > 0,
+      noneApproved: approvedCount === 0,
+      progressPct: Math.round(approvedCount / rows.length * 100) + "%",
+      selectedCount,
+      allSelected: selectedCount === rows.length,
+      highConfCount: rows.filter(r => r.conf > 0.95).length,
+      isReview: view === "review", isEmpty: view === "empty", isDone: view === "done",
+      viewReview: () => this.setState({ view: "review" }),
+      viewEmpty: () => this.setState({ view: "empty" }),
+      viewDone: () => this.setState({ view: "done" }),
+      setQuery: e => this.setState({ query: e.target.value }),
+      toggleAll: () => this.setState(s => { const all = s.rows.every(r => r.selected); return { rows: s.rows.map(r => ({ ...r, selected: !all })) }; }),
+      approveHighConf: () => this.bulk(r => r.conf > 0.95, "approve"),
+      approveSelected: () => this.bulk(r => r.selected, "approve"),
+      rejectSelected: () => this.bulk(r => r.selected, "reject"),
+      applyApproved: () => this.setState({ view: "done" }),
+      activePage: active.page,
+      activeRaw: active.raw,
+      activePdfPrice: "UNIT " + money(active.price) + "   MOQ 1   " + active.sku,
+      activePriceText: money(active.price),
+      activePrevText: active.prev == null ? "—" : money(active.prev),
+      activeDeltaText: ad.text, activeDeltaColor: ad.color,
+      activeApprove: () => this.setAction(active.id, "approve"),
+      activeReject: () => this.setAction(active.id, "reject")
+    };
+  }
+}
+</script>
+</body>
+</html>

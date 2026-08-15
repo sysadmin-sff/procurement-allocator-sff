@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; background:#F5F6F8; }
+  * { box-sizing: border-box; }
+  a { color:#1B3A6B; text-decoration:none; }
+  a:hover { color:#122A50; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#D9DEE6; border-radius:6px; }
+  select { font-family:'Manrope',Helvetica,Arial,sans-serif; }
+</style>
+</helmet>
+<div style="font-family:'Manrope','Helvetica Neue',Helvetica,Arial,sans-serif; color:#16233D; background:#F5F6F8; min-height:100vh; display:flex; flex-direction:column;">
+
+  <div style="display:flex; align-items:center; gap:18px; padding:14px 28px; background:#FFFFFF; border-bottom:1px solid #E3E6EC;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="width:30px; height:30px; border-radius:8px; background:#1B3A6B; display:flex; align-items:center; justify-content:center; color:#fff; font-family:Poppins,sans-serif; font-weight:700; font-size:13px;">SF</div>
+      <div style="line-height:1.05;">
+        <div style="font-family:Poppins,sans-serif; font-weight:700; font-size:13.5px; letter-spacing:.02em; color:#1B3A6B;">SCREEN FACTORY</div>
+        <div style="font-size:8.5px; letter-spacing:.16em; color:#D2232A; font-weight:600;">MODERN SOLUTION <span style="background:#1B3A6B; color:#fff; padding:1px 4px; border-radius:2px; letter-spacing:.1em;">FLORIDA</span></div>
+      </div>
+    </div>
+    <div style="width:1px; height:26px; background:#E3E6EC;"></div>
+    <div style="display:flex; gap:22px; font-size:13.5px; font-weight:500; color:#6B7688;">
+      <span style="color:#16233D; font-weight:700;">Закупки</span>
+      <span>Импорт прайс-листов</span>
+      <span>Материалы</span>
+      <span>Поставщики</span>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="font-size:12.5px; color:#6B7688; font-weight:500;">Расчёт #PO-2026-0814-3 · А. Мартин</div>
+  </div>
+
+  <div style="display:flex; align-items:flex-end; gap:32px; padding:22px 28px 18px;">
+    <div>
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:#8A94A6; font-weight:700; margin-bottom:7px;">Результат расчёта закупки</div>
+      <div style="font-family:Poppins,sans-serif; font-size:27px; font-weight:600; letter-spacing:-.015em; color:#1B3A6B; line-height:1.15;">Riverside Pool Cage · 2842 Bayshore Dr</div>
+      <div style="font-size:13px; color:#6B7688; margin-top:6px;">Смета SC-1184 · 16 позиций · расчёт от 15 авг 2026, 08:12 · доставка на склад Fort Myers</div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="flex:none; display:flex; align-items:stretch; gap:0; background:#fff; border:1px solid #E3E6EC; border-radius:14px; box-shadow:0 6px 20px rgba(22,35,61,.05); overflow:hidden;">
+      <div style="padding:14px 20px;">
+        <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8A94A6; font-weight:700;">Товары</div>
+        <div style="font-family:Poppins,sans-serif; font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:4px;">{{ goodsText }}</div>
+      </div>
+      <div style="width:1px; background:#E3E6EC;"></div>
+      <div style="padding:14px 20px;">
+        <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8A94A6; font-weight:700;">Доставка</div>
+        <div style="font-family:Poppins,sans-serif; font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:4px;">{{ shipText }}</div>
+      </div>
+      <div style="width:1px; background:#E3E6EC;"></div>
+      <div style="padding:14px 20px;">
+        <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8A94A6; font-weight:700;">Поставщиков</div>
+        <div style="font-family:Poppins,sans-serif; font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:4px;">{{ supplierCount }}</div>
+      </div>
+      <div style="width:1px; background:#E3E6EC;"></div>
+      <div style="flex:none; padding:14px 22px; background:#1B3A6B; color:#fff;">
+        <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; opacity:.72; font-weight:700;">Итого закупки</div>
+        <div style="font-family:Poppins,sans-serif; font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px; letter-spacing:-.01em;">{{ totalText }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:0 28px 6px; display:flex; flex-direction:column; gap:12px;">
+
+    <sc-if value="{{ showShortage }}" hint-placeholder-val="{{ true }}">
+      <div style="background:#FDF2F3; border:1px solid #EFC2C5; border-radius:14px; padding:16px 18px; display:flex; align-items:flex-start; gap:14px;">
+        <div style="width:24px; height:24px; flex:none; border-radius:6px; background:#D2232A; color:#fff; font-family:Poppins,sans-serif; font-weight:700; font-size:15px; line-height:24px; text-align:center;">!</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:Poppins,sans-serif; font-size:14.5px; font-weight:600; color:#A8171E;">Позиция не закрыта: не хватает 1 рул. — ордера нельзя создать</div>
+          <div style="font-size:13px; color:#7D3238; margin-top:5px; line-height:1.5;">
+            <span style="font-weight:700;">Сетка Super Screen 17×14, black · 96" × 100 ft</span> — требуется 6 рул. Доступно: 3 рул. у Phifer Direct ($231.00) и 2 рул. у Gulf Coast Screen ($238.00). Ни один поставщик не закрывает объём, суммарно доступно 5 рул.
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; flex:none;">
+          <button onClick="{{ splitShortage }}" style="background:#fff; border:1px solid #E0A9AD; color:#A8171E; font:inherit; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:9px; cursor:pointer;" style-hover="background:#FBE9EA;">Разбить 3 + 2 рул.</button>
+          <button onClick="{{ excludeShortage }}" style="background:#D2232A; border:none; color:#fff; font:inherit; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:9px; cursor:pointer;" style-hover="background:#B31C22;">Исключить из закупки</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showSplitNote }}">
+      <div style="background:#FDF2F3; border:1px solid #EFC2C5; border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:14px;">
+        <div style="width:24px; height:24px; flex:none; border-radius:6px; background:#D2232A; color:#fff; font-family:Poppins,sans-serif; font-weight:700; font-size:15px; line-height:24px; text-align:center;">!</div>
+        <div style="flex:1; font-size:13px; color:#7D3238; line-height:1.5;">
+          <span style="font-family:Poppins,sans-serif; font-weight:600; font-size:13.5px; color:#A8171E;">Дефицит 1 рул. остаётся.</span>
+          Сетка Super Screen 96" разбита: 3 рул. Phifer Direct + 2 рул. Gulf Coast Screen. Закрыть остаток нечем — исключите позицию или согласуйте перенос срока.
+        </div>
+        <button onClick="{{ excludeShortage }}" style="background:#D2232A; border:none; color:#fff; font:inherit; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:9px; cursor:pointer; flex:none;" style-hover="background:#B31C22;">Исключить из закупки</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showExcludedNote }}">
+      <div style="background:#fff; border:1px solid #E3E6EC; border-radius:14px; padding:12px 18px; display:flex; align-items:center; gap:12px;">
+        <div style="font-size:13px; color:#6B7688;">Исключено из закупки: <span style="font-weight:700; color:#16233D;">Сетка Super Screen 17×14, black · 96" × 100 ft</span> — 6 рул. оформляются отдельным запросом.</div>
+        <div style="flex:1;"></div>
+        <button onClick="{{ restoreShortage }}" style="background:#F1F3F6; border:none; color:#1B3A6B; font:inherit; font-size:12.5px; font-weight:700; padding:8px 13px; border-radius:8px; cursor:pointer;" style-hover="background:#E6E9EF;">Вернуть в закупку</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ showDeviation }}">
+      <div style="background:#fff; border:1px solid #E3E6EC; border-radius:14px; padding:12px 18px; display:flex; align-items:center; gap:12px;">
+        <div style="width:8px; height:8px; border-radius:50%; background:#1B3A6B; flex:none;"></div>
+        <div style="font-size:13px; color:#16233D;">Ручные правки: итог отличается от расчёта алгоритма на <span style="font-weight:700; font-variant-numeric:tabular-nums;">{{ deviationText }}</span> <span style="color:#6B7688;">(расчёт алгоритма — {{ baseTotalText }})</span></div>
+        <div style="flex:1;"></div>
+        <button onClick="{{ resetAll }}" style="background:#F1F3F6; border:none; color:#1B3A6B; font:inherit; font-size:12.5px; font-weight:700; padding:8px 13px; border-radius:8px; cursor:pointer;" style-hover="background:#E6E9EF;">Вернуть расчёт алгоритма</button>
+      </div>
+    </sc-if>
+  </div>
+
+  <div style="flex:1; padding:12px 28px 20px; display:flex; flex-direction:column; gap:16px;">
+    <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+      <div style="background:#fff; border:1px solid #E3E6EC; border-radius:14px; box-shadow:0 6px 20px rgba(22,35,61,.05); overflow-x:auto;">
+
+        <div style="display:flex; align-items:center; gap:14px; padding:15px 20px 14px; border-bottom:1px solid #E9ECF1;">
+          <div style="min-width:0;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="font-family:Poppins,sans-serif; font-size:16.5px; font-weight:600; color:#1B3A6B;">{{ g.name }}</div>
+              <sc-if value="{{ g.touched }}">
+                <span style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#1B3A6B; background:#E8EDF6; padding:4px 8px; border-radius:99px;">изменено вручную</span>
+              </sc-if>
+            </div>
+            <div style="font-size:12px; color:#6B7688; margin-top:4px; font-weight:500;">{{ g.meta }}</div>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="text-align:right;">
+            <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8A94A6; font-weight:700;">Ордер по поставщику</div>
+            <div style="font-family:Poppins,sans-serif; font-size:18px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:3px;">{{ g.totalText }}</div>
+          </div>
+        </div>
+
+        <div style="min-width:960px; display:grid; grid-template-columns:minmax(320px,1fr) 92px 124px 132px 240px; align-items:center; gap:0; padding:0 20px; background:#FAFBFC; border-bottom:1px solid #E9ECF1; height:36px; font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8A94A6; font-weight:700;">
+          <div>Материал</div>
+          <div style="text-align:right;">Кол-во</div>
+          <div style="text-align:right;">Цена за ед.</div>
+          <div style="text-align:right;">Сумма</div>
+          <div style="padding-left:20px;">Поставщик</div>
+        </div>
+
+        <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="5">
+          <div style="min-width:960px; display:grid; grid-template-columns:minmax(320px,1fr) 92px 124px 132px 240px; align-items:center; padding:9px 20px; border-bottom:1px solid #F0F2F5; font-size:13px; background:{{ r.bg }};">
+            <div style="padding-right:20px; min-width:0;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-weight:600; font-size:13.5px;">{{ r.name }}</span>
+                <sc-if value="{{ r.manual }}">
+                  <span style="font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#1B3A6B; background:#E8EDF6; padding:3px 7px; border-radius:99px; flex:none;">вручную</span>
+                </sc-if>
+              </div>
+              <div style="font-size:11px; color:#8A94A6; margin-top:3px; font-family:'SFMono-Regular',Menlo,Consolas,monospace;">{{ r.spec }}</div>
+              <sc-if value="{{ r.hasReason }}">
+                <div style="margin-top:6px; display:inline-flex; align-items:flex-start; gap:8px; background:#F1F3F7; border:1px solid #E2E6EE; border-radius:9px; padding:6px 10px;">
+                  <span style="font-family:Poppins,sans-serif; font-weight:700; font-size:11px; color:#1B3A6B; line-height:1.35; flex:none;">{{ r.reasonHead }}</span>
+                  <span style="font-size:11.5px; color:#4C5872; line-height:1.35;">{{ r.reasonBody }}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ r.showAlt }}">
+                <div style="font-size:11px; color:#8A94A6; margin-top:5px;">{{ r.altLine }}</div>
+              </sc-if>
+            </div>
+            <div style="text-align:right; font-variant-numeric:tabular-nums; color:#4C5872;">{{ r.qtyText }}</div>
+            <div style="text-align:right; font-variant-numeric:tabular-nums;">{{ r.priceText }}</div>
+            <div style="text-align:right; font-variant-numeric:tabular-nums; font-weight:700;">{{ r.sumText }}</div>
+            <div style="padding-left:20px;">
+              <sc-if value="{{ r.editable }}">
+                <select value="{{ r.sup }}" onChange="{{ r.change }}" style="width:100%; font-size:12.5px; font-weight:600; color:#16233D; background:#F1F3F6; border:1px solid {{ r.selBorder }}; border-radius:9px; padding:8px 10px; cursor:pointer; outline:none;">
+                  <sc-for list="{{ r.options }}" as="o" hint-placeholder-count="2">
+                    <option value="{{ o.value }}">{{ o.label }}</option>
+                  </sc-for>
+                </select>
+              </sc-if>
+              <sc-if value="{{ r.locked }}">
+                <div style="font-size:12px; color:#8A94A6; padding:8px 2px;">единственный поставщик</div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="min-width:960px; display:flex; align-items:center; gap:12px; padding:13px 20px; background:#FAFBFC; border-bottom:1px solid #E9ECF1;">
+          <div style="width:8px; height:8px; border-radius:50%; flex:none; background:{{ g.shipDot }};"></div>
+          <div style="font-size:13px; color:#16233D;"><span style="font-weight:700;">{{ g.shipLabel }}</span> <span style="color:#6B7688;">{{ g.shipNote }}</span></div>
+          <div style="flex:1;"></div>
+          <div style="display:flex; gap:26px; font-size:12.5px; color:#6B7688;">
+            <div>Позиций: <span style="font-weight:700; color:#16233D; font-variant-numeric:tabular-nums;">{{ g.count }}</span></div>
+            <div>Товары: <span style="font-weight:700; color:#16233D; font-variant-numeric:tabular-nums;">{{ g.subText }}</span></div>
+            <div>Доставка: <span style="font-weight:700; color:#16233D; font-variant-numeric:tabular-nums;">{{ g.shipText }}</span></div>
+            <div style="color:#16233D;">Итого: <span style="font-family:Poppins,sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">{{ g.totalText }}</span></div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="position:sticky; bottom:0; background:#FFFFFF; border-top:1px solid #E3E6EC; padding:14px 28px; display:flex; align-items:center; gap:20px; box-shadow:0 -6px 20px rgba(22,35,61,.05);">
+    <div style="font-size:12.5px; color:#6B7688; line-height:1.5;">
+      Будет создано <span style="font-weight:700; color:#16233D;">{{ supplierCount }}</span> ордера · товары {{ goodsText }} + доставка {{ shipText }}
+      <div style="font-size:11.5px; color:#8A94A6; margin-top:2px;">Изменения поставщика в строках пересчитывают ордера мгновенно · ⌘↵ — подтвердить</div>
+    </div>
+    <div style="flex:1;"></div>
+    <sc-if value="{{ confirmed }}">
+      <div style="font-size:13px; font-weight:700; color:#0F6B4A;">✓ Ордера созданы — {{ supplierCount }} документа отправлены на согласование</div>
+    </sc-if>
+    <button onClick="{{ exportPlan }}" style="background:#F1F3F6; border:none; color:#1B3A6B; font:inherit; font-size:13.5px; font-weight:700; padding:12px 18px; border-radius:10px; cursor:pointer;" style-hover="background:#E6E9EF;">Выгрузить расчёт в CSV</button>
+    <sc-if value="{{ canConfirm }}" hint-placeholder-val="{{ true }}">
+      <button onClick="{{ confirm }}" style="background:#1B3A6B; color:#fff; border:none; font:inherit; font-size:14px; font-weight:700; padding:13px 24px; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:9px; box-shadow:0 6px 16px rgba(27,58,107,.22);" style-hover="background:#122A50;">Подтвердить и создать ордера <span style="opacity:.7;">»</span></button>
+    </sc-if>
+    <sc-if value="{{ blocked }}">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="font-size:12.5px; font-weight:700; color:#D2232A; text-align:right; max-width:220px; line-height:1.35;">Сначала закройте дефицит по Super Screen 96"</div>
+        <button disabled="{{ true }}" style="background:#E9ECF1; color:#A6AEBC; border:none; font:inherit; font-size:14px; font-weight:700; padding:13px 24px; border-radius:10px; cursor:not-allowed; display:flex; align-items:center; gap:9px;">Подтвердить и создать ордера <span style="opacity:.7;">»</span></button>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1560,&quot;height&quot;:1060},&quot;strategy&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;consolidated&quot;,&quot;lowest_unit&quot;],&quot;default&quot;:&quot;consolidated&quot;,&quot;tsType&quot;:&quot;\&quot;consolidated\&quot; | \&quot;lowest_unit\&quot;&quot;,&quot;section&quot;:&quot;Алгоритм&quot;},&quot;showAltPrice&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Алгоритм&quot;}}">
+const SUP = {
+  alutex:  { id:"alutex",  name:"Alutex Supply Co.",           short:"Alutex",       ship:145, free:2500, meta:"Fort Myers · склад 12 миль · срок 2–3 дня · Net 30" },
+  phifer:  { id:"phifer",  name:"Phifer Direct",               short:"Phifer",       ship:210, free:5000, meta:"Tuscaloosa, AL · срок 4–6 дней · предоплата 50%" },
+  gulf:    { id:"gulf",    name:"Gulf Coast Screen Wholesale", short:"Gulf Coast",   ship:125, free:2500, meta:"Tampa · срок 1–2 дня · Net 15" },
+  coastal: { id:"coastal", name:"Coastal Hardware & Fasteners",short:"Coastal",      ship:60,  free:900,  meta:"Cape Coral · самовывоз или доставка · срок 1 день" }
+};
+
+const ITEMS = [
+  { id:1,  name:"Профиль рамный 2×2 SMB, белый", spec:'24 ft · AL-SMB-22W', unit:"шт", qty:46, base:"alutex", c:{ alutex:{p:51.75,a:200}, gulf:{p:53.40,a:150} } },
+  { id:2,  name:"Уголок алюминиевый 6063-T5 50×50×3", spec:'24 ft · AL-ANG-5050', unit:"шт", qty:18, base:"alutex", c:{ alutex:{p:42.80,a:80}, gulf:{p:44.10,a:40} } },
+  { id:3,  name:"Профиль Chair Rail 2×2, бронза", spec:'21 ft · AL-CHR-22B', unit:"шт", qty:12, base:"alutex", c:{ alutex:{p:58.40,a:30}, gulf:{p:56.90,a:25} } },
+  { id:4,  name:'Шпонка (spline) 0.160", чёрная', spec:'500 ft · SPL-160-BLK', unit:"кат.", qty:14, base:"alutex", c:{ alutex:{p:24.90,a:60}, gulf:{p:23.60,a:100} } },
+  { id:5,  name:"Саморез Tek #10×3/4, нерж.", spec:'500 шт · FAS-TEK-1034', unit:"кор.", qty:9, base:"alutex", c:{ alutex:{p:31.20,a:40}, gulf:{p:30.10,a:60} } },
+  { id:6,  name:"Клипса рамная универсальная", spec:'100 шт · HRD-CLIP-UNI', unit:"упак.", qty:6, base:"alutex", c:{ alutex:{p:17.95,a:50}, gulf:{p:18.40,a:80} } },
+  { id:7,  name:"Уплотнитель EPDM 6 мм", spec:'250 ft · SEA-EPDM-6', unit:"кат.", qty:5, base:"alutex", c:{ alutex:{p:36.40,a:25}, gulf:{p:37.20,a:30} } },
+  { id:8,  name:"Дверная фурнитура, комплект", spec:'HRD-DOOR-KIT', unit:"компл.", qty:4, base:"alutex", c:{ alutex:{p:47.90,a:20}, gulf:{p:49.50,a:10} } },
+  { id:9,  name:"Сетка Fiberglass 18×14, charcoal", spec:'96" × 100 ft · MSH-FG-1814', unit:"рул.", qty:8, base:"phifer", c:{ phifer:{p:161.50,a:50}, gulf:{p:168.00,a:20}, alutex:{p:172.00,a:10} } },
+  { id:10, name:"Сетка No-See-Um 20×20, charcoal", spec:'60" × 100 ft · MSH-NSU-2020', unit:"рул.", qty:3, base:"phifer", c:{ phifer:{p:189.00,a:30}, gulf:{p:182.50,a:12} } },
+  { id:11, name:"Сетка Super Screen 17×14, black", spec:'72" × 100 ft · MSH-SS-1714', unit:"рул.", qty:4, base:"phifer", c:{ phifer:{p:214.00,a:15}, gulf:{p:219.50,a:6} } },
+  { id:12, name:"Сетка Phifer 20×20, серебро", spec:'48" × 100 ft · MSH-PH-2020', unit:"рул.", qty:6, base:"phifer", c:{ phifer:{p:142.30,a:40}, gulf:{p:148.00,a:8} } },
+  { id:13, name:"Кронштейн угловой 4-way, усиленный", spec:'HRD-BRK-4W', unit:"шт", qty:24, base:"coastal", c:{ coastal:{p:12.40,a:400} } },
+  { id:14, name:"Анкер Tapcon 1/4×2¾", spec:'100 шт · FAS-TAP-1425', unit:"кор.", qty:5, base:"coastal", c:{ coastal:{p:34.50,a:60} } },
+  { id:15, name:"Герметик Vulkem 116, серый", spec:'туба 10.1 oz · SEA-VLK-116', unit:"шт", qty:12, base:"coastal", c:{ coastal:{p:9.80,a:200} } }
+];
+
+const SPLIT = [
+  { id:901, name:"Сетка Super Screen 17×14, black", spec:'96" × 100 ft · MSH-SS-1714-96 · частично', unit:"рул.", qty:3, base:"phifer", c:{ phifer:{p:231.00,a:3} } },
+  { id:902, name:"Сетка Super Screen 17×14, black", spec:'96" × 100 ft · MSH-SS-1714-96 · частично', unit:"рул.", qty:2, base:"gulf", c:{ gulf:{p:238.00,a:2} } }
+];
+
+const money = n => "$" + n.toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+const feasible = it => Object.keys(it.c).filter(k => it.c[k].a >= it.qty);
+
+class Component extends DCLogic {
+  state = { overrides:{}, shortage:"open", confirmed:false };
+
+  componentDidMount() {
+    this._key = e => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); if (this.state.shortage !== "open") this.setState({ confirmed:true }); }
+    };
+    window.addEventListener("keydown", this._key);
+  }
+  componentWillUnmount() { window.removeEventListener("keydown", this._key); }
+
+  pool() {
+    const s = this.state.shortage;
+    return s === "split" ? ITEMS.concat(SPLIT) : ITEMS;
+  }
+  baseSup(it) {
+    if ((this.props.strategy ?? "consolidated") === "lowest_unit") {
+      const f = feasible(it);
+      return f.sort((a,b) => it.c[a].p - it.c[b].p)[0];
+    }
+    return it.base;
+  }
+  assignment() {
+    const o = this.state.overrides, m = {};
+    this.pool().forEach(it => { m[it.id] = o[it.id] || this.baseSup(it); });
+    return m;
+  }
+  plan(assign) {
+    const bucket = {};
+    this.pool().forEach(it => { const s = assign[it.id]; if (!s || !it.c[s]) return; (bucket[s] = bucket[s] || []).push(it); });
+    let goods = 0, ship = 0;
+    const groups = Object.keys(bucket).map(sid => {
+      const sub = bucket[sid].reduce((a, it) => a + it.qty * it.c[sid].p, 0);
+      const sh = sub >= SUP[sid].free ? 0 : SUP[sid].ship;
+      goods += sub; ship += sh;
+      return { sid, items:bucket[sid], sub, sh };
+    }).sort((a, b) => b.sub - a.sub);
+    return { groups, goods, ship, total: goods + ship };
+  }
+
+  renderVals() {
+    const showAlt = this.props.showAltPrice ?? true;
+    const assign = this.assignment();
+    const cur = this.plan(assign);
+    const o = this.state.overrides;
+
+    const baseMap = {};
+    this.pool().forEach(it => { baseMap[it.id] = it.base || this.baseSup(it); });
+    const baseTotal = this.plan(baseMap).total;
+    const dev = cur.total - baseTotal;
+
+    const groups = cur.groups.map(g => {
+      const S = SUP[g.sid];
+      const rows = g.items.map(it => {
+        const sup = g.sid, price = it.c[sup].p, sum = price * it.qty;
+        const f = feasible(it).filter(k => k !== sup);
+        const cheaper = f.filter(k => it.c[k].p < price).sort((a, b) => it.c[a].p - it.c[b].p)[0];
+        let hasReason = false, reasonHead = "", reasonBody = "", altLine = "";
+        if (cheaper) {
+          const extra = (price - it.c[cheaper].p) * it.qty;
+          const altTotal = this.plan(Object.assign({}, assign, { [it.id]: cheaper })).total;
+          const gain = altTotal - cur.total;
+          hasReason = true;
+          reasonHead = "Дороже на " + money(extra);
+          reasonBody = gain > 0.005
+            ? "но экономия " + money(gain) + " на консолидации доставки — отдельный заказ у " + SUP[cheaper].short + " добавил бы доставку " + money(SUP[cheaper].ship)
+            : "перенос к " + SUP[cheaper].short + " дал бы " + money(-gain) + " экономии — алгоритм пересчитает при подтверждении";
+          altLine = "мин. цена " + money(it.c[cheaper].p) + "/" + it.unit + " у " + SUP[cheaper].name + " · доступно " + it.c[cheaper].a + " " + it.unit;
+        }
+        const opts = [sup].concat(f).map(k => ({ value:k, label:SUP[k].short + " · " + money(it.c[k].p) + "/" + it.unit }));
+        const manual = !!o[it.id];
+        return {
+          name:it.name, spec:it.spec, sup, manual,
+          qtyText:it.qty + " " + it.unit,
+          priceText:money(price),
+          sumText:money(sum),
+          hasReason, reasonHead, reasonBody,
+          showAlt: hasReason && showAlt, altLine,
+          bg: manual ? "#F7F9FD" : "#FFFFFF",
+          selBorder: manual ? "#1B3A6B" : "#DDE2EA",
+          editable: f.length > 0, locked: f.length === 0,
+          options: opts,
+          change: e => { const v = e.target.value; this.setState(s => ({ overrides:Object.assign({}, s.overrides, { [it.id]:v }), confirmed:false })); }
+        };
+      });
+      const free = g.sh === 0;
+      return {
+        name:S.name, meta:S.meta, count:g.items.length, rows,
+        touched: g.items.some(it => o[it.id]),
+        subText:money(g.sub), shipText:free ? "бесплатно" : money(g.sh), totalText:money(g.sub + g.sh),
+        shipDot: free ? "#0F6B4A" : "#8A94A6",
+        shipLabel: free ? "Доставка: бесплатно" : "Доставка: " + money(g.sh),
+        shipNote: free
+          ? "— сумма заказа " + money(g.sub) + " выше порога " + money(S.free)
+          : "— до бесплатной доставки не хватает " + money(S.free - g.sub) + " (порог " + money(S.free) + ")"
+      };
+    });
+
+    const sh = this.state.shortage;
+    return {
+      groups,
+      goodsText:money(cur.goods), shipText:money(cur.ship), totalText:money(cur.total),
+      supplierCount:cur.groups.length,
+      showShortage: sh === "open", showSplitNote: sh === "split", showExcludedNote: sh === "excluded",
+      canConfirm: sh !== "open" && sh !== "split", blocked: sh === "open" || sh === "split",
+      showDeviation: Math.abs(dev) > 0.005,
+      deviationText: (dev > 0 ? "+" : "−") + money(Math.abs(dev)).slice(1),
+      baseTotalText: money(baseTotal),
+      confirmed: this.state.confirmed,
+      splitShortage: () => this.setState({ shortage:"split" }),
+      excludeShortage: () => this.setState({ shortage:"excluded" }),
+      restoreShortage: () => this.setState({ shortage:"open", confirmed:false }),
+      resetAll: () => this.setState({ overrides:{}, confirmed:false }),
+      confirm: () => this.setState({ confirmed:true }),
+      exportPlan: () => this.setState({ confirmed:false })
+    };
+  }
+}
+</script>
+</body>
+</html>

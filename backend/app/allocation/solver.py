@@ -95,8 +95,11 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
         free_var = model.new_bool_var(f"free_{s_id}")
         free[s_id] = free_var
 
-        if threshold <= 0:
-            # Порог не задан/нулевой — доставка бесплатна, как только поставщик задействован.
+        if threshold is None:
+            # Порог не настроен поставщиком — бесплатной доставки не бывает.
+            model.add(free_var == 0)
+        elif threshold == 0:
+            # Порог явно выставлен в 0 — доставка бесплатна, как только поставщик задействован.
             model.add(free_var == y[s_id])
         else:
             big_m = threshold + max_order_total[s_id]

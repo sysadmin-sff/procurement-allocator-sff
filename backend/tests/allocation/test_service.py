@@ -1,7 +1,7 @@
 import pytest
 
 from app.allocation.service import EmptyProjectError, run_allocation
-from app.models import AllocationLine, AllocationRun, Project
+from app.models import AllocationLine, AllocationRun, Project, Supplier
 
 
 def test_run_allocation_persists_run_and_lines(
@@ -114,6 +114,32 @@ def test_run_allocation_records_supplier_summary_with_free_shipping(
     assert summary["goods_total"] == 5.00
     assert summary["delivery_fee"] == 0.0
     assert summary["free_shipping_achieved"] is True
+
+
+def test_run_allocation_never_grants_free_shipping_when_threshold_unset(
+    db_session, make_material, make_price, make_project
+):
+    """delivery_policy без ключа free_shipping_threshold (а не 0) не должен
+    трактоваться солвером как 'бесплатная доставка всегда' — см. фикс
+    различения 'порог не задан' vs 'порог явно 0' в service.py/solver.py."""
+    session, project_ids, material_ids, supplier_ids = db_session
+    supplier = Supplier(
+        name="No Threshold Supplier",
+        currency="USD",
+        delivery_policy={"flat_fee": 10.0},
+    )
+    session.add(supplier)
+    session.flush()
+    supplier_ids.append(supplier.id)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+
+    summary = run.supplier_summaries[0]
+    assert summary["delivery_fee"] == 10.00
+    assert summary["free_shipping_achieved"] is False
 
 
 def test_run_allocation_raises_on_project_with_no_items(db_session):

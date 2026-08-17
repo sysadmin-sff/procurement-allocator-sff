@@ -46,6 +46,30 @@ def test_supplier_summary_reports_free_shipping_achieved():
     assert summary.free_shipping_achieved is True
 
 
+def test_supplier_with_unset_threshold_never_gets_free_shipping():
+    """free_shipping_threshold_cents=None (порог не настроен поставщиком) должен
+    вести себя иначе, чем 0 (поставщик явно настроен на бесплатную доставку
+    всегда) — задействованный поставщик без настроенного порога всегда платит
+    flat_fee, независимо от суммы заказа."""
+    materials = [MaterialInput(material_id="m1", quantity=1)]
+    suppliers = [
+        SupplierInput(
+            supplier_id="s1",
+            flat_fee_cents=1000,
+            free_shipping_threshold_cents=None,
+        )
+    ]
+    prices = [PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=500, availability=10)]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    summary = result.supplier_summaries[0]
+    assert summary.delivery_fee_cents == 1000
+    assert summary.free_shipping_achieved is False
+
+
 def test_supplier_summary_excludes_unused_suppliers():
     materials = [MaterialInput(material_id="m1", quantity=1)]
     suppliers = [

@@ -75,8 +75,10 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
         SupplierInput(
             supplier_id=str(supplier.id),
             flat_fee_cents=_to_cents(supplier.delivery_policy.get("flat_fee", 0)),
-            free_shipping_threshold_cents=_to_cents(
-                supplier.delivery_policy.get("free_shipping_threshold", 0)
+            free_shipping_threshold_cents=(
+                None
+                if supplier.delivery_policy.get("free_shipping_threshold") is None
+                else _to_cents(supplier.delivery_policy["free_shipping_threshold"])
             ),
             per_order_min_amount_cents=_to_cents(
                 supplier.delivery_policy.get("per_order_min_amount", 0)

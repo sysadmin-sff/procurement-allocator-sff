@@ -20,7 +20,9 @@ class MaterialInput:
 class SupplierInput:
     supplier_id: str
     flat_fee_cents: int
-    free_shipping_threshold_cents: int
+    free_shipping_threshold_cents: int | None
+    """None = порог не настроен поставщиком -> доставка никогда не бесплатна.
+    0 = поставщик явно настроен на бесплатную доставку всегда (см. ADR-0002)."""
     per_order_min_amount_cents: int = 0
 
 

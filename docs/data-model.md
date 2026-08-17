@@ -4,9 +4,13 @@
 erDiagram
     Supplier ||--o{ Price : "предлагает"
     Supplier ||--o{ SupplierMaterialAlias : "называет по-своему"
+    Supplier ||--o{ PriceListImport : "прайс от"
     Material ||--o{ Price : "имеет цену у"
     Material ||--o{ SupplierMaterialAlias : "известен как"
     Material ||--o{ ProjectItem : "используется в"
+    Material ||--o{ PriceListEntry : "сопоставлена со строкой"
+    PriceListImport ||--o{ PriceListEntry : "содержит строки"
+    PriceListImport ||--o{ Price : "источник цены"
     Project ||--o{ ProjectItem : "содержит"
     Project ||--o{ AllocationRun : "рассчитывается"
     AllocationRun ||--o{ AllocationLine : "состоит из"
@@ -33,14 +37,37 @@ erDiagram
         string supplier_sku
         string supplier_raw_name
     }
+    PriceListImport {
+        uuid id
+        uuid supplier_id
+        string file_ref
+        datetime uploaded_at
+        string status "pending_review/approved/rejected"
+        datetime parsed_by_ai_at
+    }
+    PriceListEntry {
+        uuid id
+        uuid import_id
+        string supplier_raw_name
+        string supplier_sku
+        uuid matched_material_id "nullable — новый материал?"
+        decimal confidence
+        decimal price
+        string currency
+        int availability
+        int min_order_qty
+        string action "update/new/ignore"
+    }
     Price {
         uuid material_id
         uuid supplier_id
         decimal price
         string currency
         int availability
+        int min_order_qty
         date valid_from
         date valid_to
+        uuid source_import_id "nullable"
     }
     Project {
         uuid id
@@ -56,6 +83,8 @@ erDiagram
         uuid id
         uuid project_id
         datetime created_at
+        string algorithm_version
+        json orphaned_materials "недостижимые материалы, см. ADR-0002"
     }
     AllocationLine {
         uuid allocation_run_id
@@ -82,3 +111,11 @@ erDiagram
 Правило, которое нельзя нарушать без ADR: `Material.internal_sku` — единственный источник истины
 об идентичности материала. `SupplierMaterialAlias` — единственное место, где допустимы
 дублирующиеся/расходящиеся названия.
+
+`PriceListImport`/`PriceListEntry` добавлены сверх исходной диаграммы — см. `docs/decisions/0001-price-list-import-table.md`.
+`PriceListEntry` — черновые строки на ревью (до аппрува, не пишутся в `Price` напрямую).
+
+`AllocationRun.orphaned_materials` добавлено сверх исходной диаграммы — см.
+`docs/decisions/0002-supplier-allocation-algorithm.md`. Список материалов проекта,
+недостижимых ни у одного поставщика в нужном количестве; чисто информационный для UI,
+не участвует в дальнейших расчётах.

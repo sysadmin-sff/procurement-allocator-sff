@@ -57,8 +57,21 @@ class AllocationLineResult:
 
 
 @dataclass(frozen=True)
+class SupplierSummary:
+    """Сводка по одному задействованному поставщику (y[s]=1) — экспортирует
+    наружу order_total[s] и free[s] из ADR-0002, которые solve_allocation
+    иначе считает только внутри модели и не возвращает."""
+
+    supplier_id: str
+    goods_total_cents: int
+    delivery_fee_cents: int
+    free_shipping_achieved: bool
+
+
+@dataclass(frozen=True)
 class AllocationResult:
     status: str  # "OPTIMAL" | "FEASIBLE" | "INFEASIBLE" | "NO_SOLVABLE_MATERIALS"
     lines: list[AllocationLineResult] = field(default_factory=list)
     orphaned_materials: list[OrphanedMaterial] = field(default_factory=list)
+    supplier_summaries: list[SupplierSummary] = field(default_factory=list)
     total_cents: int = 0

@@ -3,7 +3,7 @@
 import datetime
 
 from app.core.database import SessionLocal
-from app.models import Material, Price, Supplier
+from app.models import Material, Price, Project, ProjectItem, Supplier
 
 SUPPLIERS = [
     {
@@ -23,7 +23,7 @@ SUPPLIERS = [
         "currency": "USD",
         "delivery_policy": {
             "flat_fee": 45.00,
-            "free_shipping_threshold": 1000.00,
+            "free_shipping_threshold": 250.00,
             "per_order_min_amount": 150.00,
             "lead_time_days": 2,
         },
@@ -171,6 +171,7 @@ PRICES = [
     ("AL-SMB-22W", "Alutex Supply Co.", 4.35, 600, 22),
     ("AL-SMB-22B", "Florida Aluminum Distributors", 4.60, 500, 22),
     ("AL-CH-EAVE", "Florida Aluminum Distributors", 3.20, 1000, 10),
+    ("AL-CH-EAVE", "Gulf Coast Screen Wholesale", 3.30, 150, 10),
     ("SPL-BASE-2", "Gulf Coast Screen Wholesale", 18.50, 150, 1),
     ("SPL-BASE-175", "Phifer Direct", 17.90, 180, 1),
     ("FSTN-SMS-8", "Alutex Supply Co.", 12.75, 300, 1),
@@ -180,6 +181,27 @@ PRICES = [
     ("SLNT-CLR-10", "Gulf Coast Screen Wholesale", 4.10, 500, 1),
     ("AL-CH-GUTTER", "Florida Aluminum Distributors", 3.85, 700, 10),
     ("SCR-FG-84", "Phifer Direct", 1.70, 2000, 100),
+]
+
+TEST_PROJECT_TITLE = "Test Project — Screen Room 20x12"
+
+# (material_sku, quantity). Chosen so the allocation is feasible against every
+# supplier's per_order_min_amount: SCR-FG-96 + AL-SMB-22W alone already clear
+# Alutex's $200 minimum ($222+$34.80=$256.80) and Gulf Coast's $150 minimum
+# ($230.40), so either supplier can carry the whole order on its own -- the
+# solver has a genuine choice, not a single feasible assignment.
+#
+# SCR-FG-96 and AL-CH-EAVE are also both priced at Gulf Coast Screen
+# Wholesale ($1.92 and $3.30 -- $0.10 pricier than Florida Aluminum's $3.20
+# on AL-CH-EAVE alone), and Gulf Coast's free_shipping_threshold is $250:
+# consolidating both onto Gulf Coast ($230.40+$66.00=$296.40) clears the
+# threshold and drops its $45 flat fee, which beats taking each material at
+# its cheapest individual price and paying delivery separately. Exercises
+# the delivery-consolidation trade-off end to end against real seed data.
+TEST_PROJECT_ITEMS = [
+    ("SCR-FG-96", 120),  # priced at 2 suppliers -- exercises supplier choice
+    ("AL-SMB-22W", 8),  # priced at 2 suppliers
+    ("AL-CH-EAVE", 20),  # single supplier (Florida Aluminum), no minimum
 ]
 
 
@@ -192,6 +214,8 @@ def seed() -> None:
             if supplier is None:
                 supplier = Supplier(**data)
                 db.add(supplier)
+            else:
+                supplier.delivery_policy = data["delivery_policy"]
             suppliers_by_name[data["name"]] = supplier
 
         materials_by_sku: dict[str, Material] = {}
@@ -228,11 +252,26 @@ def seed() -> None:
                 )
             )
 
+        project = db.query(Project).filter_by(title=TEST_PROJECT_TITLE).one_or_none()
+        if project is None:
+            project = Project(title=TEST_PROJECT_TITLE, status="draft")
+            db.add(project)
+            db.flush()
+            for sku, quantity in TEST_PROJECT_ITEMS:
+                db.add(
+                    ProjectItem(
+                        project_id=project.id,
+                        material_id=materials_by_sku[sku].id,
+                        quantity=quantity,
+                    )
+                )
+
         db.commit()
         print(
             f"Seeded {len(SUPPLIERS)} suppliers, {len(MATERIALS)} materials, "
             f"{len(PRICES)} prices."
         )
+        print(f"Test project_id: {project.id}")
     finally:
         db.close()
 

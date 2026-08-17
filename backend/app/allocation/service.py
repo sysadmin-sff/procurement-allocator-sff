@@ -20,6 +20,17 @@ ALGORITHM_VERSION = "adr-0002-v1"
 _CENTS_PER_UNIT = 100
 
 
+class EmptyProjectError(Exception):
+    """Проект существует, но у него нет ни одной позиции (ProjectItem) —
+    считать расчёт не над чем. Отдельно от "проекта не существует": то
+    проверяет вызывающая сторона (например, API-роут через 404 до вызова
+    run_allocation), это не забота солвера."""
+
+    def __init__(self, project_id: uuid.UUID):
+        self.project_id = project_id
+        super().__init__(f"Project {project_id} has no items to allocate")
+
+
 def _to_cents(amount) -> int:
     return round(float(amount) * _CENTS_PER_UNIT)
 
@@ -32,6 +43,9 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
     project_items = db.scalars(
         select(ProjectItem).where(ProjectItem.project_id == project_id)
     ).all()
+
+    if not project_items:
+        raise EmptyProjectError(project_id)
 
     materials = [
         MaterialInput(material_id=str(item.material_id), quantity=item.quantity)
@@ -77,10 +91,21 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
         )
     )
 
+    supplier_summaries = [
+        {
+            "supplier_id": s.supplier_id,
+            "goods_total": _from_cents(s.goods_total_cents),
+            "delivery_fee": _from_cents(s.delivery_fee_cents),
+            "free_shipping_achieved": s.free_shipping_achieved,
+        }
+        for s in result.supplier_summaries
+    ]
+
     run = AllocationRun(
         project_id=project_id,
         algorithm_version=ALGORITHM_VERSION,
         orphaned_materials=[asdict(o) for o in orphaned],
+        supplier_summaries=supplier_summaries,
     )
     db.add(run)
     db.flush()

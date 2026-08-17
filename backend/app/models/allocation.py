@@ -28,6 +28,11 @@ class AllocationRun(UUIDPKMixin, Base):
     """Материалы, недостижимые ни у одного поставщика — см. ADR-0002.
     Список объектов {material_id, required_quantity, best_partial_supplier_id,
     best_partial_available}, чисто информационный для UI, не участвует в расчётах."""
+    supplier_summaries: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    """Сводка доставки по каждому задействованному поставщику — экспорт
+    order_total[s]/free[s] из ADR-0002, которые солвер иначе считает только
+    внутри модели. Список объектов {supplier_id, goods_total, delivery_fee,
+    free_shipping_achieved}, снимок на момент run_allocation()."""
 
     project: Mapped["Project"] = relationship(back_populates="allocation_runs")
     lines: Mapped[list["AllocationLine"]] = relationship(back_populates="allocation_run")

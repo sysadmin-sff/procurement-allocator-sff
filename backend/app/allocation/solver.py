@@ -9,7 +9,12 @@ from __future__ import annotations
 
 from ortools.sat.python import cp_model
 
-from app.allocation.types import AllocationInput, AllocationLineResult, AllocationResult
+from app.allocation.types import (
+    AllocationInput,
+    AllocationLineResult,
+    AllocationResult,
+    SupplierSummary,
+)
 
 _STATUS_NAMES = {
     cp_model.OPTIMAL: "OPTIMAL",
@@ -139,10 +144,37 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
                 )
             )
 
+    # y[s]=1 не гарантирует, что поставщику реально что-то назначено: когда
+    # поставщик не входит ни в одно допустимое (m, s), ничто в модели не
+    # принуждает его y[s] к 0 (Ограничение 3 — это x[m][s] <= y[s], оно не
+    # работает в обратную сторону), и CP-SAT волен оставить y[s]=1 просто
+    # потому что целевой функции это безразлично. Единственный надёжный
+    # признак активности поставщика — наличие у него назначенных строк.
+    active_supplier_ids = {line.supplier_id for line in lines}
+
     total_cents = sum(line.line_total_cents for line in lines) + sum(
         suppliers_by_id[s_id].flat_fee_cents
-        for s_id in supplier_ids
-        if solver.value(y[s_id]) and not solver.value(free[s_id])
+        for s_id in active_supplier_ids
+        if not solver.value(free[s_id])
     )
 
-    return AllocationResult(status=status, lines=lines, total_cents=total_cents)
+    supplier_summaries: list[SupplierSummary] = []
+    for s_id in sorted(active_supplier_ids):
+        free_achieved = bool(solver.value(free[s_id]))
+        supplier_summaries.append(
+            SupplierSummary(
+                supplier_id=s_id,
+                goods_total_cents=solver.value(order_total[s_id]),
+                delivery_fee_cents=0
+                if free_achieved
+                else suppliers_by_id[s_id].flat_fee_cents,
+                free_shipping_achieved=free_achieved,
+            )
+        )
+
+    return AllocationResult(
+        status=status,
+        lines=lines,
+        supplier_summaries=supplier_summaries,
+        total_cents=total_cents,
+    )

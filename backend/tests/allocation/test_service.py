@@ -1,5 +1,7 @@
-from app.allocation.service import run_allocation
-from app.models import AllocationLine, AllocationRun
+import pytest
+
+from app.allocation.service import EmptyProjectError, run_allocation
+from app.models import AllocationLine, AllocationRun, Project
 
 
 def test_run_allocation_persists_run_and_lines(
@@ -72,3 +74,54 @@ def test_run_allocation_skips_supplier_below_min_order_amount_for_single_item(
     lines = session.query(AllocationLine).filter_by(allocation_run_id=run.id).all()
     assert len(lines) == 1
     assert lines[0].supplier_id == fallback.id
+
+
+def test_run_allocation_records_supplier_summary_with_delivery_fee(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(
+        flat_fee=10.0, free_shipping_threshold=1000.0, per_order_min_amount=0.0
+    )
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+
+    assert len(run.supplier_summaries) == 1
+    summary = run.supplier_summaries[0]
+    assert summary["supplier_id"] == str(supplier.id)
+    assert summary["goods_total"] == 5.00
+    assert summary["delivery_fee"] == 10.00
+    assert summary["free_shipping_achieved"] is False
+
+
+def test_run_allocation_records_supplier_summary_with_free_shipping(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(
+        flat_fee=10.0, free_shipping_threshold=5.00, per_order_min_amount=0.0
+    )
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+
+    summary = run.supplier_summaries[0]
+    assert summary["goods_total"] == 5.00
+    assert summary["delivery_fee"] == 0.0
+    assert summary["free_shipping_achieved"] is True
+
+
+def test_run_allocation_raises_on_project_with_no_items(db_session):
+    session, project_ids, *_ = db_session
+    project = Project(title="Empty Project", status="draft")
+    session.add(project)
+    session.flush()
+    project_ids.append(project.id)
+
+    with pytest.raises(EmptyProjectError):
+        run_allocation(session, project.id)

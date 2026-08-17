@@ -35,6 +35,9 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# B008: FastAPI's Depends()-in-default-argument is the framework's documented
+# DI pattern, not the accidental mutable-default footgun this rule targets.
+ignore = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

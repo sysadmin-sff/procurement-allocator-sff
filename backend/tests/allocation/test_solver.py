@@ -2,6 +2,103 @@ from app.allocation.solver import solve_allocation
 from app.allocation.types import AllocationInput, MaterialInput, PriceInput, SupplierInput
 
 
+def test_supplier_summary_reports_goods_total_and_no_free_shipping():
+    materials = [MaterialInput(material_id="m1", quantity=1)]
+    suppliers = [
+        SupplierInput(
+            supplier_id="s1",
+            flat_fee_cents=1000,
+            free_shipping_threshold_cents=100_000,
+        )
+    ]
+    prices = [PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=500, availability=10)]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert len(result.supplier_summaries) == 1
+    summary = result.supplier_summaries[0]
+    assert summary.supplier_id == "s1"
+    assert summary.goods_total_cents == 500
+    assert summary.delivery_fee_cents == 1000
+    assert summary.free_shipping_achieved is False
+
+
+def test_supplier_summary_reports_free_shipping_achieved():
+    materials = [MaterialInput(material_id="m1", quantity=1)]
+    suppliers = [
+        SupplierInput(
+            supplier_id="s1",
+            flat_fee_cents=1000,
+            free_shipping_threshold_cents=500,
+        )
+    ]
+    prices = [PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=500, availability=10)]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    summary = result.supplier_summaries[0]
+    assert summary.goods_total_cents == 500
+    assert summary.delivery_fee_cents == 0
+    assert summary.free_shipping_achieved is True
+
+
+def test_supplier_summary_excludes_unused_suppliers():
+    materials = [MaterialInput(material_id="m1", quantity=1)]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=0),
+        SupplierInput(supplier_id="s2", flat_fee_cents=0, free_shipping_threshold_cents=0),
+    ]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=500, availability=10),
+        PriceInput(material_id="m1", supplier_id="s2", unit_price_cents=900, availability=10),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert len(result.supplier_summaries) == 1
+    assert result.supplier_summaries[0].supplier_id == "s1"
+
+
+def test_supplier_summary_covers_every_active_supplier_across_multiple():
+    materials = [
+        MaterialInput(material_id="m1", quantity=1),
+        MaterialInput(material_id="m2", quantity=1),
+    ]
+    suppliers = [
+        SupplierInput(
+            supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=1500
+        ),
+        SupplierInput(
+            supplier_id="s2", flat_fee_cents=1000, free_shipping_threshold_cents=100_000
+        ),
+    ]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=1000, availability=10),
+        PriceInput(material_id="m2", supplier_id="s1", unit_price_cents=600, availability=10),
+        PriceInput(material_id="m2", supplier_id="s2", unit_price_cents=400, availability=10),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    # This is the same consolidation scenario as
+    # test_delivery_consolidation_is_preferred_over_cheapest_per_line_price:
+    # both materials end up on s1, crossing its free-shipping threshold.
+    assert len(result.supplier_summaries) == 1
+    summary = result.supplier_summaries[0]
+    assert summary.supplier_id == "s1"
+    assert summary.goods_total_cents == 1600
+    assert summary.delivery_fee_cents == 0
+    assert summary.free_shipping_achieved is True
+
+
 def test_single_material_single_supplier_is_assigned():
     materials = [MaterialInput(material_id="m1", quantity=10)]
     suppliers = [
@@ -102,6 +199,98 @@ def test_delivery_consolidation_is_preferred_over_cheapest_per_line_price():
     assert result.total_cents == 1600
     assignments = {line.material_id: line.supplier_id for line in result.lines}
     assert assignments == {"m1": "s1", "m2": "s1"}
+
+
+def test_delivery_consolidation_matches_seed_screen_room_scenario():
+    # Regression pinned to the exact seed.py numbers (app/scripts/seed.py) for
+    # the "Test Project — Screen Room 20x12" project: SCR-FG-96 is cheapest at
+    # Alutex ($1.85) and AL-CH-EAVE is cheapest at Florida ($3.20), but
+    # consolidating both onto Gulf Coast Screen Wholesale ($1.92 + $3.30)
+    # crosses its $250 free-shipping threshold and drops its $45 flat fee,
+    # which beats taking each material at its individually cheapest price and
+    # paying delivery separately. AL-SMB-22W has no Gulf Coast price at all,
+    # so it must go to Florida regardless. This is the scenario verified live
+    # against the real seeded DB/HTTP endpoint -- pinned here so a future
+    # seed.py price/threshold edit can't silently break it.
+    materials = [
+        MaterialInput(material_id="SCR-FG-96", quantity=120),
+        MaterialInput(material_id="AL-SMB-22W", quantity=8),
+        MaterialInput(material_id="AL-CH-EAVE", quantity=20),
+    ]
+    suppliers = [
+        SupplierInput(
+            supplier_id="Alutex",
+            flat_fee_cents=6500,
+            free_shipping_threshold_cents=150_000,
+            per_order_min_amount_cents=20_000,
+        ),
+        SupplierInput(
+            supplier_id="GulfCoast",
+            flat_fee_cents=4500,
+            free_shipping_threshold_cents=25_000,
+            per_order_min_amount_cents=15_000,
+        ),
+        SupplierInput(
+            supplier_id="Florida",
+            flat_fee_cents=5500,
+            free_shipping_threshold_cents=120_000,
+            per_order_min_amount_cents=0,
+        ),
+    ]
+    prices = [
+        PriceInput(
+            material_id="SCR-FG-96", supplier_id="Alutex", unit_price_cents=185, availability=4000
+        ),
+        PriceInput(
+            material_id="SCR-FG-96",
+            supplier_id="GulfCoast",
+            unit_price_cents=192,
+            availability=2500,
+        ),
+        PriceInput(
+            material_id="AL-SMB-22W",
+            supplier_id="Florida",
+            unit_price_cents=410,
+            availability=900,
+        ),
+        PriceInput(
+            material_id="AL-SMB-22W", supplier_id="Alutex", unit_price_cents=435, availability=600
+        ),
+        PriceInput(
+            material_id="AL-CH-EAVE",
+            supplier_id="Florida",
+            unit_price_cents=320,
+            availability=1000,
+        ),
+        PriceInput(
+            material_id="AL-CH-EAVE",
+            supplier_id="GulfCoast",
+            unit_price_cents=330,
+            availability=150,
+        ),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status == "OPTIMAL"
+    assignments = {line.material_id: line.supplier_id for line in result.lines}
+    assert assignments == {
+        "SCR-FG-96": "GulfCoast",
+        "AL-SMB-22W": "Florida",
+        "AL-CH-EAVE": "GulfCoast",
+    }
+    assert result.total_cents == 23040 + 3280 + 6600 + 5500  # goods + Florida's flat fee only
+
+    summaries = {s.supplier_id: s for s in result.supplier_summaries}
+    assert set(summaries) == {"GulfCoast", "Florida"}
+    assert summaries["GulfCoast"].goods_total_cents == 23040 + 6600
+    assert summaries["GulfCoast"].delivery_fee_cents == 0
+    assert summaries["GulfCoast"].free_shipping_achieved is True
+    assert summaries["Florida"].goods_total_cents == 3280
+    assert summaries["Florida"].delivery_fee_cents == 5500
+    assert summaries["Florida"].free_shipping_achieved is False
 
 
 def test_per_order_min_amount_forces_larger_order_or_alternative_supplier():

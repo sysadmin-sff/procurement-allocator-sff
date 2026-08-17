@@ -3,7 +3,8 @@ import uuid
 
 import pytest
 
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, get_db
+from app.main import app
 from app.models import (
     AllocationLine,
     AllocationRun,
@@ -22,9 +23,15 @@ def db_session():
     material_ids: list = []
     supplier_ids: list = []
 
+    def _override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = _override_get_db
+
     try:
         yield session, project_ids, material_ids, supplier_ids
     finally:
+        app.dependency_overrides.pop(get_db, None)
         session.rollback()
         for project_id in project_ids:
             run_ids = [

@@ -5,7 +5,7 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, UUIDPKMixin
+from app.models.base import Base, TimestampMixin, UUIDPKMixin
 
 if TYPE_CHECKING:
     from app.models.allocation import AllocationRun
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from app.models.order import Order
 
 
-class Project(UUIDPKMixin, Base):
+class Project(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "projects"
 
     title: Mapped[str] = mapped_column(String(255), nullable=False)

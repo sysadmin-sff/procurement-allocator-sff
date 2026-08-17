@@ -17,6 +17,7 @@ def test_run_allocation_persists_run_and_lines(
 
     assert isinstance(run, AllocationRun)
     assert run.project_id == project.id
+    assert run.status == "ok"
     assert run.orphaned_materials == []
 
     persisted = session.get(AllocationRun, run.id)
@@ -151,3 +152,52 @@ def test_run_allocation_raises_on_project_with_no_items(db_session):
 
     with pytest.raises(EmptyProjectError):
         run_allocation(session, project.id)
+
+
+def test_run_allocation_marks_infeasible_when_sole_supplier_misses_min_order_amount(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Regression for the reproduced bug (ADR-0003): a material with exactly
+    one available-and-priced supplier, whose per_order_min_amount is not met
+    by this order in isolation, makes the whole CP-SAT model infeasible
+    (Constraint 1 forces x[m][s]=1 for the only candidate pair, Constraint 4
+    then requires y[s]=0). Pre-fix, run_allocation() silently persisted an
+    empty-but-"successful" AllocationRun instead of surfacing this."""
+    session, *_ = db_session
+    supplier = make_supplier(
+        name="Gated Sole Supplier",
+        flat_fee=0.0,
+        free_shipping_threshold=0.0,
+        per_order_min_amount=200.0,
+    )
+    material = make_material()
+    make_price(material, supplier, price=13.25, availability=500)
+    project = make_project([(material, 10)])  # 13.25 * 10 = 132.50, below the $200 minimum
+
+    run = run_allocation(session, project.id)
+
+    assert run.status == "infeasible"
+    assert run.lines == []
+    assert run.supplier_summaries == []
+
+
+def test_run_allocation_marks_infeasible_when_no_solvable_materials(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """NO_SOLVABLE_MATERIALS (every item orphaned by preprocessing) is the
+    same "silently empty success" bug class as ILP infeasibility — both must
+    surface as status == "infeasible", not just orphaned_materials without a
+    persisted signal. See ADR-0003."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=3.00, availability=2)  # short by 8
+    project = make_project([(material, 10)])
+
+    run = run_allocation(session, project.id)
+
+    assert run.status == "infeasible"
+    assert run.lines == []
+    assert run.supplier_summaries == []
+    assert len(run.orphaned_materials) == 1
+    assert run.orphaned_materials[0]["material_id"] == str(material.id)

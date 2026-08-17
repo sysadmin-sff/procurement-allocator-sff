@@ -84,6 +84,7 @@ erDiagram
         uuid project_id
         datetime created_at
         string algorithm_version
+        string status "ok/infeasible, см. ADR-0003"
         json orphaned_materials "недостижимые материалы, см. ADR-0002"
     }
     AllocationLine {
@@ -119,3 +120,10 @@ erDiagram
 `docs/decisions/0002-supplier-allocation-algorithm.md`. Список материалов проекта,
 недостижимых ни у одного поставщика в нужном количестве; чисто информационный для UI,
 не участвует в дальнейших расчётах.
+
+`AllocationRun.status` добавлено сверх исходной диаграммы — см.
+`docs/decisions/0003-infeasible-allocation-status.md`. `"ok"` — модель решена;
+`"infeasible"` — ILP-модель невыполнима целиком (например, `per_order_min_amount`
+единственного поставщика материала не достигается) или на входе солвера не осталось
+материалов после предобработки; `lines`/`supplier_summaries` в этом случае пустые,
+но `AllocationRun` всё равно создаётся и сохраняется — попытка расчёта не теряется.

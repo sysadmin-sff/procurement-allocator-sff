@@ -22,6 +22,7 @@ def test_allocate_returns_run_with_lines(
     assert response.status_code == 200
     body = response.json()
     assert body["project_id"] == str(project.id)
+    assert body["status"] == "ok"
     assert body["orphaned_materials"] == []
     assert len(body["lines"]) == 1
     line = body["lines"][0]
@@ -30,6 +31,61 @@ def test_allocate_returns_run_with_lines(
     assert line["quantity"] == 10
     assert line["unit_price"] == 5.00
     assert line["line_total"] == 50.00
+
+
+def test_get_project_reflects_latest_allocation_run(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+
+    before_allocate = client.get(f"/projects/{project.id}")
+    assert before_allocate.json()["latest_allocation_run"] is None
+
+    allocate_response = client.post(f"/projects/{project.id}/allocate")
+    run_id = allocate_response.json()["id"]
+
+    after_allocate = client.get(f"/projects/{project.id}")
+    latest_run = after_allocate.json()["latest_allocation_run"]
+    assert latest_run["id"] == run_id
+    assert latest_run["status"] == "ok"
+
+
+def test_allocate_returns_infeasible_status_when_sole_supplier_misses_min_order_amount(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """API-level counterpart to the service-level regression in
+    test_service.py — status must be visible in AllocationRunOut on both
+    POST (create) and GET (fetch persisted run). See ADR-0003."""
+    session, *_ = db_session
+    supplier = make_supplier(
+        name="Gated Sole Supplier",
+        flat_fee=0.0,
+        free_shipping_threshold=0.0,
+        per_order_min_amount=200.0,
+    )
+    material = make_material()
+    make_price(material, supplier, price=13.25, availability=500)
+    project = make_project([(material, 10)])  # 132.50, below the $200 minimum
+
+    post_response = client.post(f"/projects/{project.id}/allocate")
+
+    assert post_response.status_code == 200
+    post_body = post_response.json()
+    assert post_body["status"] == "infeasible"
+    assert post_body["lines"] == []
+    assert post_body["supplier_summaries"] == []
+
+    run_id = post_body["id"]
+    get_response = client.get(f"/projects/{project.id}/allocations/{run_id}")
+
+    assert get_response.status_code == 200
+    get_body = get_response.json()
+    assert get_body["status"] == "infeasible"
+    assert get_body["lines"] == []
+    assert get_body["supplier_summaries"] == []
 
 
 def test_allocate_includes_orphaned_materials_in_response(

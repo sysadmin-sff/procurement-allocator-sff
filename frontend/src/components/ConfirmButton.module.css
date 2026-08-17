@@ -1,0 +1,11 @@
+.confirmGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.confirmLabel {
+  font-size: var(--text-sm-alt);
+  color: var(--color-danger-text);
+  font-weight: 600;
+}

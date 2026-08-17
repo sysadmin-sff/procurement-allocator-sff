@@ -1,0 +1,212 @@
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ProjectDetailPage } from './ProjectDetailPage';
+import { materialsApi } from '../api/materials';
+import { projectsApi } from '../api/projects';
+import type { Material, ProjectWithItems } from '../api/types';
+
+vi.mock('../api/projects', () => ({
+  projectsApi: {
+    list: vi.fn(),
+    create: vi.fn(),
+    get: vi.fn(),
+    addItem: vi.fn(),
+    updateItem: vi.fn(),
+    removeItem: vi.fn(),
+  },
+}));
+vi.mock('../api/materials', () => ({
+  materialsApi: { list: vi.fn(), search: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+}));
+
+const getMock = vi.mocked(projectsApi.get);
+const addItemMock = vi.mocked(projectsApi.addItem);
+const updateItemMock = vi.mocked(projectsApi.updateItem);
+const removeItemMock = vi.mocked(projectsApi.removeItem);
+const materialsListMock = vi.mocked(materialsApi.list);
+const materialsSearchMock = vi.mocked(materialsApi.search);
+
+const material: Material = {
+  id: 'mat-1',
+  internal_sku: 'MSH-FG-1814',
+  canonical_name: 'Сетка Fiberglass 18x14',
+  category: 'Сетка',
+  unit: 'рулон',
+  attributes: {},
+};
+
+const material2: Material = {
+  id: 'mat-2',
+  internal_sku: 'FSTN-SMS-8',
+  canonical_name: '#8 Self-Tapping Screw 1"',
+  category: 'fastener',
+  unit: 'box',
+  attributes: {},
+};
+
+function renderPage() {
+  return render(
+    <MemoryRouter initialEntries={['/projects/proj-1']}>
+      <Routes>
+        <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+        <Route path="/projects/:projectId/allocation" element={<div>Allocation screen</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe('ProjectDetailPage', () => {
+  beforeEach(() => {
+    getMock.mockReset();
+    addItemMock.mockReset();
+    updateItemMock.mockReset();
+    removeItemMock.mockReset();
+    materialsListMock.mockReset();
+    materialsSearchMock.mockReset();
+    materialsListMock.mockResolvedValue([material, material2]);
+  });
+
+  it('shows "Рассчитать закупку" and no run summary when there is no prior run', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [{ id: 'item-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 10 }],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+
+    renderPage();
+
+    expect(await screen.findByText(material.canonical_name)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Рассчитать закупку/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Последний расчёт/)).not.toBeInTheDocument();
+  });
+
+  it('shows "Пересчитать закупку" and the run summary when a prior run exists', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [{ id: 'item-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 10 }],
+      latest_allocation_run: { id: 'run-1', created_at: '2026-08-17T12:00:00Z', status: 'ok' },
+    };
+    getMock.mockResolvedValue(project);
+
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: /Пересчитать закупку/ })).toBeInTheDocument();
+    expect(screen.getByText(/Последний расчёт/)).toBeInTheDocument();
+  });
+
+  it('navigates to the allocation screen when the calculate button is clicked', async () => {
+    const user = userEvent.setup();
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Рассчитать закупку/ }));
+
+    expect(await screen.findByText('Allocation screen')).toBeInTheDocument();
+  });
+
+  it('saves a quantity change on blur', async () => {
+    const user = userEvent.setup();
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [{ id: 'item-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 10 }],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+    updateItemMock.mockResolvedValue({ id: 'item-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 25 });
+
+    renderPage();
+
+    const qtyInput = await screen.findByDisplayValue('10');
+    await user.clear(qtyInput);
+    await user.type(qtyInput, '25');
+    await user.tab();
+
+    expect(updateItemMock).toHaveBeenCalledWith('proj-1', 'item-1', 25);
+  });
+
+  it('removes an item after confirming delete', async () => {
+    const user = userEvent.setup();
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [{ id: 'item-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 10 }],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+    removeItemMock.mockResolvedValue(undefined);
+
+    renderPage();
+
+    await screen.findByText(material.canonical_name);
+    await user.click(screen.getByRole('button', { name: 'Удалить' }));
+    await user.click(screen.getByRole('button', { name: 'Да' }));
+
+    expect(removeItemMock).toHaveBeenCalledWith('proj-1', 'item-1');
+    await screen.findByPlaceholderText('Название или артикул…');
+    expect(screen.queryByText(material.canonical_name)).not.toBeInTheDocument();
+  });
+
+  it('adds a new item by selecting a material and entering a quantity', async () => {
+    const user = userEvent.setup();
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+    materialsSearchMock.mockResolvedValue([material2]);
+    addItemMock.mockResolvedValue({
+      id: 'item-new',
+      project_id: 'proj-1',
+      material_id: 'mat-2',
+      quantity: 7,
+    });
+
+    renderPage();
+
+    const materialInput = await screen.findByPlaceholderText('Название или артикул…');
+    await user.type(materialInput, 'screw');
+    const option = await screen.findByText(material2.canonical_name);
+    await user.click(option);
+
+    const qtyInput = screen.getByPlaceholderText('0');
+    await user.type(qtyInput, '7');
+
+    await user.click(screen.getByRole('button', { name: /Добавить/ }));
+
+    expect(addItemMock).toHaveBeenCalledWith('proj-1', { material_id: 'mat-2', quantity: 7 });
+    expect(await screen.findByText(material2.canonical_name)).toBeInTheDocument();
+  });
+});

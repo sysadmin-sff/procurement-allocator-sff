@@ -24,6 +24,11 @@ class AllocationRun(UUIDPKMixin, Base):
         DateTime(timezone=True), server_default=func.now()
     )
     algorithm_version: Mapped[str | None] = mapped_column(String(50))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="ok")
+    """'ok' — модель решена, lines/supplier_summaries заполнены. 'infeasible' —
+    CP-SAT не нашёл допустимого назначения (или M_solvable пуст на входе) —
+    lines/supplier_summaries пустые, попытка расчёта тем не менее сохранена.
+    См. ADR-0003."""
     orphaned_materials: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     """Материалы, недостижимые ни у одного поставщика — см. ADR-0002.
     Список объектов {material_id, required_quantity, best_partial_supplier_id,

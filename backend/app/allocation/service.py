@@ -19,6 +19,12 @@ ALGORITHM_VERSION = "adr-0002-v1"
 
 _CENTS_PER_UNIT = 100
 
+_SOLVED_STATUSES = ("OPTIMAL", "FEASIBLE")
+"""solve_allocation() statuses that mean 'a feasible assignment was found'.
+Anything else — INFEASIBLE, MODEL_INVALID, UNKNOWN, NO_SOLVABLE_MATERIALS —
+persists as AllocationRun.status == "infeasible" instead of a silent empty
+"success". See ADR-0003."""
+
 
 class EmptyProjectError(Exception):
     """Проект существует, но у него нет ни одной позиции (ProjectItem) —
@@ -93,36 +99,44 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
         )
     )
 
-    supplier_summaries = [
-        {
-            "supplier_id": s.supplier_id,
-            "goods_total": _from_cents(s.goods_total_cents),
-            "delivery_fee": _from_cents(s.delivery_fee_cents),
-            "free_shipping_achieved": s.free_shipping_achieved,
-        }
-        for s in result.supplier_summaries
-    ]
+    solved = result.status in _SOLVED_STATUSES
+
+    supplier_summaries = (
+        [
+            {
+                "supplier_id": s.supplier_id,
+                "goods_total": _from_cents(s.goods_total_cents),
+                "delivery_fee": _from_cents(s.delivery_fee_cents),
+                "free_shipping_achieved": s.free_shipping_achieved,
+            }
+            for s in result.supplier_summaries
+        ]
+        if solved
+        else []
+    )
 
     run = AllocationRun(
         project_id=project_id,
         algorithm_version=ALGORITHM_VERSION,
+        status="ok" if solved else "infeasible",
         orphaned_materials=[asdict(o) for o in orphaned],
         supplier_summaries=supplier_summaries,
     )
     db.add(run)
     db.flush()
 
-    for line in result.lines:
-        db.add(
-            AllocationLine(
-                allocation_run_id=run.id,
-                material_id=uuid.UUID(line.material_id),
-                supplier_id=uuid.UUID(line.supplier_id),
-                quantity=line.quantity,
-                unit_price=_from_cents(line.unit_price_cents),
-                line_total=_from_cents(line.line_total_cents),
+    if solved:
+        for line in result.lines:
+            db.add(
+                AllocationLine(
+                    allocation_run_id=run.id,
+                    material_id=uuid.UUID(line.material_id),
+                    supplier_id=uuid.UUID(line.supplier_id),
+                    quantity=line.quantity,
+                    unit_price=_from_cents(line.unit_price_cents),
+                    line_total=_from_cents(line.line_total_cents),
+                )
             )
-        )
 
     db.commit()
     db.refresh(run)

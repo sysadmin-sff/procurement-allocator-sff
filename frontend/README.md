@@ -1,11 +1,39 @@
-# React + TypeScript + Vite
+# frontend — procurement-allocator
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript + Vite. Routing via `react-router-dom`. Design tokens live in
+`src/styles/tokens.css`, sourced from `docs/design/README.md` → "Design Tokens"
+(canon palette, screens 2–3). See root `CLAUDE.md` for how `docs/design/` and
+`docs/ui-reference.md` relate.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Create `.env` in this directory (gitignored) with:
+
+```
+VITE_API_BASE_URL=http://localhost:8000
+```
+
+If unset, the API client falls back to `http://localhost:8000`.
+
+## Structure
+
+```
+src/
+  api/        — typed fetch client for the backend (suppliers, materials, prices, allocation)
+  layout/     — AppLayout: topbar + nav shared by all screens
+  routes/     — one page component per route (currently stubs for the 3 MVP screens)
+  styles/     — design tokens + global stylesheet
+  test/       — vitest setup
+```
+
+## Commands
+
+```
+npm run dev
+npm run lint    # oxlint
+npm run test    # vitest run
+npm run build   # tsc -b && vite build
+```
 
 ## React Compiler
 

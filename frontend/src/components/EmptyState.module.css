@@ -1,0 +1,20 @@
+.wrap {
+  padding: 56px 24px 60px;
+  text-align: center;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-brand);
+  margin-bottom: var(--space-3);
+}
+
+.description {
+  font-size: var(--text-base-alt);
+  color: var(--color-text-tertiary-alt);
+  line-height: 1.6;
+  max-width: 420px;
+  margin: 0 auto var(--space-8);
+}

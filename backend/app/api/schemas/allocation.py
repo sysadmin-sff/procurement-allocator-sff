@@ -48,6 +48,7 @@ class AllocationRunOut(BaseModel):
     project_id: uuid.UUID
     created_at: datetime
     algorithm_version: str | None
+    status: str
     lines: list[AllocationLineOut]
     orphaned_materials: list[OrphanedMaterialOut]
     supplier_summaries: list[SupplierAllocationSummaryOut]

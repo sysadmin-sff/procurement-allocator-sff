@@ -116,6 +116,7 @@ export interface AllocationLine {
   overridden_at: string | null;
   original_supplier_id: string | null;
   original_unit_price: number | null;
+  ordered_at: string | null;
 }
 
 export interface OrphanedMaterial {
@@ -144,4 +145,26 @@ export interface AllocationRun {
   lines: AllocationLine[];
   orphaned_materials: OrphanedMaterial[];
   supplier_summaries: SupplierAllocationSummary[];
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  material_id: string;
+  quantity: number;
+  quoted_price: number;
+  confirmed_price: number | null;
+  confirmed_at: string | null;
+  price_delta: number | null;
+  price_delta_pct: number | null;
+}
+
+export interface Order {
+  id: string;
+  project_id: string;
+  supplier_id: string;
+  status: string;
+  total_amount: number;
+  delivery_fee: number;
+  items: OrderItem[];
 }

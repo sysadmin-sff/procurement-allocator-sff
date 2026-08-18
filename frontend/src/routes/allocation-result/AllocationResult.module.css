@@ -262,6 +262,13 @@
   color: var(--color-danger-text);
 }
 
+.orderStaleWarning {
+  display: block;
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-danger-text);
+}
+
 .supplierSelect {
   font-size: var(--text-sm-alt2);
   color: var(--color-text);

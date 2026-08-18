@@ -4,8 +4,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDetailPage } from './ProjectDetailPage';
 import { materialsApi } from '../api/materials';
+import { ordersApi } from '../api/orders';
 import { projectsApi } from '../api/projects';
-import type { Material, ProjectWithItems } from '../api/types';
+import { suppliersApi } from '../api/suppliers';
+import type { Material, Order, ProjectWithItems, Supplier } from '../api/types';
 
 vi.mock('../api/projects', () => ({
   projectsApi: {
@@ -20,6 +22,17 @@ vi.mock('../api/projects', () => ({
 vi.mock('../api/materials', () => ({
   materialsApi: { list: vi.fn(), search: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
+vi.mock('../api/suppliers', () => ({
+  suppliersApi: { list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+}));
+vi.mock('../api/orders', () => ({
+  ordersApi: {
+    createForRun: vi.fn(),
+    listForProject: vi.fn(),
+    get: vi.fn(),
+    setConfirmedPrice: vi.fn(),
+  },
+}));
 
 const getMock = vi.mocked(projectsApi.get);
 const addItemMock = vi.mocked(projectsApi.addItem);
@@ -27,6 +40,8 @@ const updateItemMock = vi.mocked(projectsApi.updateItem);
 const removeItemMock = vi.mocked(projectsApi.removeItem);
 const materialsListMock = vi.mocked(materialsApi.list);
 const materialsSearchMock = vi.mocked(materialsApi.search);
+const suppliersListMock = vi.mocked(suppliersApi.list);
+const ordersListForProjectMock = vi.mocked(ordersApi.listForProject);
 
 const material: Material = {
   id: 'mat-1',
@@ -65,7 +80,11 @@ describe('ProjectDetailPage', () => {
     removeItemMock.mockReset();
     materialsListMock.mockReset();
     materialsSearchMock.mockReset();
+    suppliersListMock.mockReset();
+    ordersListForProjectMock.mockReset();
     materialsListMock.mockResolvedValue([material, material2]);
+    suppliersListMock.mockResolvedValue([]);
+    ordersListForProjectMock.mockResolvedValue([]);
   });
 
   it('shows "Рассчитать закупку" and no run summary when there is no prior run', async () => {
@@ -208,5 +227,138 @@ describe('ProjectDetailPage', () => {
 
     expect(addItemMock).toHaveBeenCalledWith('proj-1', { material_id: 'mat-2', quantity: 7 });
     expect(await screen.findByText(material2.canonical_name)).toBeInTheDocument();
+  });
+
+  it('shows an orders section with a link to each order once orders exist', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: { id: 'run-1', created_at: '2026-08-17T12:00:00Z', status: 'ok' },
+    };
+    const supplier: Supplier = {
+      id: 'sup-a',
+      name: 'ABC Supply',
+      contacts: null,
+      currency: 'USD',
+      delivery_policy: { flat_fee: 25, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },
+    };
+    const order: Order = {
+      id: 'order-1',
+      project_id: 'proj-1',
+      supplier_id: 'sup-a',
+      status: 'draft',
+      total_amount: 150,
+      delivery_fee: 25,
+      items: [],
+    };
+    getMock.mockResolvedValue(project);
+    suppliersListMock.mockResolvedValue([supplier]);
+    ordersListForProjectMock.mockResolvedValue([order]);
+
+    renderPage();
+
+    expect(await screen.findByText('Ордера')).toBeInTheDocument();
+    expect(screen.getByText(supplier.name)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Открыть »' })).toHaveAttribute('href', '/orders/order-1');
+  });
+
+  it('hides the orders section when there are no orders yet', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+
+    renderPage();
+
+    await screen.findByRole('button', { name: /Рассчитать закупку/ });
+    expect(screen.queryByText('Ордера')).not.toBeInTheDocument();
+  });
+
+  it('groups the spec table by material category with contiguous numbering', async () => {
+    const materialNoCategory: Material = {
+      id: 'mat-3',
+      internal_sku: 'MISC-001',
+      canonical_name: 'Разное крепление',
+      category: null,
+      unit: 'шт',
+      attributes: {},
+    };
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [
+        { id: 'item-1', project_id: 'proj-1', material_id: 'mat-2', quantity: 5 }, // fastener
+        { id: 'item-2', project_id: 'proj-1', material_id: 'mat-1', quantity: 2 }, // Сетка
+        { id: 'item-3', project_id: 'proj-1', material_id: 'mat-3', quantity: 1 }, // no category
+        { id: 'item-4', project_id: 'proj-1', material_id: 'mat-2', quantity: 3 }, // fastener again
+      ],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+    materialsListMock.mockResolvedValue([material, material2, materialNoCategory]);
+
+    renderPage();
+
+    await screen.findAllByText(material2.canonical_name);
+
+    const categoryHeaders = screen.getAllByText(/^(fastener|Сетка|Без категории)$/);
+    // First-appearance order: fastener (item-1) before Сетка (item-2) before
+    // "Без категории" (item-3) — even though item-4 (fastener again) comes
+    // later in the input, it must not create a second "fastener" header.
+    expect(categoryHeaders.map((el) => el.textContent)).toEqual(['fastener', 'Сетка', 'Без категории']);
+
+    const rowNumberCells = document.querySelectorAll('td');
+    const numbers = [...rowNumberCells]
+      .map((td) => td.textContent)
+      .filter((text): text is string => /^[1-4]$/.test(text ?? ''));
+    // Contiguous 1..4 across all groups, in the order rows are rendered
+    // (both fastener rows — item-1 and item-4 — end up adjacent under the
+    // same header despite not being adjacent in the input).
+    expect(numbers).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('puts items with no category in a single trailing group, not scattered by input order', async () => {
+    const materialNoCategory: Material = {
+      id: 'mat-3',
+      internal_sku: 'MISC-001',
+      canonical_name: 'Разное крепление',
+      category: null,
+      unit: 'шт',
+      attributes: {},
+    };
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [
+        { id: 'item-1', project_id: 'proj-1', material_id: 'mat-3', quantity: 1 }, // no category, first in input
+        { id: 'item-2', project_id: 'proj-1', material_id: 'mat-1', quantity: 2 }, // Сетка
+      ],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+    materialsListMock.mockResolvedValue([material, material2, materialNoCategory]);
+
+    renderPage();
+
+    await screen.findByText(material.canonical_name);
+
+    const categoryHeaders = screen.getAllByText(/^(Сетка|Без категории)$/);
+    expect(categoryHeaders.map((el) => el.textContent)).toEqual(['Сетка', 'Без категории']);
   });
 });

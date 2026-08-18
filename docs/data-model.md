@@ -17,6 +17,9 @@ erDiagram
     Project ||--o{ Order : "порождает"
     Order ||--o{ OrderItem : "содержит"
     Supplier ||--o{ Order : "получает"
+    Project ||--o{ PurchaseRecord : "фактически закупает"
+    Supplier ||--o{ PurchaseRecord : "продаёт по факту"
+    Material ||--o{ PurchaseRecord : "опционально аннотирована как"
 
     Supplier {
         uuid id
@@ -107,6 +110,16 @@ erDiagram
         int quantity
         decimal unit_price
     }
+    PurchaseRecord {
+        uuid id
+        uuid project_id
+        uuid supplier_id
+        string raw_description "свободный текст, не обязан матчиться на Material"
+        int quantity
+        decimal unit_price
+        uuid material_id "nullable — опциональная ручная аннотация"
+        datetime created_at
+    }
 ```
 
 Правило, которое нельзя нарушать без ADR: `Material.internal_sku` — единственный источник истины
@@ -127,3 +140,20 @@ erDiagram
 единственного поставщика материала не достигается) или на входе солвера не осталось
 материалов после предобработки; `lines`/`supplier_summaries` в этом случае пустые,
 но `AllocationRun` всё равно создаётся и сохраняется — попытка расчёта не теряется.
+
+`PurchaseRecord` добавлена сверх исходной диаграммы — см.
+`docs/decisions/0008-actual-purchase-record.md`. Журнал того, что реально
+закупили, независимый от `Order`/`AllocationLine`: `raw_description` — как
+сотрудник видит название у поставщика, не обязан матчиться на
+`Material.canonical_name`/`SupplierMaterialAlias`; `supplier_id` может не
+совпадать с поставщиком, для которого позиция планировалась; `material_id`
+опционален и не участвует в расчётах, чисто ручная аннотация. Привязка —
+на уровне `Project`, не `Order`/`AllocationLine` (запись может относиться к
+поставщику, для которого в проекте вообще не создавался `Order`). Итоги
+(`purchased_total` по проекту и по поставщику) сравниваются с
+`Order.total_amount` — снимком на момент отправки, не с живым
+`SupplierAllocationSummaryOut` — и равны `NULL`, если для
+project/supplier ещё нет ни одного `Order` (нет базы для сравнения, не
+ноль). Автоматическое сопоставление строк плана и факта по тексту — не
+проектируется, экран показывает оба списка для визуальной сверки
+человеком.

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { allocationApi } from '../api/allocation';
 import { materialsApi } from '../api/materials';
+import { ordersApi } from '../api/orders';
 import { pricesApi } from '../api/prices';
 import { projectsApi } from '../api/projects';
 import { suppliersApi } from '../api/suppliers';
@@ -105,6 +106,7 @@ export function AllocationResultPage() {
       data={data}
       onBack={() => navigate(`/projects/${projectId}`)}
       onRunChange={(run) => setData((prev) => (prev ? { ...prev, run } : prev))}
+      onOrdersCreated={() => navigate(`/projects/${projectId}`)}
     />
   );
 }
@@ -113,10 +115,12 @@ function AllocationResultOk({
   data,
   onBack,
   onRunChange,
+  onOrdersCreated,
 }: {
   data: LoadedData;
   onBack: () => void;
   onRunChange: (run: AllocationRun) => void;
+  onOrdersCreated: () => void;
 }) {
   const { run, project, suppliers, materials, prices } = data;
 
@@ -133,6 +137,8 @@ function AllocationResultOk({
 
   const [overrideError, setOverrideError] = useState<unknown>(null);
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
+  const [creatingOrders, setCreatingOrders] = useState(false);
+  const [createOrdersError, setCreateOrdersError] = useState<unknown>(null);
 
   async function handleOverride(lineId: string, supplierId: string) {
     setOverrideError(null);
@@ -145,6 +151,19 @@ function AllocationResultOk({
       setOverrideError(err);
     } finally {
       setSavingLineId(null);
+    }
+  }
+
+  async function handleCreateOrders() {
+    setCreateOrdersError(null);
+    setCreatingOrders(true);
+    try {
+      await ordersApi.createForRun(project.id, run.id);
+      onOrdersCreated();
+    } catch (err) {
+      setCreateOrdersError(err);
+    } finally {
+      setCreatingOrders(false);
     }
   }
 
@@ -261,11 +280,15 @@ function AllocationResultOk({
           );
         })}
 
+        {createOrdersError != null && <ErrorBanner error={createOrdersError} />}
+
         <div className={styles.footer}>
-          <Button variant="primary" disabled title="Генерация ордеров — скоро">
-            Подтвердить и создать ордера
+          <Button variant="primary" disabled={creatingOrders} onClick={() => void handleCreateOrders()}>
+            {creatingOrders ? 'Создаём ордера…' : 'Подтвердить и создать ордера'}
           </Button>
-          <span className={styles.footerHint}>Скоро — генерация Order ещё не реализована.</span>
+          <span className={styles.footerHint}>
+            Создаст по одному ордеру на каждого поставщика — необратимо.
+          </span>
         </div>
       </div>
     </div>
@@ -301,6 +324,14 @@ function LineRow({
     line.original_supplier_id != null
       ? (supplierById.get(line.original_supplier_id)?.name ?? line.original_supplier_id)
       : null;
+
+  // ADR-0007 п.2: comparing two backend-supplied timestamps as-is is not
+  // money arithmetic, so this stays a client-side check (CLAUDE.md принцип 4
+  // restricts money math, not date ordering).
+  const changedAfterOrder =
+    line.ordered_at != null &&
+    line.overridden_at != null &&
+    new Date(line.overridden_at).getTime() > new Date(line.ordered_at).getTime();
 
   const currentPrice = supplierOptions.find((p) => p.supplier_id === line.supplier_id);
   const availabilityShort =
@@ -338,6 +369,11 @@ function LineRow({
           <span className={styles.availabilityRisk}>
             ⚠ у поставщика доступно {currentPrice.availability} {material?.unit ?? ''}, требуется{' '}
             {line.quantity}
+          </span>
+        )}
+        {changedAfterOrder && (
+          <span className={styles.orderStaleWarning}>
+            ⚠ изменено после отправки ордера — это изменение не попало в уже созданный ордер
           </span>
         )}
       </td>

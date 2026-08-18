@@ -7,6 +7,7 @@ from app.api.material import router as material_router
 from app.api.order import router as order_router
 from app.api.price import router as price_router
 from app.api.project import router as project_router
+from app.api.purchase_record import router as purchase_record_router
 from app.api.supplier import router as supplier_router
 
 app = FastAPI(title="procurement-allocator")
@@ -26,6 +27,7 @@ app.include_router(health_router)
 app.include_router(project_router)
 app.include_router(allocation_router)
 app.include_router(order_router)
+app.include_router(purchase_record_router)
 app.include_router(supplier_router)
 app.include_router(material_router)
 app.include_router(price_router)

@@ -1,0 +1,176 @@
+.page {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-10) var(--space-9) 60px;
+}
+
+.inner {
+  width: 100%;
+  max-width: 1180px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.backLink {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--color-brand);
+}
+
+.centerWrap {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-10) var(--space-9);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  color: var(--color-brand);
+  letter-spacing: -0.01em;
+}
+
+.printLink {
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.printLink:hover {
+  color: var(--color-brand);
+}
+
+/* Same visual language as .belowMinOrderNotice (ADR-0006) — danger-tint
+   banner, not a new warning class. */
+.discrepancyBanner {
+  padding: var(--space-5) var(--space-8);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-danger-text);
+  background: var(--color-danger-tint);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-xl);
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card-sm);
+  overflow: hidden;
+}
+
+.materialColHeader,
+.materialColCell {
+  width: 34%;
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-4) var(--space-8);
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--color-text-tertiary-alt);
+  background: var(--color-surface-subtle);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: var(--space-5) var(--space-8);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.numCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Row-level highlight for |price_delta_pct| > 10 — same danger-tint
+   language as below_min_order, applied per-row instead of per-card. */
+.discrepantRow td {
+  background: var(--color-danger-tint);
+}
+
+.priceInput {
+  width: 110px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-base-alt);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+}
+
+.priceInput:focus {
+  border-color: var(--color-brand);
+  outline: none;
+}
+
+.priceInput:disabled {
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-text-alt);
+}
+
+.delta {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.deltaDiscrepant {
+  font-weight: 700;
+  color: var(--color-danger-text);
+}
+
+.deltaEmpty {
+  color: var(--color-text-tertiary-alt);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-6) var(--space-2);
+}
+
+.footerTotal {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-text);
+}

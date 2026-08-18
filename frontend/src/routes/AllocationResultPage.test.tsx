@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AllocationResultPage } from './AllocationResultPage';
 import { allocationApi } from '../api/allocation';
 import { materialsApi } from '../api/materials';
+import { ordersApi } from '../api/orders';
 import { pricesApi } from '../api/prices';
 import { projectsApi } from '../api/projects';
 import { suppliersApi } from '../api/suppliers';
@@ -25,6 +26,14 @@ vi.mock('../api/materials', () => ({
 vi.mock('../api/prices', () => ({
   pricesApi: { list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
+vi.mock('../api/orders', () => ({
+  ordersApi: {
+    createForRun: vi.fn(),
+    listForProject: vi.fn(),
+    get: vi.fn(),
+    setConfirmedPrice: vi.fn(),
+  },
+}));
 
 const runMock = vi.mocked(allocationApi.run);
 const getRunMock = vi.mocked(allocationApi.get);
@@ -33,6 +42,7 @@ const projectGetMock = vi.mocked(projectsApi.get);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 const materialsListMock = vi.mocked(materialsApi.list);
 const pricesListMock = vi.mocked(pricesApi.list);
+const createOrdersMock = vi.mocked(ordersApi.createForRun);
 
 const project: Project & { items: []; latest_allocation_run: null } = {
   id: 'proj-1',
@@ -89,6 +99,7 @@ describe('AllocationResultPage', () => {
     suppliersListMock.mockReset();
     materialsListMock.mockReset();
     pricesListMock.mockReset();
+    createOrdersMock.mockReset();
 
     projectGetMock.mockResolvedValue(project);
     suppliersListMock.mockResolvedValue([supplierA, supplierB]);
@@ -137,6 +148,7 @@ describe('AllocationResultPage', () => {
           overridden_at: null,
           original_supplier_id: null,
           original_unit_price: null,
+          ordered_at: null,
         },
       ],
       orphaned_materials: [
@@ -161,8 +173,7 @@ describe('AllocationResultPage', () => {
 
     expect(await screen.findByText(supplierA.name)).toBeInTheDocument();
     expect(screen.getAllByText(materialScreen.canonical_name).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Подтвердить и создать ордера/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Подтвердить и создать ордера/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Подтвердить и создать ордера/ })).toBeEnabled();
     expect(screen.getByText(/Не удалось разместить/i)).toBeInTheDocument();
 
     const user = userEvent.setup();
@@ -188,6 +199,7 @@ describe('AllocationResultPage', () => {
           overridden_at: null,
           original_supplier_id: null,
           original_unit_price: null,
+          ordered_at: null,
         },
       ],
       orphaned_materials: [],
@@ -214,6 +226,7 @@ describe('AllocationResultPage', () => {
           overridden_at: '2026-08-18T00:00:00Z',
           original_supplier_id: 'sup-a',
           original_unit_price: 12,
+          ordered_at: null,
         },
       ],
       supplier_summaries: [
@@ -264,6 +277,7 @@ describe('AllocationResultPage', () => {
           overridden_at: '2026-08-18T00:00:00Z',
           original_supplier_id: 'sup-b',
           original_unit_price: 15,
+          ordered_at: null,
         },
       ],
       orphaned_materials: [],
@@ -285,5 +299,137 @@ describe('AllocationResultPage', () => {
     renderPage();
 
     expect(await screen.findByText(/Сумма заказа \$12\.00 меньше минимальной/)).toBeInTheDocument();
+  });
+
+  it('creates orders and navigates to the project on click', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-4',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          quantity: 10,
+          unit_price: 12,
+          line_total: 120,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+    createOrdersMock.mockResolvedValue([]);
+
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
+
+    expect(createOrdersMock).toHaveBeenCalledWith('proj-1', 'run-4');
+    expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
+  });
+
+  it('shows "изменено после отправки ордера" when overridden_at is after ordered_at', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-5',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          quantity: 10,
+          unit_price: 12,
+          line_total: 120,
+          overridden_at: '2026-08-18T12:00:00Z',
+          original_supplier_id: 'sup-b',
+          original_unit_price: 15,
+          ordered_at: '2026-08-18T10:00:00Z',
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    expect(await screen.findByText(/изменено после отправки ордера/)).toBeInTheDocument();
+  });
+
+  it('does not show "изменено после отправки ордера" when the override happened before ordering', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-6',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          quantity: 10,
+          unit_price: 12,
+          line_total: 120,
+          overridden_at: '2026-08-18T08:00:00Z',
+          original_supplier_id: 'sup-b',
+          original_unit_price: 15,
+          ordered_at: '2026-08-18T10:00:00Z',
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    expect(await screen.findByText(supplierA.name)).toBeInTheDocument();
+    expect(screen.queryByText(/изменено после отправки ордера/)).not.toBeInTheDocument();
   });
 });

@@ -32,6 +32,25 @@ def test_create_project_returns_201_with_body(db_session):
     assert body["created_by"] is None
 
 
+def test_update_project_changes_title(make_project):
+    project = make_project(title="Original Title")
+
+    response = client.patch(f"/projects/{project.id}", json={"title": "Renamed Project"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "Renamed Project"
+
+    get_response = client.get(f"/projects/{project.id}")
+    assert get_response.json()["title"] == "Renamed Project"
+
+
+def test_update_project_returns_404_for_missing_project():
+    response = client.patch(f"/projects/{uuid.uuid4()}", json={"title": "Doesn't matter"})
+
+    assert response.status_code == 404
+
+
 def test_get_project_returns_created_project_with_items(db_session, make_project, make_material):
     project = make_project(title="Get Me")
     material = make_material()

@@ -11,10 +11,16 @@ import styles from '../components/CrudScreen.module.css';
 
 type Status = 'loading' | 'ready' | 'error';
 
-export function ProjectDetailPage() {
-  const { projectId } = useParams<{ projectId: string }>();
+interface ProjectDetailPageProps {
+  /** Already-loaded project — skips the initial GET when the caller (ProjectRouterPage) has it. */
+  initialProject?: ProjectWithItems;
+}
+
+export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {}) {
+  const { projectId: routeProjectId } = useParams<{ projectId: string }>();
+  const projectId = initialProject?.id ?? routeProjectId;
   const navigate = useNavigate();
-  const [project, setProject] = useState<ProjectWithItems | null>(null);
+  const [project, setProject] = useState<ProjectWithItems | null>(initialProject ?? null);
   const [materials, setMaterials] = useState<Material[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -26,8 +32,25 @@ export function ProjectDetailPage() {
 
   useEffect(() => {
     if (!projectId) return;
+    if (initialProject) {
+      loadMaterialsOnly();
+      return;
+    }
     void load(projectId);
-  }, [projectId]);
+  }, [projectId, initialProject]);
+
+  async function loadMaterialsOnly() {
+    setStatus('loading');
+    setLoadError(null);
+    try {
+      const materialsData = await materialsApi.list();
+      setMaterials(materialsData);
+      setStatus('ready');
+    } catch (err) {
+      setLoadError(err);
+      setStatus('error');
+    }
+  }
 
   async function load(id: string) {
     setStatus('loading');

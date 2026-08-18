@@ -10,6 +10,7 @@ from app.api.schemas.project import (
     ProjectItemOut,
     ProjectItemUpdate,
     ProjectOut,
+    ProjectUpdate,
     ProjectWithItemsOut,
 )
 from app.core.database import get_db
@@ -27,6 +28,19 @@ def list_projects(db: Session = Depends(get_db)) -> list[Project]:
 def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> Project:
     project = Project(title=payload.title, created_by=payload.created_by)
     db.add(project)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+@router.patch("/{project_id}", response_model=ProjectOut)
+def update_project(
+    project_id: uuid.UUID, payload: ProjectUpdate, db: Session = Depends(get_db)
+) -> Project:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    project.title = payload.title
     db.commit()
     db.refresh(project)
     return project

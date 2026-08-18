@@ -70,6 +70,26 @@
   color: var(--color-text-tertiary-alt);
 }
 
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sortableHeader:hover {
+  color: var(--color-text-secondary);
+}
+
+.sortIndicator {
+  display: inline-block;
+  margin-left: var(--space-2);
+  color: var(--color-text-tertiary-alt);
+}
+
+.sortIndicatorActive {
+  color: var(--color-brand);
+}
+
 .table tbody td {
   padding: var(--space-5) var(--space-8);
   border-bottom: 1px solid var(--color-border-subtle);

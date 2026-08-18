@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { materialsApi } from '../api/materials';
 import { suppliersApi } from '../api/suppliers';
 import type { Material, MaterialCreate, Supplier } from '../api/types';
@@ -11,6 +11,8 @@ import { MaterialPricesPanel } from './materials/MaterialPricesPanel';
 import styles from '../components/CrudScreen.module.css';
 
 type Status = 'loading' | 'ready' | 'error';
+type SortColumn = 'internal_sku' | 'canonical_name';
+type SortDirection = 'asc' | 'desc';
 
 export function MaterialsPage() {
   const [materials, setMaterials] = useState<Material[]>([]);
@@ -21,10 +23,42 @@ export function MaterialsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Material | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     void load();
   }, []);
+
+  function toggleSort(column: SortColumn) {
+    if (sortColumn !== column) {
+      setSortColumn(column);
+      setSortDirection('asc');
+      return;
+    }
+    setSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
+  }
+
+  const filteredMaterials = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (query === '') return materials;
+    return materials.filter(
+      (material) =>
+        material.internal_sku.toLowerCase().includes(query) ||
+        material.canonical_name.toLowerCase().includes(query)
+    );
+  }, [materials, searchQuery]);
+
+  const sortedMaterials = useMemo(() => {
+    if (sortColumn == null) return filteredMaterials;
+    const collator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
+    const sorted = [...filteredMaterials].sort((a, b) =>
+      collator.compare(a[sortColumn], b[sortColumn])
+    );
+    if (sortDirection === 'desc') sorted.reverse();
+    return sorted;
+  }, [filteredMaterials, sortColumn, sortDirection]);
 
   async function load() {
     setStatus('loading');
@@ -123,6 +157,16 @@ export function MaterialsPage() {
             </div>
           )}
 
+          {status === 'ready' && materials.length > 0 && (
+            <input
+              type="text"
+              className={styles.input}
+              placeholder="Поиск по артикулу или названию…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          )}
+
           <div className={styles.card}>
             {status === 'loading' && <div className={styles.loading}>Загрузка…</div>}
 
@@ -147,20 +191,51 @@ export function MaterialsPage() {
               />
             )}
 
-            {status === 'ready' && materials.length > 0 && (
+            {status === 'ready' && materials.length > 0 && sortedMaterials.length === 0 && (
+              <EmptyState
+                title="Ничего не найдено"
+                description={`По запросу «${searchQuery}» материалов не найдено.`}
+              />
+            )}
+
+            {status === 'ready' && sortedMaterials.length > 0 && (
               <table className={`${styles.table} ${styles.rowClickable}`}>
                 <thead>
                   <tr>
                     <th className={styles.expandHeaderCell}></th>
-                    <th>internal_sku</th>
-                    <th>Название</th>
+                    <th
+                      className={styles.sortableHeader}
+                      onClick={() => toggleSort('internal_sku')}
+                    >
+                      internal_sku
+                      <span
+                        className={`${styles.sortIndicator} ${
+                          sortColumn === 'internal_sku' ? styles.sortIndicatorActive : ''
+                        }`}
+                      >
+                        {sortColumn === 'internal_sku' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </th>
+                    <th
+                      className={styles.sortableHeader}
+                      onClick={() => toggleSort('canonical_name')}
+                    >
+                      Название
+                      <span
+                        className={`${styles.sortIndicator} ${
+                          sortColumn === 'canonical_name' ? styles.sortIndicatorActive : ''
+                        }`}
+                      >
+                        {sortColumn === 'canonical_name' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </th>
                     <th>Категория</th>
                     <th>Ед.</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {materials.map((material) => {
+                  {sortedMaterials.map((material) => {
                     const expanded = expandedId === material.id;
                     return (
                       <Fragment key={material.id}>

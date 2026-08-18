@@ -1,7 +1,8 @@
 """Pydantic-схемы для проектов и позиций спецификации (ProjectItem).
 
-Проект как таковой (title/status) — только create/read. Позиции (ProjectItem)
-поддерживают полный CRUD — редактируются с экрана просмотра проекта."""
+Проект поддерживает create/read и обновление title (см. ADR-0004 — автосохранение
+черновика по мере ввода). status не редактируется напрямую через API. Позиции
+(ProjectItem) поддерживают полный CRUD — редактируются с экрана просмотра проекта."""
 
 from __future__ import annotations
 
@@ -14,6 +15,10 @@ from pydantic import BaseModel, ConfigDict, Field
 class ProjectCreate(BaseModel):
     title: str
     created_by: str | None = None
+
+
+class ProjectUpdate(BaseModel):
+    title: str
 
 
 class ProjectOut(BaseModel):

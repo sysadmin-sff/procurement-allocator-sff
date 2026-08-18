@@ -4,6 +4,7 @@ import type { Project, ProjectCreate, ProjectItem, ProjectItemCreate, ProjectWit
 export const projectsApi = {
   list: () => http.get<Project[]>('/projects'),
   create: (payload: ProjectCreate) => http.post<Project>('/projects', payload),
+  updateProject: (id: string, title: string) => http.patch<Project>(`/projects/${id}`, { title }),
   get: (id: string) => http.get<ProjectWithItems>(`/projects/${id}`),
   addItem: (projectId: string, payload: ProjectItemCreate) =>
     http.post<ProjectItem>(`/projects/${projectId}/items`, payload),

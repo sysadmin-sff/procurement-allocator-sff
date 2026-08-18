@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Numeric, String
+from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,7 +44,15 @@ class OrderItem(UUIDPKMixin, Base):
         UUID(as_uuid=True), ForeignKey("materials.id"), nullable=False
     )
     quantity: Mapped[int] = mapped_column(nullable=False)
-    unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    quoted_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    """Снимок AllocationLine.unit_price на момент создания Order — что мы
+    рассчитали и отправили поставщику. См. ADR-0007 п.1."""
+    confirmed_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    """То, что реально подтвердил поставщик — вводится сотрудником вручную
+    после ответа. NULL = ещё не сверено, не "подтверждено с ценой 0"."""
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """Когда сотрудник ввёл confirmed_price. Сбрасывается в NULL, если
+    confirmed_price явно очищен."""
 
     order: Mapped["Order"] = relationship(back_populates="items")
     material: Mapped["Material"] = relationship()

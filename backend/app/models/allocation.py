@@ -69,6 +69,12 @@ class AllocationLine(UUIDPKMixin, Base):
     """supplier_id/unit_price до первого override — не перезаписываются при
     повторном override той же строки, чтобы бейдж "не самая дешёвая цена"
     мог всегда сравнить с настоящим ILP-решением. См. ADR-0006 п.1."""
+    ordered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """Не NULL, если строка вошла в Order, созданный из этого run — см.
+    ADR-0007 п.2. Не блокирует дальнейший override (ADR-0006): если строка
+    переопределена позже (overridden_at > ordered_at), это сигнал для UI,
+    что уже созданный Order расходится с текущим состоянием строки, не
+    запрет на правку."""
 
     allocation_run: Mapped["AllocationRun"] = relationship(back_populates="lines")
     material: Mapped["Material"] = relationship()

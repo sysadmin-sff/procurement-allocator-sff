@@ -25,6 +25,11 @@ class AllocationLineOut(BaseModel):
     overridden_at: datetime | None = None
     original_supplier_id: uuid.UUID | None = None
     original_unit_price: float | None = None
+    ordered_at: datetime | None = None
+    """Не NULL, если строка вошла в Order — см. ADR-0007 п.2. UI сравнивает
+    overridden_at > ordered_at, чтобы показать "изменено после отправки
+    ордера" (сравнение timestamp'ов, не денежная операция — принцип 4
+    CLAUDE.md касается арифметики над деньгами, не сравнения дат)."""
 
 
 class AllocationLineOverrideIn(BaseModel):

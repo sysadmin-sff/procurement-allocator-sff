@@ -9,6 +9,8 @@ from app.models import (
     AllocationLine,
     AllocationRun,
     Material,
+    Order,
+    OrderItem,
     Price,
     Project,
     ProjectItem,
@@ -34,6 +36,16 @@ def db_session():
         app.dependency_overrides.pop(get_db, None)
         session.rollback()
         for project_id in project_ids:
+            order_ids = [
+                o.id for o in session.query(Order).filter_by(project_id=project_id).all()
+            ]
+            if order_ids:
+                session.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(
+                    synchronize_session=False
+                )
+                session.query(Order).filter(Order.id.in_(order_ids)).delete(
+                    synchronize_session=False
+                )
             run_ids = [
                 r.id for r in session.query(AllocationRun).filter_by(project_id=project_id).all()
             ]

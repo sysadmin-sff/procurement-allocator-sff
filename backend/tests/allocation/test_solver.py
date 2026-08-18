@@ -2,6 +2,26 @@ from app.allocation.solver import solve_allocation
 from app.allocation.types import AllocationInput, MaterialInput, PriceInput, SupplierInput
 
 
+def test_material_with_null_availability_is_still_assignable():
+    """See ADR-0005: availability=NULL means "not tracked", not "unavailable" —
+    the pair (m, s) stays eligible for the solver, it isn't excluded."""
+    materials = [MaterialInput(material_id="m1", quantity=10)]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=None)
+    ]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=500, availability=None)
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    assert len(result.lines) == 1
+    assert result.lines[0].supplier_id == "s1"
+
+
 def test_supplier_summary_reports_goods_total_and_no_free_shipping():
     materials = [MaterialInput(material_id="m1", quantity=1)]
     suppliers = [

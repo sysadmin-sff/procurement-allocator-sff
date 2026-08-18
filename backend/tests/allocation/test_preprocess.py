@@ -51,7 +51,10 @@ def test_material_with_zero_availability_offer_has_no_partial_suggestion():
     assert orphaned[0].best_partial_available is None
 
 
-def test_material_with_null_availability_price_does_not_satisfy_and_is_not_partial():
+def test_material_with_null_availability_price_is_treated_as_available():
+    """availability = NULL means "not tracked", not "zero in stock" — see
+    ADR-0005: suppliers only confirm real stock after an order is sent, so
+    availability is routinely unset at calculation time."""
     materials = [MaterialInput(material_id="m1", quantity=10)]
     prices = [
         PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=500, availability=None)
@@ -59,8 +62,23 @@ def test_material_with_null_availability_price_does_not_satisfy_and_is_not_parti
 
     solvable, orphaned = split_orphaned_materials(materials, prices)
 
-    assert solvable == []
-    assert orphaned[0].best_partial_supplier_id is None
+    assert solvable == materials
+    assert orphaned == []
+
+
+def test_material_solvable_via_null_availability_even_if_another_supplier_has_insufficient():
+    """One offer with an explicit, insufficient availability shouldn't shadow
+    a NULL offer from a different supplier — NULL still rescues the material."""
+    materials = [MaterialInput(material_id="m1", quantity=10)]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=500, availability=3),
+        PriceInput(material_id="m1", supplier_id="s2", unit_price_cents=600, availability=None),
+    ]
+
+    solvable, orphaned = split_orphaned_materials(materials, prices)
+
+    assert solvable == materials
+    assert orphaned == []
 
 
 def test_mix_of_solvable_and_orphaned_materials_are_both_reported():

@@ -11,7 +11,7 @@ import { suppliersApi } from '../api/suppliers';
 import type { AllocationRun, Material, Price, Project, Supplier } from '../api/types';
 
 vi.mock('../api/allocation', () => ({
-  allocationApi: { run: vi.fn(), get: vi.fn() },
+  allocationApi: { run: vi.fn(), get: vi.fn(), overrideLine: vi.fn() },
 }));
 vi.mock('../api/projects', () => ({
   projectsApi: { create: vi.fn(), get: vi.fn(), addItem: vi.fn() },
@@ -27,6 +27,8 @@ vi.mock('../api/prices', () => ({
 }));
 
 const runMock = vi.mocked(allocationApi.run);
+const getRunMock = vi.mocked(allocationApi.get);
+const overrideLineMock = vi.mocked(allocationApi.overrideLine);
 const projectGetMock = vi.mocked(projectsApi.get);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 const materialsListMock = vi.mocked(materialsApi.list);
@@ -81,6 +83,8 @@ function renderPage(projectId = 'proj-1') {
 describe('AllocationResultPage', () => {
   beforeEach(() => {
     runMock.mockReset();
+    getRunMock.mockReset();
+    overrideLineMock.mockReset();
     projectGetMock.mockReset();
     suppliersListMock.mockReset();
     materialsListMock.mockReset();
@@ -130,13 +134,22 @@ describe('AllocationResultPage', () => {
           quantity: 10,
           unit_price: 12,
           line_total: 120,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
         },
       ],
       orphaned_materials: [
         { material_id: 'mat-1', required_quantity: 5, best_partial_supplier_id: null, best_partial_available: null },
       ],
       supplier_summaries: [
-        { supplier_id: 'sup-a', goods_total: 120, delivery_fee: 0, free_shipping_achieved: true },
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
       ],
     };
     runMock.mockResolvedValue(okRun);
@@ -155,5 +168,122 @@ describe('AllocationResultPage', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /Назад к проекту/ }));
     expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
+  });
+
+  it('overrides the supplier on a line via the select, then refetches the run', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-2',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          quantity: 10,
+          unit_price: 12,
+          line_total: 120,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    const refetchedRun: AllocationRun = {
+      ...okRun,
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-b',
+          quantity: 10,
+          unit_price: 15,
+          line_total: 150,
+          overridden_at: '2026-08-18T00:00:00Z',
+          original_supplier_id: 'sup-a',
+          original_unit_price: 12,
+        },
+      ],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-b',
+          goods_total: 150,
+          delivery_fee: 15,
+          free_shipping_achieved: false,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    getRunMock.mockResolvedValue(refetchedRun);
+    overrideLineMock.mockResolvedValue(refetchedRun.lines[0]);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      { id: 'p2', material_id: 'mat-1', supplier_id: 'sup-b', price: 15, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    const select = await screen.findByRole('combobox');
+    const user = userEvent.setup();
+    await user.selectOptions(select, 'sup-b');
+
+    expect(overrideLineMock).toHaveBeenCalledWith('proj-1', 'run-2', 'line-1', 'sup-b');
+    expect(await screen.findByText(supplierB.name)).toBeInTheDocument();
+    expect(screen.getByText(/изменено вручную/)).toBeInTheDocument();
+    expect(screen.getByText(/было: ABC Supply, \$12\.00\/ед\./)).toBeInTheDocument();
+  });
+
+  it('shows a below-min-order notice row under the supplier header', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-3',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          quantity: 1,
+          unit_price: 12,
+          line_total: 12,
+          overridden_at: '2026-08-18T00:00:00Z',
+          original_supplier_id: 'sup-b',
+          original_unit_price: 15,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 12,
+          delivery_fee: 25,
+          free_shipping_achieved: false,
+          below_min_order: true,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    expect(await screen.findByText(/Сумма заказа \$12\.00 меньше минимальной/)).toBeInTheDocument();
   });
 });

@@ -33,12 +33,14 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
     material_ids = list(qty.keys())
 
     # price[m][s], только для допустимых пар (Ограничение 2: недопустимые пары
-    # исключаются из модели, а не запрещаются ограничением).
+    # исключаются из модели, а не запрещаются ограничением). availability=NULL
+    # трактуется как "доступно" — см. ADR-0005; исключаем пару только когда
+    # availability явно задан и его недостаточно.
     price: dict[tuple[str, str], int] = {}
     for p in data.prices:
         if p.material_id not in qty:
             continue
-        if p.availability is None or p.availability < qty[p.material_id]:
+        if p.availability is not None and p.availability < qty[p.material_id]:
             continue
         price[(p.material_id, p.supplier_id)] = p.unit_price_cents
 

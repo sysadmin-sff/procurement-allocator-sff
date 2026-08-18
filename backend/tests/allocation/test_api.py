@@ -197,3 +197,133 @@ def test_get_allocation_run_returns_404_when_run_belongs_to_different_project(
     response = client.get(f"/projects/{project_b.id}/allocations/{run_id}")
 
     assert response.status_code == 404
+
+
+def test_patch_override_line_supplier_returns_updated_line(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    old_supplier = make_supplier(name="Old Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    new_supplier = make_supplier(name="New Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, old_supplier, price=5.00, availability=10)
+    make_price(material, new_supplier, price=7.00, availability=10)
+    project = make_project([(material, 10)])
+
+    run_response = client.post(f"/projects/{project.id}/allocate")
+    run_id = run_response.json()["id"]
+    line_id = run_response.json()["lines"][0]["id"]
+
+    response = client.patch(
+        f"/projects/{project.id}/allocations/{run_id}/lines/{line_id}",
+        json={"supplier_id": str(new_supplier.id)},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["supplier_id"] == str(new_supplier.id)
+    assert body["unit_price"] == 7.00
+    assert body["line_total"] == 70.00
+    assert body["overridden_at"] is not None
+    assert body["original_supplier_id"] == str(old_supplier.id)
+    assert body["original_unit_price"] == 5.00
+
+
+def test_patch_override_line_supplier_persists_across_get(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """The override must survive re-fetching the run — not just be reflected
+    in the PATCH response — since it's backend-persisted, not client state.
+    See ADR-0006 п.5 (ADR-0004 F5-loss class of bug)."""
+    session, *_ = db_session
+    old_supplier = make_supplier(name="Old Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    new_supplier = make_supplier(name="New Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, old_supplier, price=5.00, availability=10)
+    make_price(material, new_supplier, price=7.00, availability=10)
+    project = make_project([(material, 10)])
+
+    run_response = client.post(f"/projects/{project.id}/allocate")
+    run_id = run_response.json()["id"]
+    line_id = run_response.json()["lines"][0]["id"]
+
+    client.patch(
+        f"/projects/{project.id}/allocations/{run_id}/lines/{line_id}",
+        json={"supplier_id": str(new_supplier.id)},
+    )
+
+    get_response = client.get(f"/projects/{project.id}/allocations/{run_id}")
+    body = get_response.json()
+    line = next(entry for entry in body["lines"] if entry["id"] == line_id)
+    assert line["supplier_id"] == str(new_supplier.id)
+    assert line["overridden_at"] is not None
+
+    summaries = {s["supplier_id"]: s for s in body["supplier_summaries"]}
+    assert str(old_supplier.id) not in summaries
+    assert summaries[str(new_supplier.id)]["goods_total"] == 70.00
+
+
+def test_patch_override_returns_422_for_supplier_without_active_price(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    old_supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    supplier_without_price = make_supplier(
+        name="No Price Supplier", flat_fee=0.0, free_shipping_threshold=0.0
+    )
+    material = make_material()
+    make_price(material, old_supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+
+    run_response = client.post(f"/projects/{project.id}/allocate")
+    run_id = run_response.json()["id"]
+    line_id = run_response.json()["lines"][0]["id"]
+
+    response = client.patch(
+        f"/projects/{project.id}/allocations/{run_id}/lines/{line_id}",
+        json={"supplier_id": str(supplier_without_price.id)},
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_override_returns_404_for_unknown_line(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+
+    run_response = client.post(f"/projects/{project.id}/allocate")
+    run_id = run_response.json()["id"]
+
+    response = client.patch(
+        f"/projects/{project.id}/allocations/{run_id}/lines/{uuid.uuid4()}",
+        json={"supplier_id": str(supplier.id)},
+    )
+
+    assert response.status_code == 404
+
+
+def test_patch_override_returns_404_when_run_belongs_to_different_project(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project_a = make_project([(material, 10)])
+    project_b = make_project([(material, 10)])
+
+    run_response = client.post(f"/projects/{project_a.id}/allocate")
+    run_id = run_response.json()["id"]
+    line_id = run_response.json()["lines"][0]["id"]
+
+    response = client.patch(
+        f"/projects/{project_b.id}/allocations/{run_id}/lines/{line_id}",
+        json={"supplier_id": str(supplier.id)},
+    )
+
+    assert response.status_code == 404

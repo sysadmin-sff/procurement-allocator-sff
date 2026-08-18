@@ -17,6 +17,9 @@ interface MaterialComboboxProps {
   onQuantityFocus: () => void;
 }
 
+/** Below this many pixels of room underneath the input, the list opens upward instead. */
+const MIN_SPACE_BELOW_PX = 200;
+
 export function MaterialCombobox({
   query,
   selected,
@@ -29,7 +32,9 @@ export function MaterialCombobox({
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<Material[]>([]);
   const [highlighted, setHighlighted] = useState(0);
+  const [openUpward, setOpenUpward] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (query.trim().length < MIN_QUERY_LENGTH) {
@@ -51,6 +56,15 @@ export function MaterialCombobox({
     return () => clearTimeout(debounceRef.current);
   }, [query]);
 
+  function openList() {
+    const wrap = wrapRef.current;
+    if (wrap) {
+      const spaceBelow = window.innerHeight - wrap.getBoundingClientRect().bottom;
+      setOpenUpward(spaceBelow < MIN_SPACE_BELOW_PX);
+    }
+    setOpen(true);
+  }
+
   function pick(material: Material) {
     onSelect(material);
     setOpen(false);
@@ -60,7 +74,7 @@ export function MaterialCombobox({
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setOpen(true);
+      openList();
       setHighlighted((i) => Math.min(i + 1, options.length - 1));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
@@ -79,7 +93,7 @@ export function MaterialCombobox({
   const showEmpty = open && query.trim().length >= MIN_QUERY_LENGTH && options.length === 0;
 
   return (
-    <div className={styles.comboboxWrap}>
+    <div className={styles.comboboxWrap} ref={wrapRef}>
       <input
         ref={inputRef}
         className={`${styles.input} ${invalid ? styles.inputInvalid : ''}`}
@@ -89,14 +103,17 @@ export function MaterialCombobox({
         aria-expanded={open}
         aria-autocomplete="list"
         onChange={(e) => onQueryChange(e.target.value)}
-        onFocus={() => setOpen(true)}
+        onFocus={openList}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={handleKeyDown}
       />
       {selected && <div className={styles.comboboxUnit}>{selected.unit}</div>}
 
       {open && options.length > 0 && (
-        <ul className={styles.comboboxList} role="listbox">
+        <ul
+          className={`${styles.comboboxList} ${openUpward ? styles.comboboxListUp : ''}`}
+          role="listbox"
+        >
           {options.map((material, index) => (
             <li key={material.id} role="option" aria-selected={index === highlighted}>
               <button
@@ -117,7 +134,9 @@ export function MaterialCombobox({
       )}
 
       {showEmpty && (
-        <div className={styles.comboboxEmpty}>
+        <div
+          className={`${styles.comboboxEmpty} ${openUpward ? styles.comboboxListUp : ''}`}
+        >
           Ничего не найдено. Проверьте артикул или добавьте материал в базу.
         </div>
       )}

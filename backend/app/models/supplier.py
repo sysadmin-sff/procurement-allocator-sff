@@ -26,4 +26,6 @@ class Supplier(UUIDPKMixin, Base):
     aliases: Mapped[list["SupplierMaterialAlias"]] = relationship(back_populates="supplier")
     price_list_imports: Mapped[list["PriceListImport"]] = relationship(back_populates="supplier")
     orders: Mapped[list["Order"]] = relationship(back_populates="supplier")
-    allocation_lines: Mapped[list["AllocationLine"]] = relationship(back_populates="supplier")
+    allocation_lines: Mapped[list["AllocationLine"]] = relationship(
+        back_populates="supplier", foreign_keys="AllocationLine.supplier_id"
+    )

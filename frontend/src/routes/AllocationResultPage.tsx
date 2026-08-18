@@ -100,10 +100,24 @@ export function AllocationResultPage() {
     );
   }
 
-  return <AllocationResultOk data={data} onBack={() => navigate(`/projects/${projectId}`)} />;
+  return (
+    <AllocationResultOk
+      data={data}
+      onBack={() => navigate(`/projects/${projectId}`)}
+      onRunChange={(run) => setData((prev) => (prev ? { ...prev, run } : prev))}
+    />
+  );
 }
 
-function AllocationResultOk({ data, onBack }: { data: LoadedData; onBack: () => void }) {
+function AllocationResultOk({
+  data,
+  onBack,
+  onRunChange,
+}: {
+  data: LoadedData;
+  onBack: () => void;
+  onRunChange: (run: AllocationRun) => void;
+}) {
   const { run, project, suppliers, materials, prices } = data;
 
   const supplierById = new Map(suppliers.map((s) => [s.id, s]));
@@ -115,6 +129,24 @@ function AllocationResultOk({ data, onBack }: { data: LoadedData; onBack: () => 
   );
 
   const cheapestByMaterial = buildCheapestPriceIndex(prices);
+  const pricesByMaterial = buildPricesByMaterialIndex(prices);
+
+  const [overrideError, setOverrideError] = useState<unknown>(null);
+  const [savingLineId, setSavingLineId] = useState<string | null>(null);
+
+  async function handleOverride(lineId: string, supplierId: string) {
+    setOverrideError(null);
+    setSavingLineId(lineId);
+    try {
+      await allocationApi.overrideLine(project.id, run.id, lineId, supplierId);
+      const refreshed = await allocationApi.get(project.id, run.id);
+      onRunChange(refreshed);
+    } catch (err) {
+      setOverrideError(err);
+    } finally {
+      setSavingLineId(null);
+    }
+  }
 
   return (
     <div className={styles.page}>
@@ -133,6 +165,8 @@ function AllocationResultOk({ data, onBack }: { data: LoadedData; onBack: () => 
             </span>
           </div>
         </div>
+
+        {overrideError != null && <ErrorBanner error={overrideError} />}
 
         {run.orphaned_materials.length > 0 && (
           <div className={styles.warningBlock} role="alert">
@@ -190,12 +224,21 @@ function AllocationResultOk({ data, onBack }: { data: LoadedData; onBack: () => 
                 <span className={styles.supplierTotal}>{formatMoney(cardTotal)}</span>
               </div>
 
+              {summary.below_min_order && (
+                <div className={styles.belowMinOrderNotice} role="alert">
+                  ⚠ Сумма заказа {formatMoney(summary.goods_total)} меньше минимальной{' '}
+                  {formatMoney(supplier?.delivery_policy.per_order_min_amount ?? 0)} — поставщик
+                  может отклонить заказ.
+                </div>
+              )}
+
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>Материал</th>
+                    <th className={styles.materialColHeader}>Материал</th>
                     <th className={styles.numCell}>Кол-во</th>
                     <th className={styles.numCell}>Цена за ед.</th>
+                    <th className={styles.numCell}>Поставщик</th>
                     <th className={styles.numCell}>Сумма</th>
                   </tr>
                 </thead>
@@ -206,6 +249,10 @@ function AllocationResultOk({ data, onBack }: { data: LoadedData; onBack: () => 
                       line={line}
                       material={materialById.get(line.material_id)}
                       cheapest={cheapestByMaterial.get(line.material_id)}
+                      supplierOptions={pricesByMaterial.get(line.material_id) ?? []}
+                      supplierById={supplierById}
+                      saving={savingLineId === line.id}
+                      onOverride={(supplierId) => handleOverride(line.id, supplierId)}
                     />
                   ))}
                 </tbody>
@@ -229,37 +276,90 @@ function LineRow({
   line,
   material,
   cheapest,
+  supplierOptions,
+  supplierById,
+  saving,
+  onOverride,
 }: {
   line: AllocationLine;
   material: Material | undefined;
   cheapest: { price: number; supplierIds: string[] } | undefined;
+  supplierOptions: Price[];
+  supplierById: Map<string, Supplier>;
+  saving: boolean;
+  onOverride: (supplierId: string) => void;
 }) {
   const isCheapest = !cheapest || line.unit_price <= cheapest.price;
   const delta = cheapest ? line.unit_price - cheapest.price : null;
+  const cheapestSupplierName =
+    cheapest && cheapest.supplierIds.length > 0
+      ? (supplierById.get(cheapest.supplierIds[0])?.name ?? cheapest.supplierIds[0])
+      : null;
+
+  const isOverridden = line.overridden_at != null;
+  const originalSupplierName =
+    line.original_supplier_id != null
+      ? (supplierById.get(line.original_supplier_id)?.name ?? line.original_supplier_id)
+      : null;
+
+  const currentPrice = supplierOptions.find((p) => p.supplier_id === line.supplier_id);
+  const availabilityShort =
+    currentPrice?.availability != null && currentPrice.availability < line.quantity;
 
   return (
     <tr>
-      <td>
+      <td className={styles.materialColCell}>
         <span className={styles.materialCell}>
           {material?.canonical_name ?? line.material_id}
           {!isCheapest && (
-            <span
-              className={styles.badge}
-              title={
-                delta != null && delta > 0
-                  ? `Дороже на ${formatMoney(delta)} за единицу, но экономит на доставке у этого поставщика`
-                  : 'Дороже, но экономит на доставке у этого поставщика'
-              }
-            >
+            <span className={styles.badge}>
               не самая дешёвая цена
+              {delta != null && delta > 0 && cheapestSupplierName && (
+                <span className={styles.badgeText}>
+                  {' '}
+                  — дороже на {formatMoney(delta)} за единицу, чем у {cheapestSupplierName}
+                </span>
+              )}
+            </span>
+          )}
+          {isOverridden && (
+            <span className={styles.overrideBadge}>
+              изменено вручную
+              {originalSupplierName && line.original_unit_price != null && (
+                <span className={styles.overrideNote}>
+                  {' '}
+                  было: {originalSupplierName}, {formatMoney(line.original_unit_price)}/ед.
+                </span>
+              )}
             </span>
           )}
         </span>
+        {availabilityShort && currentPrice && (
+          <span className={styles.availabilityRisk}>
+            ⚠ у поставщика доступно {currentPrice.availability} {material?.unit ?? ''}, требуется{' '}
+            {line.quantity}
+          </span>
+        )}
       </td>
       <td className={styles.numCell}>
         {line.quantity} {material?.unit ?? ''}
       </td>
       <td className={styles.numCell}>{formatMoney(line.unit_price)}</td>
+      <td className={styles.numCell}>
+        <select
+          className={styles.supplierSelect}
+          value={line.supplier_id}
+          disabled={saving}
+          onChange={(e) => onOverride(e.target.value)}
+        >
+          {supplierOptions.map((price) => (
+            <option key={price.supplier_id} value={price.supplier_id}>
+              {supplierById.get(price.supplier_id)?.name ?? price.supplier_id} —{' '}
+              {formatMoney(price.price)}
+            </option>
+          ))}
+        </select>
+      </td>
       <td className={styles.numCell}>{formatMoney(line.line_total)}</td>
     </tr>
   );
@@ -276,6 +376,21 @@ function buildCheapestPriceIndex(
       index.set(price.material_id, { price: price.price, supplierIds: [price.supplier_id] });
     } else if (price.price === existing.price) {
       existing.supplierIds.push(price.supplier_id);
+    }
+  }
+  return index;
+}
+
+/** Active prices grouped by material_id — the option set for the per-line supplier override select. */
+function buildPricesByMaterialIndex(prices: Price[]): Map<string, Price[]> {
+  const index = new Map<string, Price[]>();
+  for (const price of prices) {
+    if (price.valid_to != null) continue;
+    const list = index.get(price.material_id);
+    if (list) {
+      list.push(price);
+    } else {
+      index.set(price.material_id, [price]);
     }
   }
   return index;

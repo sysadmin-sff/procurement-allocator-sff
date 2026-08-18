@@ -173,7 +173,13 @@
 
 .table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
+}
+
+.materialColHeader,
+.materialColCell {
+  width: 40%;
 }
 
 .table th {
@@ -208,7 +214,9 @@
 .materialCell {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
+  min-width: 0;
 }
 
 .badge {
@@ -220,8 +228,57 @@
   color: var(--color-warning-text);
   font-size: var(--text-xs-alt);
   font-weight: 700;
-  cursor: help;
   white-space: nowrap;
+}
+
+.badgeText {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.overrideBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs-alt);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.overrideNote {
+  margin-left: var(--space-2);
+  font-size: var(--text-xs-alt);
+  font-weight: 500;
+  color: var(--color-text-tertiary-alt);
+}
+
+.availabilityRisk {
+  display: block;
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-danger-text);
+}
+
+.supplierSelect {
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 2px var(--space-3);
+  max-width: 220px;
+}
+
+.belowMinOrderNotice {
+  padding: var(--space-3) var(--space-8);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-danger-text);
+  background: var(--color-danger-tint);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .footer {

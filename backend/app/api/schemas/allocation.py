@@ -22,6 +22,16 @@ class AllocationLineOut(BaseModel):
     quantity: int
     unit_price: float
     line_total: float
+    overridden_at: datetime | None = None
+    original_supplier_id: uuid.UUID | None = None
+    original_unit_price: float | None = None
+
+
+class AllocationLineOverrideIn(BaseModel):
+    """Body for PATCH .../lines/{line_id} — see ADR-0006 п.5. Single-field,
+    no diff-semantics, same style as ProjectUpdate (ADR-0004)."""
+
+    supplier_id: uuid.UUID
 
 
 class OrphanedMaterialOut(BaseModel):
@@ -39,6 +49,11 @@ class SupplierAllocationSummaryOut(BaseModel):
     goods_total: float
     delivery_fee: float
     free_shipping_achieved: bool
+    below_min_order: bool = False
+    """True если goods_total ниже Supplier.delivery_policy.per_order_min_amount
+    — при обычном run_allocation() всегда False (ADR-0002 Ограничение 4 —
+    жёсткое условие ILP), может стать True только после ручного
+    переопределения (ADR-0006), которое не подчиняется этому ограничению."""
 
 
 class AllocationRunOut(BaseModel):

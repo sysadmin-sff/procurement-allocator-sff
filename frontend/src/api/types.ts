@@ -113,6 +113,9 @@ export interface AllocationLine {
   quantity: number;
   unit_price: number;
   line_total: number;
+  overridden_at: string | null;
+  original_supplier_id: string | null;
+  original_unit_price: number | null;
 }
 
 export interface OrphanedMaterial {
@@ -127,6 +130,7 @@ export interface SupplierAllocationSummary {
   goods_total: number;
   delivery_fee: number;
   free_shipping_achieved: boolean;
+  below_min_order: boolean;
 }
 
 export type AllocationRunStatus = 'ok' | 'infeasible';

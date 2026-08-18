@@ -58,7 +58,21 @@ class AllocationLine(UUIDPKMixin, Base):
     quantity: Mapped[int] = mapped_column(nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     line_total: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    overridden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """Не NULL, если поставщик строки был вручную переопределён пользователем
+    после run_allocation() — см. ADR-0006. NULL = строка в исходном
+    ILP-состоянии."""
+    original_supplier_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("suppliers.id")
+    )
+    original_unit_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    """supplier_id/unit_price до первого override — не перезаписываются при
+    повторном override той же строки, чтобы бейдж "не самая дешёвая цена"
+    мог всегда сравнить с настоящим ILP-решением. См. ADR-0006 п.1."""
 
     allocation_run: Mapped["AllocationRun"] = relationship(back_populates="lines")
     material: Mapped["Material"] = relationship()
-    supplier: Mapped["Supplier"] = relationship(back_populates="allocation_lines")
+    supplier: Mapped["Supplier"] = relationship(
+        back_populates="allocation_lines", foreign_keys=[supplier_id]
+    )
+    original_supplier: Mapped["Supplier | None"] = relationship(foreign_keys=[original_supplier_id])

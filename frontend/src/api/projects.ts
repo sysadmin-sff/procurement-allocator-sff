@@ -12,4 +12,6 @@ export const projectsApi = {
     http.patch<ProjectItem>(`/projects/${projectId}/items/${itemId}`, { quantity }),
   removeItem: (projectId: string, itemId: string) =>
     http.delete<void>(`/projects/${projectId}/items/${itemId}`),
+  remove: (id: string) => http.delete<void>(`/projects/${id}`),
+  complete: (id: string) => http.post<Project>(`/projects/${id}/complete`, {}),
 };

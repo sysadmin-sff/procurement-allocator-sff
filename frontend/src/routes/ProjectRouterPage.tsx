@@ -10,11 +10,12 @@ import styles from '../components/CrudScreen.module.css';
 type Status = 'loading' | 'ready' | 'error';
 
 /**
- * `/projects/:projectId` renders one of two screens depending on whether the
- * project has ever been calculated (see ADR-0004): a project with no
- * `latest_allocation_run` is still a draft under construction — it gets the
- * keyboard-first builder grid (autosaving). Once allocation has run at least
- * once, it gets the read/edit detail screen with the run summary.
+ * `/projects/:projectId` renders one of two screens depending on
+ * `project.status` (see ADR-0011): `status === 'draft'` means the project
+ * is still being assembled and has never had a solved AllocationRun — it
+ * gets the keyboard-first builder grid (autosaving). Any later status
+ * (`calculated`/`ordered`/`completed`) gets the read/edit detail screen
+ * with the run summary.
  */
 export function ProjectRouterPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -56,7 +57,7 @@ export function ProjectRouterPage() {
     );
   }
 
-  if (project.latest_allocation_run == null) {
+  if (project.status === 'draft') {
     return <ProjectBuilderPage projectId={projectId} initialProject={project} />;
   }
 

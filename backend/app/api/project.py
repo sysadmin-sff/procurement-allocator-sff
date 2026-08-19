@@ -55,6 +55,22 @@ def update_project(
     return project
 
 
+@router.post("/{project_id}/complete", response_model=ProjectOut)
+def complete_project(project_id: uuid.UUID, db: Session = Depends(get_db)) -> Project:
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.status != "ordered":
+        raise HTTPException(
+            status_code=409,
+            detail="Проект можно завершить только после отправки ордеров поставщикам.",
+        )
+    project.status = "completed"
+    db.commit()
+    db.refresh(project)
+    return project
+
+
 @router.get("/{project_id}", response_model=ProjectWithItemsOut)
 def get_project(project_id: uuid.UUID, db: Session = Depends(get_db)) -> ProjectWithItemsOut:
     project = db.get(Project, project_id)

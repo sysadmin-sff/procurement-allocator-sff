@@ -20,7 +20,7 @@ def test_list_projects_returns_projects_ordered_by_created_at_desc(make_project)
 
 
 def test_create_project_returns_201_with_body(db_session):
-    session, project_ids, _material_ids = db_session
+    session, project_ids, _material_ids, _supplier_ids = db_session
 
     response = client.post("/projects", json={"title": "Riverside Pool Cage"})
 
@@ -54,7 +54,7 @@ def test_update_project_returns_404_for_missing_project():
 def test_get_project_returns_created_project_with_items(db_session, make_project, make_material):
     project = make_project(title="Get Me")
     material = make_material()
-    session, _project_ids, _material_ids = db_session
+    session, _project_ids, _material_ids, _supplier_ids = db_session
 
     response = client.post(
         f"/projects/{project.id}/items",

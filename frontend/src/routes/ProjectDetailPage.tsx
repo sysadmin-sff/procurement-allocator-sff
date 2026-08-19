@@ -129,6 +129,17 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
     }
   }
 
+  async function handleComplete() {
+    if (!projectId) return;
+    setActionError(null);
+    try {
+      const updated = await projectsApi.complete(projectId);
+      setProject((prev) => (prev ? { ...prev, status: updated.status } : prev));
+    } catch (err) {
+      setActionError(err);
+    }
+  }
+
   if (!projectId) {
     return <ErrorBanner error="Не указан проект." />;
   }
@@ -139,12 +150,19 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
         <div className={styles.header}>
           <h1 className={styles.title}>{project?.title ?? 'Проект'}</h1>
           {status === 'ready' && project && (
-            <Button
-              variant="primary"
-              onClick={() => navigate(`/projects/${projectId}/allocation`)}
-            >
-              {project.latest_allocation_run ? 'Пересчитать закупку »' : 'Рассчитать закупку »'}
-            </Button>
+            <div className={styles.actionsCell}>
+              {project.status === 'ordered' && (
+                <Button variant="secondary" onClick={() => void handleComplete()}>
+                  Завершить проект
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={() => navigate(`/projects/${projectId}/allocation`)}
+              >
+                {project.latest_allocation_run ? 'Пересчитать закупку »' : 'Рассчитать закупку »'}
+              </Button>
+            </div>
           )}
         </div>
 
@@ -167,6 +185,7 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                 <div className={styles.card}>
                   <div className={styles.sectionHeader}>
                     <div className={styles.sectionTitle}>Ордера</div>
+                    <Link to={`/projects/${projectId}/purchases`}>Фактическая закупка »</Link>
                   </div>
                   <table className={styles.table}>
                     <thead>

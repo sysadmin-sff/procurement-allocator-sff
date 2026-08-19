@@ -100,7 +100,7 @@ erDiagram
     Project {
         uuid id
         string title
-        string status
+        string status "draft/calculated/ordered/completed, см. ADR-0011"
     }
     ProjectItem {
         uuid project_id
@@ -191,3 +191,15 @@ project/supplier ещё нет ни одного `Order` (нет базы для
 ноль). Автоматическое сопоставление строк плана и факта по тексту — не
 проектируется, экран показывает оба списка для визуальной сверки
 человеком.
+
+`Project.status` — добавлено сверх исходной диаграммы, см.
+`docs/decisions/0011-project-status-lifecycle.md`. `draft → calculated →
+ordered → completed`. Первые три перехода — автоматические, побочный
+эффект `run_allocation()`/`create_orders_for_run()` (по наличию
+`AllocationRun.status == "ok"` / `Order` для проекта, не по отдельному
+действию пользователя). Только `AllocationRun` со статусом `"ok"` двигает
+статус — `"infeasible"` не меняет его никогда, даже если это единственный
+прогон у проекта. Повторный успешный расчёт на уже `ordered` проекте
+откатывает статус в `calculated`. `ordered → completed` — единственный
+ручной переход (кнопка «Завершить проект»), `completed` финален, без
+обратного перехода.

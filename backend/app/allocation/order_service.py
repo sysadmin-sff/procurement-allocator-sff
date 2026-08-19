@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import AllocationLine, AllocationRun, Order, OrderItem
+from app.models import AllocationLine, AllocationRun, Order, OrderItem, Project
 
 SIGNIFICANT_PRICE_DELTA_PCT = 10
 """Threshold above which a quoted vs. confirmed price discrepancy is flagged
@@ -92,6 +92,10 @@ def create_orders_for_run(
             line.ordered_at = now
 
         orders.append(order)
+
+    if orders:
+        project = db.get(Project, project_id)
+        project.status = "ordered"
 
     db.commit()
     for order in orders:

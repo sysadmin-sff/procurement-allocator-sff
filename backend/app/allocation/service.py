@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.allocation.preprocess import split_orphaned_materials
 from app.allocation.solver import solve_allocation
 from app.allocation.types import AllocationInput, MaterialInput, PriceInput, SupplierInput
-from app.models import AllocationLine, AllocationRun, Price, ProjectItem, Supplier
+from app.models import AllocationLine, AllocationRun, Price, Project, ProjectItem, Supplier
 
 ALGORITHM_VERSION = "adr-0005-v1"
 """Правило допустимости пары (material, supplier) изменилось под ADR-0005:
@@ -164,6 +164,10 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
     db.flush()
 
     if solved:
+        project = db.get(Project, project_id)
+        if project.status in ("draft", "ordered"):
+            project.status = "calculated"
+
         for line in result.lines:
             db.add(
                 AllocationLine(

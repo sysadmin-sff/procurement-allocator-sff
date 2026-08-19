@@ -141,11 +141,13 @@ export interface PriceUpdate {
   valid_to?: string | null;
 }
 
+export type ProjectStatus = 'draft' | 'calculated' | 'ordered' | 'completed';
+
 export interface Project {
   id: string;
   title: string;
   created_by: string | null;
-  status: string;
+  status: ProjectStatus;
   created_at: string;
 }
 

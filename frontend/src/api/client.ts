@@ -3,11 +3,21 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 export class ApiError extends Error {
   status: number;
   detail: unknown;
+  /** Full parsed response body — detail is just its .detail field (or the
+   * whole body, if that field is absent), kept for ErrorBanner's existing
+   * string-message use. Structured 4xx bodies (e.g. ADR-0012's 409 conflict
+   * payload) need the rest of the body too, hence keeping both. */
+  body: unknown;
 
-  constructor(status: number, detail: unknown) {
+  constructor(status: number, body: unknown) {
+    const detail =
+      body != null && typeof body === 'object' && 'detail' in body
+        ? (body as { detail: unknown }).detail
+        : body;
     super(typeof detail === 'string' ? detail : `Request failed with status ${status}`);
     this.status = status;
     this.detail = detail;
+    this.body = body;
   }
 }
 
@@ -21,8 +31,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const detail = await response.json().catch(() => undefined);
-    throw new ApiError(response.status, detail?.detail ?? detail);
+    const body = await response.json().catch(() => undefined);
+    throw new ApiError(response.status, body);
   }
 
   if (response.status === 204) {

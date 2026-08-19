@@ -242,6 +242,30 @@ export interface Order {
   items: OrderItem[];
 }
 
+/** One prior draft Order for a supplier already conflicting with the current
+ * run — see ADR-0012. A supplier can have more than one (the bug ADR-0012
+ * fixes produced exactly this), so this is always read as a list, never a
+ * single value. */
+export interface ExistingDraftOrder {
+  order_id: string;
+  total_amount: number;
+  has_confirmed_prices: boolean;
+}
+
+export interface SupplierWithExistingDrafts {
+  supplier_id: string;
+  supplier_name: string;
+  existing_draft_orders: ExistingDraftOrder[];
+}
+
+/** Body of the 409 POST .../orders returns when replace_drafts is not true
+ * and a supplier in the run already has a draft Order in this project — see
+ * ADR-0012 п.4. */
+export interface OrderDraftConflict {
+  detail: 'draft_orders_exist';
+  suppliers_with_existing_drafts: SupplierWithExistingDrafts[];
+}
+
 export interface PurchaseRecord {
   id: string;
   project_id: string;

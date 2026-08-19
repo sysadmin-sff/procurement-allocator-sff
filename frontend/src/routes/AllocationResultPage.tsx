@@ -1,15 +1,35 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { allocationApi } from '../api/allocation';
+import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import { pricesApi } from '../api/prices';
 import { projectsApi } from '../api/projects';
 import { suppliersApi } from '../api/suppliers';
-import type { AllocationLine, AllocationRun, Material, Price, ProjectWithItems, Supplier } from '../api/types';
+import type {
+  AllocationLine,
+  AllocationRun,
+  Material,
+  OrderDraftConflict,
+  Price,
+  ProjectWithItems,
+  Supplier,
+} from '../api/types';
 import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { OrderDraftConflictModal } from '../components/OrderDraftConflictModal';
 import styles from './allocation-result/AllocationResult.module.css';
+
+function isOrderDraftConflict(err: unknown): err is ApiError & { body: OrderDraftConflict } {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    typeof err.body === 'object' &&
+    err.body !== null &&
+    (err.body as OrderDraftConflict).detail === 'draft_orders_exist'
+  );
+}
 
 interface LoadedData {
   run: AllocationRun;
@@ -139,6 +159,7 @@ function AllocationResultOk({
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
   const [creatingOrders, setCreatingOrders] = useState(false);
   const [createOrdersError, setCreateOrdersError] = useState<unknown>(null);
+  const [draftConflict, setDraftConflict] = useState<OrderDraftConflict | null>(null);
 
   async function handleOverride(lineId: string, supplierId: string) {
     setOverrideError(null);
@@ -154,14 +175,23 @@ function AllocationResultOk({
     }
   }
 
-  async function handleCreateOrders() {
+  async function handleCreateOrders(replaceDrafts?: boolean) {
     setCreateOrdersError(null);
+    setDraftConflict(null);
     setCreatingOrders(true);
     try {
-      await ordersApi.createForRun(project.id, run.id);
+      await ordersApi.createForRun(project.id, run.id, replaceDrafts);
       onOrdersCreated();
     } catch (err) {
-      setCreateOrdersError(err);
+      // A conflict can resurface even on a retry (e.g. another draft was
+      // created for the same supplier between the first 409 and this call)
+      // — re-showing the modal with the fresh conflict data is always
+      // correct here, not just on the very first attempt.
+      if (isOrderDraftConflict(err)) {
+        setDraftConflict(err.body);
+      } else {
+        setCreateOrdersError(err);
+      }
     } finally {
       setCreatingOrders(false);
     }
@@ -283,7 +313,11 @@ function AllocationResultOk({
         {createOrdersError != null && <ErrorBanner error={createOrdersError} />}
 
         <div className={styles.footer}>
-          <Button variant="primary" disabled={creatingOrders} onClick={() => void handleCreateOrders()}>
+          <Button
+            variant="primary"
+            disabled={creatingOrders}
+            onClick={() => void handleCreateOrders()}
+          >
             {creatingOrders ? 'Создаём ордера…' : 'Подтвердить и создать ордера'}
           </Button>
           <span className={styles.footerHint}>
@@ -291,6 +325,15 @@ function AllocationResultOk({
           </span>
         </div>
       </div>
+
+      {draftConflict != null && (
+        <OrderDraftConflictModal
+          conflict={draftConflict}
+          submitting={creatingOrders}
+          onReplace={() => void handleCreateOrders(true)}
+          onCancel={() => setDraftConflict(null)}
+        />
+      )}
     </div>
   );
 }

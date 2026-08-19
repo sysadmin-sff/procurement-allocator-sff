@@ -1,15 +1,23 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AllocationResultPage } from './AllocationResultPage';
 import { allocationApi } from '../api/allocation';
+import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import { pricesApi } from '../api/prices';
 import { projectsApi } from '../api/projects';
 import { suppliersApi } from '../api/suppliers';
-import type { AllocationRun, Material, Price, Project, Supplier } from '../api/types';
+import type {
+  AllocationRun,
+  Material,
+  OrderDraftConflict,
+  Price,
+  Project,
+  Supplier,
+} from '../api/types';
 
 vi.mock('../api/allocation', () => ({
   allocationApi: { run: vi.fn(), get: vi.fn(), overrideLine: vi.fn() },
@@ -358,8 +366,272 @@ describe('AllocationResultPage', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
 
-    expect(createOrdersMock).toHaveBeenCalledWith('proj-1', 'run-4');
+    expect(createOrdersMock).toHaveBeenCalledWith('proj-1', 'run-4', undefined);
     expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
+  });
+
+  it('opens the conflict modal instead of an error banner on 409, and lists the conflicting suppliers', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-7',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          quantity: 10,
+          unit_price: 12,
+          line_total: 120,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+    const conflict: OrderDraftConflict = {
+      detail: 'draft_orders_exist',
+      suppliers_with_existing_drafts: [
+        {
+          supplier_id: 'sup-a',
+          supplier_name: 'ABC Supply',
+          existing_draft_orders: [
+            { order_id: 'ord-1', total_amount: 120, has_confirmed_prices: false },
+            { order_id: 'ord-2', total_amount: 120, has_confirmed_prices: false },
+          ],
+        },
+      ],
+    };
+    createOrdersMock.mockRejectedValueOnce(new ApiError(409, conflict));
+
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getAllByText('$120.00')).toHaveLength(2);
+    // Not shown as a generic error banner alongside the modal.
+    expect(document.querySelectorAll('[class*="banner"]')).toHaveLength(0);
+  });
+
+  it('replaces drafts when the modal\'s "Заменить черновики" is confirmed, then navigates', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-8',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([]);
+    const conflict: OrderDraftConflict = {
+      detail: 'draft_orders_exist',
+      suppliers_with_existing_drafts: [
+        {
+          supplier_id: 'sup-a',
+          supplier_name: 'ABC Supply',
+          existing_draft_orders: [
+            { order_id: 'ord-1', total_amount: 120, has_confirmed_prices: false },
+          ],
+        },
+      ],
+    };
+    createOrdersMock.mockRejectedValueOnce(new ApiError(409, conflict));
+    createOrdersMock.mockResolvedValueOnce([]);
+
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: /Заменить черновики/ }));
+
+    expect(createOrdersMock).toHaveBeenCalledTimes(2);
+    expect(createOrdersMock).toHaveBeenNthCalledWith(2, 'proj-1', 'run-8', true);
+    expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
+  });
+
+  it('does not offer an "add additional" action on the page — the backend has no way to fulfill it', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-9',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([]);
+    const conflict: OrderDraftConflict = {
+      detail: 'draft_orders_exist',
+      suppliers_with_existing_drafts: [
+        {
+          supplier_id: 'sup-a',
+          supplier_name: 'ABC Supply',
+          existing_draft_orders: [
+            { order_id: 'ord-1', total_amount: 120, has_confirmed_prices: false },
+          ],
+        },
+      ],
+    };
+    createOrdersMock.mockRejectedValueOnce(new ApiError(409, conflict));
+
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
+    await screen.findByRole('dialog');
+
+    expect(
+      screen.queryByRole('button', { name: /Создать дополнительно/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('re-shows the conflict modal with fresh data if replacing hits a new conflict', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-9b',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([]);
+    const firstConflict: OrderDraftConflict = {
+      detail: 'draft_orders_exist',
+      suppliers_with_existing_drafts: [
+        {
+          supplier_id: 'sup-a',
+          supplier_name: 'ABC Supply',
+          existing_draft_orders: [
+            { order_id: 'ord-1', total_amount: 120, has_confirmed_prices: false },
+          ],
+        },
+      ],
+    };
+    const raceConflict: OrderDraftConflict = {
+      detail: 'draft_orders_exist',
+      suppliers_with_existing_drafts: [
+        {
+          supplier_id: 'sup-a',
+          supplier_name: 'ABC Supply',
+          existing_draft_orders: [
+            { order_id: 'ord-1', total_amount: 120, has_confirmed_prices: false },
+            { order_id: 'ord-race', total_amount: 120, has_confirmed_prices: false },
+          ],
+        },
+      ],
+    };
+    createOrdersMock.mockRejectedValueOnce(new ApiError(409, firstConflict));
+    createOrdersMock.mockRejectedValueOnce(new ApiError(409, raceConflict));
+
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getAllByText('$120.00')).toHaveLength(1);
+
+    await user.click(within(dialog).getByRole('button', { name: /Заменить черновики/ }));
+
+    const refreshedDialog = await screen.findByRole('dialog');
+    expect(within(refreshedDialog).getAllByText('$120.00')).toHaveLength(2);
+  });
+
+  it('closes the conflict modal without creating anything when cancelled', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-10',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      lines: [],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([]);
+    const conflict: OrderDraftConflict = {
+      detail: 'draft_orders_exist',
+      suppliers_with_existing_drafts: [
+        {
+          supplier_id: 'sup-a',
+          supplier_name: 'ABC Supply',
+          existing_draft_orders: [
+            { order_id: 'ord-1', total_amount: 120, has_confirmed_prices: false },
+          ],
+        },
+      ],
+    };
+    createOrdersMock.mockRejectedValueOnce(new ApiError(409, conflict));
+
+    renderPage();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: /Отмена/ }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(createOrdersMock).toHaveBeenCalledTimes(1);
   });
 
   it('shows "изменено после отправки ордера" when overridden_at is after ordered_at', async () => {

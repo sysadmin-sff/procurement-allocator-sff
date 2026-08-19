@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { diff } from './client';
+import { ApiError, diff } from './client';
+
+describe('ApiError', () => {
+  it('exposes the full response body, not just its detail field', () => {
+    const body = {
+      detail: 'draft_orders_exist',
+      suppliers_with_existing_drafts: [{ supplier_id: 's1', supplier_name: 'ABC' }],
+    };
+
+    const error = new ApiError(409, body);
+
+    expect(error.body).toEqual(body);
+  });
+});
 
 describe('diff', () => {
   it('omits unchanged top-level fields', () => {

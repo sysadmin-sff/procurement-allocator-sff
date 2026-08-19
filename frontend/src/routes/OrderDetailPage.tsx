@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
@@ -107,9 +107,6 @@ export function OrderDetailPage() {
 
         <div className={styles.header}>
           <h1 className={styles.title}>{supplier?.name ?? order.supplier_id}</h1>
-          <Link to={`/orders/${order.id}/print`} className={styles.printLink}>
-            Печатная версия »
-          </Link>
         </div>
 
         {saveError != null && <ErrorBanner error={saveError} />}
@@ -149,9 +146,101 @@ export function OrderDetailPage() {
             Товары: {formatMoney(order.total_amount)} + доставка {formatMoney(order.delivery_fee)}
           </span>
         </div>
+
+        <div className={styles.copySection}>
+          <CopyBlock
+            title="Список материалов (с ценами)"
+            text={buildOrderText({ supplierName: supplier?.name ?? order.supplier_id, order, materialById, includePrices: true })}
+          />
+          <CopyBlock
+            title="Список материалов (без цен)"
+            text={buildOrderText({ supplierName: supplier?.name ?? order.supplier_id, order, materialById, includePrices: false })}
+          />
+        </div>
       </div>
     </div>
   );
+}
+
+function CopyBlock({ title, text }: { title: string; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  async function handleCopy() {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error('Clipboard API unavailable');
+      }
+    } catch {
+      const textarea = textareaRef.current;
+      if (textarea) {
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+      }
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className={styles.copyBlock}>
+      <div className={styles.copyBlockHeader}>
+        <div className={styles.copyBlockTitle}>{title}</div>
+        <button type="button" className={styles.copyButton} onClick={() => void handleCopy()}>
+          {copied ? 'Скопировано ✓' : 'Скопировать'}
+        </button>
+      </div>
+      <textarea
+        ref={textareaRef}
+        className={styles.copyTextarea}
+        readOnly
+        value={text}
+        onFocus={(e) => e.currentTarget.select()}
+      />
+    </div>
+  );
+}
+
+function buildOrderText({
+  supplierName,
+  order,
+  materialById,
+  includePrices,
+}: {
+  supplierName: string;
+  order: Order;
+  materialById: Map<string, Material>;
+  includePrices: boolean;
+}): string {
+  const lines: string[] = [`Order for ${supplierName}`, ''];
+
+  order.items.forEach((item, index) => {
+    const material = materialById.get(item.material_id);
+    const name = material?.canonical_name ?? item.material_id;
+    const unit = material?.unit ?? '';
+    lines.push(`${index + 1}. ${name}`);
+    lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
+    if (includePrices) {
+      lines.push(`   Price: ${formatMoney(item.quoted_price)}/unit`);
+      lines.push(`   Total: ${formatMoney(item.quoted_price * item.quantity)}`);
+    }
+    lines.push('');
+  });
+
+  if (includePrices) {
+    const goodsTotal = order.total_amount;
+    const grandTotal = goodsTotal + order.delivery_fee;
+    lines.push(`Goods total: ${formatMoney(goodsTotal)}`);
+    lines.push(`Delivery: ${formatMoney(order.delivery_fee)}`);
+    lines.push(`Grand total: ${formatMoney(grandTotal)}`);
+  } else {
+    lines.pop();
+  }
+
+  return lines.join('\n');
 }
 
 function OrderItemRow({

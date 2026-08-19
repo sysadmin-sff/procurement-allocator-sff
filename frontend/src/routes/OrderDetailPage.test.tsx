@@ -185,7 +185,7 @@ describe('OrderDetailPage', () => {
     expect(screen.queryByText(/расхождением цены/)).not.toBeInTheDocument();
   });
 
-  it('links to the print view', async () => {
+  it('renders copyable material lists with and without prices', async () => {
     const order: Order = {
       id: 'order-1',
       project_id: 'proj-1',
@@ -199,9 +199,19 @@ describe('OrderDetailPage', () => {
 
     renderPage();
 
-    expect(await screen.findByRole('link', { name: /Печатная версия/ })).toHaveAttribute(
-      'href',
-      '/orders/order-1/print',
-    );
+    const withPrices = await screen.findByText('Список материалов (с ценами)');
+    const withoutPrices = screen.getByText('Список материалов (без цен)');
+    expect(withPrices).toBeInTheDocument();
+    expect(withoutPrices).toBeInTheDocument();
+
+    const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
+    const withPricesText = textareas.find((t) => t.value.includes('Price:'));
+    const withoutPricesText = textareas.find((t) => !t.value.includes('Price:'));
+
+    expect(withPricesText?.value).toContain('Order for ABC Supply');
+    expect(withPricesText?.value).toContain('Qty: 10 рулон');
+    expect(withPricesText?.value).toContain('Grand total: $275.00');
+    expect(withoutPricesText?.value).not.toContain('Total:');
+    expect(withoutPricesText?.value).not.toContain('Grand total');
   });
 });

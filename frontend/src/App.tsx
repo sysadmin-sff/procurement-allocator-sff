@@ -4,7 +4,6 @@ import {
   AllocationResultPage,
   MaterialsPage,
   OrderDetailPage,
-  OrderPrintPage,
   PriceReviewPage,
   ProjectBuilderPage,
   ProjectRouterPage,
@@ -17,10 +16,6 @@ import {
 function App() {
   return (
     <Routes>
-      {/* Outside AppLayout — no topbar/nav chrome on the printable document
-          sent to the supplier (ADR-0007 п.6: a different reader than the
-          rest of the app, sees a plain page, not the internal tool shell). */}
-      <Route path="/orders/:orderId/print" element={<OrderPrintPage />} />
       <Route element={<AppLayout />}>
         <Route path="/" element={<Navigate to="/projects" replace />} />
         <Route path="/projects" element={<ProjectsListPage />} />

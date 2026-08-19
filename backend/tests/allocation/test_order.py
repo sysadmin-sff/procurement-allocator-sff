@@ -114,11 +114,15 @@ def test_create_orders_one_per_supplier(
     assert suppliers == {supplier_a.id, supplier_b.id}
 
 
-def test_create_orders_twice_for_same_run_does_not_conflict(
+def test_create_orders_twice_with_replace_drafts_supersedes_first(
     db_session, make_supplier, make_material, make_price, make_project
 ):
     """ADR-0007 п.2 explicitly allows re-creating Orders for the same run
-    (e.g. a partial reorder) — not deduplicated, not blocked."""
+    (e.g. a partial reorder) — not deduplicated, not blocked outright.
+    ADR-0012 gates this default (un-confirmed) path behind an explicit
+    replace_drafts=True once a draft Order already exists for the supplier,
+    rather than silently creating a duplicate — see
+    tests/allocation/test_order_draft_conflict.py for the guard itself."""
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
     material = make_material()
@@ -128,13 +132,14 @@ def test_create_orders_twice_for_same_run_does_not_conflict(
     run = run_allocation(session, project.id)
 
     first = create_orders_for_run(session, project.id, run.id)
-    second = create_orders_for_run(session, project.id, run.id)
+    first_id = first[0].id
+    second = create_orders_for_run(session, project.id, run.id, replace_drafts=True)
 
     assert len(first) == 1
     assert len(second) == 1
-    assert first[0].id != second[0].id
+    assert first_id != second[0].id
     all_orders = session.query(Order).filter_by(project_id=project.id).all()
-    assert len(all_orders) == 2
+    assert len(all_orders) == 1  # replace_drafts=True supersedes the first draft
 
 
 def test_create_orders_raises_for_unknown_run(db_session, make_project, make_material):
@@ -298,13 +303,15 @@ def test_list_project_orders_returns_all_orders_for_project(
     db_session, make_supplier, make_material, make_price, make_project
 ):
     session, *_ = db_session
-    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
-    material = make_material()
-    make_price(material, supplier, price=5.00, availability=10)
-    project = make_project([(material, 10)])
+    supplier_a = make_supplier(name="A", flat_fee=0.0, free_shipping_threshold=0.0)
+    supplier_b = make_supplier(name="B", flat_fee=0.0, free_shipping_threshold=0.0)
+    material_a = make_material()
+    material_b = make_material()
+    make_price(material_a, supplier_a, price=5.00, availability=10)
+    make_price(material_b, supplier_b, price=6.00, availability=10)
+    project = make_project([(material_a, 10), (material_b, 10)])
 
     run = run_allocation(session, project.id)
-    create_orders_for_run(session, project.id, run.id)
     create_orders_for_run(session, project.id, run.id)
 
     response = client.get(f"/projects/{project.id}/orders")

@@ -13,9 +13,9 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from app.models import AllocationLine, AllocationRun, Order, OrderItem, Project
+from app.models import AllocationLine, AllocationRun, Order, OrderItem, Project, Supplier
 
 SIGNIFICANT_PRICE_DELTA_PCT = 10
 """Threshold above which a quoted vs. confirmed price discrepancy is flagged
@@ -42,19 +42,124 @@ class OrderItemNotFoundError(Exception):
         super().__init__(f"OrderItem {item_id} not found in Order {order_id}")
 
 
+class DraftOrderConflictError(Exception):
+    """Raised when create_orders_for_run() is called without replace_drafts
+    while at least one supplier in the run's supplier_summaries already has
+    a draft Order in this project from a prior run — see ADR-0012 п.1/п.2.
+
+    suppliers_with_existing_drafts mirrors the 409 body shape exactly (list
+    per supplier, list of existing_draft_orders per supplier — never a single
+    object, real dev data has suppliers with more than one, see ADR-0012
+    "Контекст") so the API layer can serialize it without recomputing.
+    """
+
+    def __init__(self, suppliers_with_existing_drafts: list[dict]):
+        self.suppliers_with_existing_drafts = suppliers_with_existing_drafts
+        super().__init__("Draft orders already exist for one or more suppliers in this run")
+
+
+def _conflicting_draft_orders_by_supplier(
+    db: Session, project_id: uuid.UUID, supplier_ids: set[uuid.UUID]
+) -> dict[uuid.UUID, list[Order]]:
+    """Existing draft Orders in this project for suppliers also present in
+    the current run — approved/sent Orders never participate (ADR-0012 п.1)."""
+    if not supplier_ids:
+        return {}
+    existing = db.scalars(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(
+            Order.project_id == project_id,
+            Order.status == "draft",
+            Order.supplier_id.in_(supplier_ids),
+        )
+    ).all()
+    by_supplier: dict[uuid.UUID, list[Order]] = {}
+    for order in existing:
+        by_supplier.setdefault(order.supplier_id, []).append(order)
+    return by_supplier
+
+
+def _order_has_confirmed_prices(order: Order) -> bool:
+    return any(item.confirmed_price is not None for item in order.items)
+
+
+def _serialize_conflicts(
+    db: Session, conflicts: dict[uuid.UUID, list[Order]]
+) -> list[dict]:
+    suppliers = db.scalars(
+        select(Supplier).where(Supplier.id.in_(conflicts.keys()))
+    ).all()
+    names_by_id = {supplier.id: supplier.name for supplier in suppliers}
+
+    result = []
+    for supplier_id, orders in conflicts.items():
+        result.append(
+            {
+                "supplier_id": supplier_id,
+                "supplier_name": names_by_id[supplier_id],
+                "existing_draft_orders": [
+                    {
+                        "order_id": order.id,
+                        "total_amount": float(order.total_amount),
+                        "has_confirmed_prices": _order_has_confirmed_prices(order),
+                    }
+                    for order in orders
+                ],
+            }
+        )
+    return result
+
+
+def _delete_orders(db: Session, orders: list[Order]) -> None:
+    """Explicit application-level cascade: order_items.order_id has no
+    ON DELETE CASCADE (verified against the schema — see ADR-0009
+    "Контекст"), so OrderItem rows must be deleted before their Order, same
+    pattern as delete_project() in app/api/project.py. See ADR-0012 п.2."""
+    order_ids = [order.id for order in orders]
+    if not order_ids:
+        return
+    db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(Order).filter(Order.id.in_(order_ids)).delete(synchronize_session=False)
+
+
 def create_orders_for_run(
-    db: Session, project_id: uuid.UUID, run_id: uuid.UUID
+    db: Session, project_id: uuid.UUID, run_id: uuid.UUID, replace_drafts: bool = False
 ) -> list[Order]:
     """Create one Order per supplier in the run's current supplier_summaries
     (i.e. after any ADR-0006 overrides), snapshotting each supplier's current
     AllocationLine rows into OrderItem. Marks every line that went into an
-    Order with ordered_at. Not deduplicated against prior Order creation for
-    the same run — see ADR-0007 п.2 "Отклонено": a re-order/partial reorder
-    is a legitimate real-world scenario, not a bug to guard against.
+    Order with ordered_at.
+
+    Guards against accidental duplicate draft Orders — see ADR-0012. Before
+    inserting, checks (per supplier in this run) whether a draft Order for
+    that supplier already exists elsewhere in this project:
+    - No conflicts, or replace_drafts=True: proceeds as before (ADR-0007
+      п.2's "re-order is legitimate" is unchanged — this only gates the
+      *default*, unconfirmed path, not re-ordering itself).
+    - Conflicts and replace_drafts is not True: raises
+      DraftOrderConflictError, creates and deletes nothing.
+    - replace_drafts=True: deletes the conflicting suppliers' existing draft
+      Order/OrderItem rows (application-level cascade, no DB-level
+      ON DELETE CASCADE exists for order_items.order_id) before the normal
+      creation logic runs, in the same transaction. Suppliers without a
+      conflict (new in this run) are unaffected. approved/sent Orders are
+      never conflicts and are never touched, at any replace_drafts value.
     """
     run = db.get(AllocationRun, run_id)
     if run is None or run.project_id != project_id:
         raise RunNotFoundError(project_id, run_id)
+
+    supplier_ids = {uuid.UUID(summary["supplier_id"]) for summary in run.supplier_summaries}
+    conflicts = _conflicting_draft_orders_by_supplier(db, project_id, supplier_ids)
+
+    if conflicts:
+        if not replace_drafts:
+            raise DraftOrderConflictError(_serialize_conflicts(db, conflicts))
+        _delete_orders(db, [order for orders in conflicts.values() for order in orders])
+        db.flush()
 
     now = datetime.now(timezone.utc)
     orders: list[Order] = []

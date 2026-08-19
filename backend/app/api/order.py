@@ -1,16 +1,24 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.allocation.order_service import (
+    DraftOrderConflictError,
     OrderItemNotFoundError,
     RunNotFoundError,
     create_orders_for_run,
     price_delta,
     set_confirmed_price,
 )
-from app.api.schemas.order import OrderItemConfirmIn, OrderItemOut, OrderOut
+from app.api.schemas.order import (
+    CreateOrdersIn,
+    OrderDraftConflictOut,
+    OrderItemConfirmIn,
+    OrderItemOut,
+    OrderOut,
+)
 from app.core.database import get_db
 from app.models import Order, Project
 
@@ -50,12 +58,22 @@ def _to_order_out(order: Order) -> OrderOut:
     status_code=201,
 )
 def create_orders(
-    project_id: uuid.UUID, run_id: uuid.UUID, db: Session = Depends(get_db)
-) -> list[OrderOut]:
+    project_id: uuid.UUID,
+    run_id: uuid.UUID,
+    payload: CreateOrdersIn = CreateOrdersIn(),
+    db: Session = Depends(get_db),
+) -> list[OrderOut] | JSONResponse:
     try:
-        orders = create_orders_for_run(db, project_id, run_id)
+        orders = create_orders_for_run(
+            db, project_id, run_id, replace_drafts=payload.replace_drafts
+        )
     except RunNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Allocation run not found") from exc
+    except DraftOrderConflictError as exc:
+        body = OrderDraftConflictOut(
+            suppliers_with_existing_drafts=exc.suppliers_with_existing_drafts
+        )
+        return JSONResponse(status_code=409, content=body.model_dump(mode="json"))
     return [_to_order_out(order) for order in orders]
 
 

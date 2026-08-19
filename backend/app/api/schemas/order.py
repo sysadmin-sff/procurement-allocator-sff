@@ -45,3 +45,38 @@ class OrderOut(BaseModel):
     total_amount: float
     delivery_fee: float
     items: list[OrderItemOut]
+
+
+class CreateOrdersIn(BaseModel):
+    """Body for POST .../orders — see ADR-0012 п.2. replace_drafts=True
+    deletes conflicting suppliers' existing draft Order/OrderItem rows
+    before creating; default False surfaces a 409 instead of creating
+    anything when a conflict exists."""
+
+    replace_drafts: bool = False
+
+
+class ExistingDraftOrderOut(BaseModel):
+    """One entry in a supplier's existing_draft_orders — see ADR-0012 п.4.
+    has_confirmed_prices is true if any OrderItem on *this* draft Order has
+    confirmed_price set; replacing such a draft loses data that cannot be
+    recovered from AllocationLine."""
+
+    order_id: uuid.UUID
+    total_amount: float
+    has_confirmed_prices: bool
+
+
+class SupplierWithExistingDraftsOut(BaseModel):
+    supplier_id: uuid.UUID
+    supplier_name: str
+    existing_draft_orders: list[ExistingDraftOrderOut]
+
+
+class OrderDraftConflictOut(BaseModel):
+    """409 response body when create_orders_for_run finds pre-existing draft
+    Orders for one or more suppliers in the run and replace_drafts is not
+    True — see ADR-0012 п.4."""
+
+    detail: str = "draft_orders_exist"
+    suppliers_with_existing_drafts: list[SupplierWithExistingDraftsOut]

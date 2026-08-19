@@ -14,7 +14,16 @@ from app.api.schemas.project import (
     ProjectWithItemsOut,
 )
 from app.core.database import get_db
-from app.models import AllocationRun, Material, Project, ProjectItem
+from app.models import (
+    AllocationLine,
+    AllocationRun,
+    Material,
+    Order,
+    OrderItem,
+    Project,
+    ProjectItem,
+    PurchaseRecord,
+)
 
 router = APIRouter(prefix="/projects")
 
@@ -120,3 +129,82 @@ def delete_project_item(
     item = _get_project_item_or_404(project_id, item_id, db)
     db.delete(item)
     db.commit()
+
+
+class ProjectHasSentOrdersError(Exception):
+    """At least one Order for this project has status != "draft" — it
+    represents a document that actually left the system to a real supplier
+    (ADR-0007 п.2 "snapshot, not cache"). Deleting the project must not be
+    able to silently erase that history. See ADR-0009 п.1."""
+
+    def __init__(self, project_id: uuid.UUID):
+        self.project_id = project_id
+        super().__init__(f"Project {project_id} has non-draft orders")
+
+
+def delete_project(db: Session, project_id: uuid.UUID) -> None:
+    """Cascades a Project delete across every table that references it —
+    PurchaseRecord, Order/OrderItem, AllocationRun/AllocationLine,
+    ProjectItem — in one transaction, refusing entirely if any Order has
+    left draft status. See ADR-0009.
+
+    Order/OrderItem and AllocationRun/AllocationLine are deleted
+    independently of each other — OrderItem copies its values from
+    AllocationLine at Order-creation time rather than holding a foreign key
+    to it (ADR-0007 п.2), so neither pair depends on the other's deletion
+    order; each pair only has to go child-before-parent internally.
+    """
+    has_sent_orders = (
+        db.query(Order)
+        .filter(Order.project_id == project_id, Order.status != "draft")
+        .first()
+        is not None
+    )
+    if has_sent_orders:
+        raise ProjectHasSentOrdersError(project_id)
+
+    db.query(PurchaseRecord).filter(PurchaseRecord.project_id == project_id).delete(
+        synchronize_session=False
+    )
+
+    order_ids = [
+        o.id for o in db.query(Order.id).filter(Order.project_id == project_id).all()
+    ]
+    if order_ids:
+        db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(Order).filter(Order.id.in_(order_ids)).delete(synchronize_session=False)
+
+    run_ids = [
+        r.id
+        for r in db.query(AllocationRun.id).filter(AllocationRun.project_id == project_id).all()
+    ]
+    if run_ids:
+        db.query(AllocationLine).filter(AllocationLine.allocation_run_id.in_(run_ids)).delete(
+            synchronize_session=False
+        )
+        db.query(AllocationRun).filter(AllocationRun.id.in_(run_ids)).delete(
+            synchronize_session=False
+        )
+
+    db.query(ProjectItem).filter(ProjectItem.project_id == project_id).delete(
+        synchronize_session=False
+    )
+    db.query(Project).filter(Project.id == project_id).delete(synchronize_session=False)
+
+    db.commit()
+
+
+@router.delete("/{project_id}", status_code=204)
+def delete_project_endpoint(project_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
+    if db.get(Project, project_id) is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        delete_project(db, project_id)
+    except ProjectHasSentOrdersError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="У проекта есть отправленные поставщику ордера — удаление недоступно.",
+        ) from exc

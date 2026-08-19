@@ -9,6 +9,8 @@ import {
   ProjectBuilderPage,
   ProjectRouterPage,
   ProjectsListPage,
+  PurchaseRecordsPage,
+  SupplierDetailPage,
   SuppliersPage,
 } from './routes';
 
@@ -25,10 +27,12 @@ function App() {
         <Route path="/projects/new" element={<ProjectBuilderPage />} />
         <Route path="/projects/:projectId" element={<ProjectRouterPage />} />
         <Route path="/projects/:projectId/allocation" element={<AllocationResultPage />} />
+        <Route path="/projects/:projectId/purchases" element={<PurchaseRecordsPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
         <Route path="/price-review" element={<PriceReviewPage />} />
         <Route path="/materials" element={<MaterialsPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
+        <Route path="/suppliers/:supplierId" element={<SupplierDetailPage />} />
       </Route>
     </Routes>
   );

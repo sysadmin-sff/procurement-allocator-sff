@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { suppliersApi } from '../api/suppliers';
 import type { Supplier, SupplierCreate } from '../api/types';
 import { Button } from '../components/Button';
@@ -12,12 +13,12 @@ import styles from '../components/CrudScreen.module.css';
 type Status = 'loading' | 'ready' | 'error';
 
 export function SuppliersPage() {
+  const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
   const [actionError, setActionError] = useState<unknown>(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<Supplier | null>(null);
 
   useEffect(() => {
     void load();
@@ -37,31 +38,18 @@ export function SuppliersPage() {
   }
 
   function openCreate() {
-    setEditing(null);
-    setActionError(null);
-    setFormOpen(true);
-  }
-
-  function openEdit(supplier: Supplier) {
-    setEditing(supplier);
     setActionError(null);
     setFormOpen(true);
   }
 
   function closeForm() {
     setFormOpen(false);
-    setEditing(null);
   }
 
   async function handleSubmit(payload: Required<SupplierCreate>) {
     setActionError(null);
     try {
-      if (editing) {
-        const after: Supplier = { ...editing, ...payload };
-        await suppliersApi.update(editing.id, editing, after);
-      } else {
-        await suppliersApi.create(payload);
-      }
+      await suppliersApi.create(payload);
       closeForm();
       await load();
     } catch (err) {
@@ -103,11 +91,9 @@ export function SuppliersPage() {
           {formOpen && (
             <div className={styles.card}>
               <div className={styles.sectionHeader}>
-                <div className={styles.sectionTitle}>
-                  {editing ? `Редактирование: ${editing.name}` : 'Новый поставщик'}
-                </div>
+                <div className={styles.sectionTitle}>Новый поставщик</div>
               </div>
-              <SupplierForm initial={editing ?? undefined} onCancel={closeForm} onSubmit={handleSubmit} />
+              <SupplierForm onCancel={closeForm} onSubmit={handleSubmit} />
             </div>
           )}
 
@@ -136,10 +122,11 @@ export function SuppliersPage() {
             )}
 
             {status === 'ready' && suppliers.length > 0 && (
-              <table className={styles.table}>
+              <table className={`${styles.table} ${styles.rowClickable}`}>
                 <thead>
                   <tr>
                     <th>Название</th>
+                    <th>Статус</th>
                     <th>Валюта</th>
                     <th>Доставка</th>
                     <th></th>
@@ -147,15 +134,13 @@ export function SuppliersPage() {
                 </thead>
                 <tbody>
                   {suppliers.map((supplier) => (
-                    <tr key={supplier.id}>
+                    <tr key={supplier.id} onClick={() => navigate(`/suppliers/${supplier.id}`)}>
                       <td>{supplier.name}</td>
+                      <td>{supplier.status ?? <span className={styles.muted}>—</span>}</td>
                       <td>{supplier.currency}</td>
                       <td>{summarizeDeliveryPolicy(supplier.delivery_policy)}</td>
-                      <td>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <div className={styles.actionsCell}>
-                          <Button variant="ghost" onClick={() => openEdit(supplier)}>
-                            Изменить
-                          </Button>
                           <ConfirmButton label="Удалить" onConfirm={() => handleDelete(supplier)} />
                         </div>
                       </td>

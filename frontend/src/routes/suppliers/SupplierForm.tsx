@@ -2,17 +2,18 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '../../components/Button';
 import type { DeliveryPolicy, Supplier, SupplierCreate } from '../../api/types';
+import {
+  DeliveryPolicyFields,
+  deliveryPolicyToFormValues,
+  formValuesToDeliveryPolicy,
+  type DeliveryPolicyFormValues,
+} from './DeliveryPolicyFields';
 import styles from '../../components/CrudScreen.module.css';
 
-export interface SupplierFormValues {
+export interface SupplierFormValues extends DeliveryPolicyFormValues {
   name: string;
   contacts: string;
   currency: string;
-  flat_fee: string;
-  free_shipping_enabled: boolean;
-  free_shipping_threshold: string;
-  per_order_min_amount: string;
-  lead_time_days: string;
 }
 
 interface SupplierFormProps {
@@ -22,17 +23,11 @@ interface SupplierFormProps {
 }
 
 function toFormValues(supplier?: Supplier): SupplierFormValues {
-  const policy = supplier?.delivery_policy;
   return {
     name: supplier?.name ?? '',
     contacts: supplier?.contacts ?? '',
     currency: supplier?.currency ?? 'USD',
-    flat_fee: String(policy?.flat_fee ?? 0),
-    free_shipping_enabled: policy?.free_shipping_threshold !== null && policy !== undefined,
-    free_shipping_threshold:
-      policy?.free_shipping_threshold != null ? String(policy.free_shipping_threshold) : '0',
-    per_order_min_amount: String(policy?.per_order_min_amount ?? 0),
-    lead_time_days: String(policy?.lead_time_days ?? 0),
+    ...deliveryPolicyToFormValues(supplier?.delivery_policy),
   };
 }
 
@@ -54,14 +49,7 @@ export function SupplierForm({ initial, onCancel, onSubmit }: SupplierFormProps)
       return;
     }
 
-    const delivery_policy: DeliveryPolicy = {
-      flat_fee: Number(values.flat_fee) || 0,
-      free_shipping_threshold: values.free_shipping_enabled
-        ? Number(values.free_shipping_threshold) || 0
-        : null,
-      per_order_min_amount: Number(values.per_order_min_amount) || 0,
-      lead_time_days: Number(values.lead_time_days) || 0,
-    };
+    const delivery_policy: DeliveryPolicy = formValuesToDeliveryPolicy(values);
 
     setSubmitting(true);
     try {
@@ -121,84 +109,7 @@ export function SupplierForm({ initial, onCancel, onSubmit }: SupplierFormProps)
           <div className={styles.sectionTitle}>Политика доставки</div>
         </div>
 
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="supplier-flat-fee">
-            Фиксированная ставка доставки
-          </label>
-          <input
-            id="supplier-flat-fee"
-            className={styles.input}
-            type="number"
-            min="0"
-            step="0.01"
-            value={values.flat_fee}
-            onChange={(e) => update('flat_fee', e.target.value)}
-          />
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="supplier-min-order">
-            Мин. сумма заказа
-          </label>
-          <input
-            id="supplier-min-order"
-            className={styles.input}
-            type="number"
-            min="0"
-            step="0.01"
-            value={values.per_order_min_amount}
-            onChange={(e) => update('per_order_min_amount', e.target.value)}
-          />
-        </div>
-
-        <div className={`${styles.field} ${styles.fieldFull}`}>
-          <div className={styles.checkboxField}>
-            <input
-              id="supplier-free-shipping-enabled"
-              type="checkbox"
-              checked={values.free_shipping_enabled}
-              onChange={(e) => update('free_shipping_enabled', e.target.checked)}
-            />
-            <label className={styles.checkboxLabel} htmlFor="supplier-free-shipping-enabled">
-              Бесплатная доставка настроена
-            </label>
-          </div>
-          <div className={styles.fieldHint}>
-            Не отмечено → порог бесплатной доставки не задан (доставка никогда не бесплатна).
-            Отмечено → можно указать порог, включая $0 (бесплатно всегда).
-          </div>
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="supplier-threshold">
-            Порог бесплатной доставки
-          </label>
-          <input
-            id="supplier-threshold"
-            className={styles.input}
-            type="number"
-            min="0"
-            step="0.01"
-            disabled={!values.free_shipping_enabled}
-            value={values.free_shipping_threshold}
-            onChange={(e) => update('free_shipping_threshold', e.target.value)}
-          />
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="supplier-lead-time">
-            Срок поставки, дней
-          </label>
-          <input
-            id="supplier-lead-time"
-            className={styles.input}
-            type="number"
-            min="0"
-            step="1"
-            value={values.lead_time_days}
-            onChange={(e) => update('lead_time_days', e.target.value)}
-          />
-        </div>
+        <DeliveryPolicyFields values={values} onChange={update} idPrefix="supplier" />
       </div>
 
       {error && <div className={styles.fieldError}>{error}</div>}

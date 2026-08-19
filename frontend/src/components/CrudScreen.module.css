@@ -18,6 +18,19 @@
   margin-bottom: var(--space-7);
 }
 
+.backLink {
+  display: inline-block;
+  margin-bottom: var(--space-5);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--color-brand);
+}
+
 .title {
   font-family: var(--font-heading);
   font-size: var(--text-3xl);
@@ -55,6 +68,23 @@
   width: 100%;
   border-collapse: collapse;
   font-size: var(--text-base);
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.tableFixed {
+  table-layout: fixed;
+}
+
+.tableInput {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .table thead th {
@@ -136,6 +166,8 @@
   display: flex;
   gap: var(--space-3);
   justify-content: flex-end;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .muted {

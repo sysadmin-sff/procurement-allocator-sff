@@ -11,6 +11,13 @@ export interface Supplier {
   contacts: string | null;
   currency: string;
   delivery_policy: DeliveryPolicy;
+  website: string | null;
+  region: string | null;
+  catalog_link: string | null;
+  status: string | null;
+  payment_terms: string | null;
+  portal_url: string | null;
+  comments: string | null;
 }
 
 export interface SupplierCreate {
@@ -18,6 +25,70 @@ export interface SupplierCreate {
   contacts?: string | null;
   currency?: string;
   delivery_policy?: DeliveryPolicy;
+}
+
+/** PATCH-семантика: только заданные поля отправляются на backend, см. diff(). */
+export interface SupplierUpdate {
+  name?: string;
+  contacts?: string | null;
+  currency?: string;
+  delivery_policy?: DeliveryPolicy;
+  website?: string | null;
+  region?: string | null;
+  catalog_link?: string | null;
+  status?: string | null;
+  payment_terms?: string | null;
+  portal_url?: string | null;
+  comments?: string | null;
+}
+
+export interface Office {
+  id: string;
+  supplier_id: string;
+  address: string;
+  region: string | null;
+}
+
+export interface OfficeCreate {
+  address: string;
+  region?: string | null;
+}
+
+export interface OfficeUpdate {
+  address?: string;
+  region?: string | null;
+}
+
+export interface SupplierContact {
+  id: string;
+  supplier_id: string;
+  office_id: string | null;
+  name: string;
+  role: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+export interface SupplierContactCreate {
+  name: string;
+  role?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  office_id?: string | null;
+}
+
+export interface SupplierContactUpdate {
+  name?: string;
+  role?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  office_id?: string | null;
+}
+
+/** GET /suppliers/{id} — offices/supplier_contacts вложены, не отдельными запросами. */
+export interface SupplierDetail extends Supplier {
+  offices: Office[];
+  supplier_contacts: SupplierContact[];
 }
 
 export interface Material {
@@ -167,4 +238,44 @@ export interface Order {
   total_amount: number;
   delivery_fee: number;
   items: OrderItem[];
+}
+
+export interface PurchaseRecord {
+  id: string;
+  project_id: string;
+  supplier_id: string;
+  raw_description: string;
+  quantity: number;
+  unit_price: number;
+  material_id: string | null;
+  created_at: string;
+}
+
+export interface PurchaseRecordCreate {
+  supplier_id: string;
+  raw_description: string;
+  quantity: number;
+  unit_price: number;
+  material_id?: string | null;
+}
+
+export type PurchaseRecordUpdate = PurchaseRecordCreate;
+
+/** planned_total/delta/delta_pct are null (not 0) when there is no Order yet
+ * to compare against — see ADR-0008 п.4. */
+export interface TotalComparison {
+  purchased_total: number;
+  planned_total: number | null;
+  delta: number | null;
+  delta_pct: number | null;
+}
+
+export interface SupplierTotal extends TotalComparison {
+  supplier_id: string;
+}
+
+export interface PurchaseRecordListOut {
+  records: PurchaseRecord[];
+  project_total: TotalComparison;
+  supplier_totals: SupplierTotal[];
 }

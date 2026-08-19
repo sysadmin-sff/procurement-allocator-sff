@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DeliveryPolicy(BaseModel):
@@ -37,6 +37,13 @@ class SupplierUpdate(BaseModel):
     contacts: str | None = None
     currency: str | None = None
     delivery_policy: DeliveryPolicy | None = None
+    website: str | None = None
+    region: str | None = None
+    catalog_link: str | None = None
+    status: str | None = None
+    payment_terms: str | None = None
+    portal_url: str | None = None
+    comments: str | None = None
 
 
 class SupplierOut(BaseModel):
@@ -47,3 +54,70 @@ class SupplierOut(BaseModel):
     contacts: str | None
     currency: str
     delivery_policy: DeliveryPolicy
+    website: str | None
+    region: str | None
+    catalog_link: str | None
+    status: str | None
+    payment_terms: str | None
+    portal_url: str | None
+    comments: str | None
+
+
+class OfficeCreate(BaseModel):
+    address: str = Field(min_length=1)
+    region: str | None = None
+
+
+class OfficeUpdate(BaseModel):
+    """Частичное обновление — та же PATCH-семантика, что у SupplierUpdate."""
+
+    address: str | None = Field(default=None, min_length=1)
+    region: str | None = None
+
+
+class OfficeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    supplier_id: uuid.UUID
+    address: str
+    region: str | None
+
+
+class SupplierContactCreate(BaseModel):
+    name: str = Field(min_length=1)
+    role: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    office_id: uuid.UUID | None = None
+
+
+class SupplierContactUpdate(BaseModel):
+    """Частичное обновление — та же PATCH-семантика, что у SupplierUpdate."""
+
+    name: str | None = Field(default=None, min_length=1)
+    role: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    office_id: uuid.UUID | None = None
+
+
+class SupplierContactOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    supplier_id: uuid.UUID
+    office_id: uuid.UUID | None
+    name: str
+    role: str | None
+    phone: str | None
+    email: str | None
+
+
+class SupplierDetailOut(SupplierOut):
+    """contacts (унаследовано от SupplierOut) — существующее свободнотекстовое
+    поле, не трогается. Структурированный список — отдельное имя, чтобы не
+    затенять его, см. ADR-0010 п.5."""
+
+    offices: list[OfficeOut]
+    supplier_contacts: list[SupplierContactOut]

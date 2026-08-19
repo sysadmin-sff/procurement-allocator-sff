@@ -5,6 +5,9 @@ erDiagram
     Supplier ||--o{ Price : "предлагает"
     Supplier ||--o{ SupplierMaterialAlias : "называет по-своему"
     Supplier ||--o{ PriceListImport : "прайс от"
+    Supplier ||--o{ Office : "имеет офисы"
+    Supplier ||--o{ SupplierContact : "имеет контакты"
+    Office ||--o{ SupplierContact : "опционально группирует"
     Material ||--o{ Price : "имеет цену у"
     Material ||--o{ SupplierMaterialAlias : "известен как"
     Material ||--o{ ProjectItem : "используется в"
@@ -26,6 +29,28 @@ erDiagram
         string name
         string currency
         json delivery_policy
+        string website
+        string region
+        string catalog_link
+        string status "свободный текст, не enum"
+        string payment_terms "NET 30 и т.п.; отдельно от delivery_policy"
+        string portal_url
+        string comments
+    }
+    Office {
+        uuid id
+        uuid supplier_id
+        string address
+        string region "может быть шире одного адреса"
+    }
+    SupplierContact {
+        uuid id
+        uuid supplier_id
+        uuid office_id "nullable"
+        string name
+        string role
+        string phone
+        string email
     }
     Material {
         uuid id
@@ -140,6 +165,15 @@ erDiagram
 единственного поставщика материала не достигается) или на входе солвера не осталось
 материалов после предобработки; `lines`/`supplier_summaries` в этом случае пустые,
 но `AllocationRun` всё равно создаётся и сохраняется — попытка расчёта не теряется.
+
+`Office`/`SupplierContact` добавлены сверх исходной диаграммы, новые поля на `Supplier`
+(`website`, `region`, `catalog_link`, `status`, `payment_terms`, `portal_url`, `comments`) —
+см. `docs/decisions/0010-supplier-directory-expansion.md`. Все справочные, ни одно не читается
+ILP-солвером — единственное поле `Supplier`, влияющее на расчёт, по-прежнему `delivery_policy`.
+`SupplierContact.office_id` nullable и удаление `Office` переводит `office_id` его контактов
+в `NULL` (не блокирует и не каскадит удаление контактов) — офис не обязателен для контакта.
+`SupplierContact.supplier_id` — намеренная денормализация поверх `office_id → Office.supplier_id`,
+не выводится через join, чтобы "все контакты поставщика" не зависело от наличия office_id.
 
 `PurchaseRecord` добавлена сверх исходной диаграммы — см.
 `docs/decisions/0008-actual-purchase-record.md`. Журнал того, что реально

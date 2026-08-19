@@ -3,9 +3,9 @@ import styles from './AppLayout.module.css';
 
 const NAV_ITEMS = [
   { to: '/projects', label: 'Проекты' },
-  { to: '/price-review', label: 'Импорт прайс-листов' },
-  { to: '/materials', label: 'Материалы' },
   { to: '/suppliers', label: 'Поставщики' },
+  { to: '/materials', label: 'Материалы' },
+  { to: '/price-review', label: 'Импорт прайс-листов' },
 ];
 
 export function AppLayout() {

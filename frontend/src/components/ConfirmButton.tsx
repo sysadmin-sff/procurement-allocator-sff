@@ -7,6 +7,10 @@ interface ConfirmButtonProps {
   confirmLabel?: string;
   onConfirm: () => void;
   disabled?: boolean;
+  /** Notified when the confirm prompt opens/closes — lets a cramped layout
+   * (e.g. a fixed-width table cell) hide sibling controls while it's shown,
+   * instead of squeezing everything onto one line. */
+  onConfirmingChange?: (confirming: boolean) => void;
 }
 
 export function ConfirmButton({
@@ -14,12 +18,18 @@ export function ConfirmButton({
   confirmLabel = 'Точно удалить?',
   onConfirm,
   disabled,
+  onConfirmingChange,
 }: ConfirmButtonProps) {
   const [confirming, setConfirming] = useState(false);
 
+  function setConfirmingAndNotify(value: boolean) {
+    setConfirming(value);
+    onConfirmingChange?.(value);
+  }
+
   if (!confirming) {
     return (
-      <Button variant="ghost" disabled={disabled} onClick={() => setConfirming(true)}>
+      <Button variant="ghost" disabled={disabled} onClick={() => setConfirmingAndNotify(true)}>
         {label}
       </Button>
     );
@@ -31,7 +41,7 @@ export function ConfirmButton({
       <Button variant="danger" onClick={onConfirm}>
         Да
       </Button>
-      <Button variant="ghost" onClick={() => setConfirming(false)}>
+      <Button variant="ghost" onClick={() => setConfirmingAndNotify(false)}>
         Отмена
       </Button>
     </span>

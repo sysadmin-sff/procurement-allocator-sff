@@ -60,6 +60,13 @@ const supplierA: Supplier = {
   contacts: null,
   currency: 'USD',
   delivery_policy: { flat_fee: 25, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },
+  website: null,
+  region: null,
+  catalog_link: null,
+  status: null,
+  payment_terms: null,
+  portal_url: null,
+  comments: null,
 };
 
 const supplierB: Supplier = {
@@ -68,6 +75,13 @@ const supplierB: Supplier = {
   contacts: null,
   currency: 'USD',
   delivery_policy: { flat_fee: 15, free_shipping_threshold: null, per_order_min_amount: 0, lead_time_days: 5 },
+  website: null,
+  region: null,
+  catalog_link: null,
+  status: null,
+  payment_terms: null,
+  portal_url: null,
+  comments: null,
 };
 
 const materialScreen: Material = {

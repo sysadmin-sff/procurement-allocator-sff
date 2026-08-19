@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { projectsApi } from '../api/projects';
 import type { Project } from '../api/types';
 import { Button } from '../components/Button';
+import { ConfirmButton } from '../components/ConfirmButton';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import styles from '../components/CrudScreen.module.css';
@@ -14,6 +15,7 @@ export function ProjectsListPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
+  const [deleteError, setDeleteError] = useState<unknown>(null);
 
   useEffect(() => {
     void load();
@@ -32,6 +34,16 @@ export function ProjectsListPage() {
     }
   }
 
+  async function handleDelete(project: Project) {
+    setDeleteError(null);
+    try {
+      await projectsApi.remove(project.id);
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+    } catch (err) {
+      setDeleteError(err);
+    }
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.inner}>
@@ -43,6 +55,13 @@ export function ProjectsListPage() {
         </div>
 
         <div className={styles.stack}>
+          {deleteError != null && (
+            <ErrorBanner
+              error={deleteError}
+              conflictMessage="У проекта есть отправленные поставщику ордера — удаление недоступно."
+            />
+          )}
+
           <div className={styles.card}>
             {status === 'loading' && <div className={styles.loading}>Загрузка…</div>}
 
@@ -74,6 +93,7 @@ export function ProjectsListPage() {
                     <th>Название</th>
                     <th>Статус</th>
                     <th>Создан</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -82,6 +102,14 @@ export function ProjectsListPage() {
                       <td>{project.title}</td>
                       <td>{project.status}</td>
                       <td>{formatDate(project.created_at)}</td>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <div className={styles.actionsCell}>
+                          <ConfirmButton
+                            label="Удалить"
+                            onConfirm={() => void handleDelete(project)}
+                          />
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

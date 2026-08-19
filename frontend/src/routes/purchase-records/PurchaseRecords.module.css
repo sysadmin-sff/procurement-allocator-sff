@@ -1,0 +1,384 @@
+.page {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-10) var(--space-9) 60px;
+}
+
+.inner {
+  width: 100%;
+  max-width: 1180px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.backLink {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--color-brand);
+}
+
+.centerWrap {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-10) var(--space-9);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  color: var(--color-brand);
+  letter-spacing: -0.01em;
+}
+
+/* Project-level totals card (ADR-0008 п.4) — same card language as
+   ProjectDetailPage's .cardPadded summary. */
+.totalsCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card-sm);
+  padding: var(--space-8);
+  display: flex;
+  align-items: center;
+  gap: var(--space-11);
+  flex-wrap: wrap;
+}
+
+.totalsFigure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.totalsLabel {
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary-alt);
+}
+
+.totalsValue {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.totalsDelta {
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.totalsDeltaOver {
+  color: var(--color-danger-text);
+}
+
+.totalsDeltaUnder {
+  color: var(--color-success);
+}
+
+.totalsNoPlan {
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-warning-text);
+  background: var(--color-warning-tint);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-6);
+}
+
+.supplierCard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card-sm);
+  overflow: hidden;
+}
+
+.supplierHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6) var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+  flex-wrap: wrap;
+}
+
+.supplierName {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-brand);
+}
+
+.supplierSpacer {
+  flex: 1;
+}
+
+.supplierFigure {
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.supplierDelta {
+  font-weight: 700;
+}
+
+.supplierDeltaOver {
+  color: var(--color-danger-text);
+}
+
+.supplierDeltaUnder {
+  color: var(--color-success);
+}
+
+.supplierNoPlanBadge {
+  font-size: var(--text-xs-alt);
+  font-weight: 700;
+  color: var(--color-warning-text);
+  background: var(--color-warning-tint);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-4);
+}
+
+/* Plan/fact side by side — deliberately two independent columns, not a
+   merged table: this is visual comparison by a human, not row-to-row
+   matching (ADR-0008 п.3). */
+.planFactGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.planFactGrid > div:first-child {
+  border-right: 1px solid var(--color-border);
+}
+
+@media (max-width: 860px) {
+  .planFactGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .planFactGrid > div:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+.columnLabel {
+  padding: var(--space-4) var(--space-8);
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary-alt);
+  background: var(--color-surface-subtle);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.descColHeader,
+.descColCell {
+  width: 32%;
+}
+
+.actionsColHeader,
+.actionsColCell {
+  width: 260px;
+}
+
+.copyColHeader,
+.copyColCell {
+  width: 48px;
+}
+
+/* "→ в факт" — copies one plan line's values into the add-record form
+   below, for the common case where it matched the actual purchase exactly.
+   Does not create a PurchaseRecord itself — the form still requires the
+   explicit "+ Добавить" click, so this is pre-filling a form, not automated
+   plan/fact matching (which ADR-0008 п.3 explicitly keeps out of scope). */
+.copyToFactButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm-alt2);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.copyToFactButton:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+  background: var(--color-brand-tint-alt);
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-4) var(--space-8);
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--color-text-tertiary-alt);
+  background: var(--color-surface-subtle);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: var(--space-5) var(--space-8);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.numCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.materialTag {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs-alt);
+  color: var(--color-text-tertiary-alt);
+}
+
+.emptyColumn {
+  padding: var(--space-7) var(--space-8);
+  color: var(--color-text-tertiary-alt);
+  font-style: italic;
+  font-size: var(--text-sm-alt2);
+}
+
+.actionsCell {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+.editInput,
+.editInputNum,
+.editSelect {
+  width: 100%;
+  text-align: left;
+  font-size: var(--text-base-alt);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  font-family: inherit;
+}
+
+.editInputNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.editInput:focus,
+.editInputNum:focus,
+.editSelect:focus {
+  border-color: var(--color-brand);
+  outline: none;
+}
+
+/* Inline add-row form (ADR-0008 п.5) — mirrors ProjectDetailPage's
+   inline-add pattern (input cells inside the last table row), extended
+   with a supplier select since PurchaseRecord's supplier need not already
+   be present in the project (ADR-0008 п.2). */
+.addRow td {
+  background: var(--color-surface-subtle);
+  vertical-align: middle;
+}
+
+/* Editing a record reuses the same full-width .addGrid form instead of
+   squeezing 5 fields into 4 narrow display columns — see PurchaseRecordRow. */
+.editRow td {
+  background: var(--color-surface-subtle);
+  padding: var(--space-6) var(--space-8);
+}
+
+.addSection {
+  padding: var(--space-7) var(--space-8);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.addGrid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.4fr 1.4fr auto;
+  gap: var(--space-5);
+  align-items: end;
+}
+
+@media (max-width: 960px) {
+  .addGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.fieldLabel {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-text-tertiary-alt);
+  margin-bottom: var(--space-2);
+}
+
+.optionalHint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--color-text-tertiary-alt2);
+}

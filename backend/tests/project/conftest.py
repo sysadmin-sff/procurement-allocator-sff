@@ -1,10 +1,20 @@
+import datetime
 import uuid
 
 import pytest
 
 from app.core.database import SessionLocal, get_db
 from app.main import app
-from app.models import AllocationRun, Material, Order, Project, ProjectItem, Supplier
+from app.models import (
+    AllocationRun,
+    Material,
+    Order,
+    OrderItem,
+    Price,
+    Project,
+    ProjectItem,
+    Supplier,
+)
 
 
 @pytest.fixture
@@ -29,6 +39,9 @@ def db_session():
                 o.id for o in session.query(Order).filter_by(project_id=project_id).all()
             ]
             if order_ids:
+                session.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(
+                    synchronize_session=False
+                )
                 session.query(Order).filter(Order.id.in_(order_ids)).delete(
                     synchronize_session=False
                 )
@@ -48,10 +61,16 @@ def db_session():
                 synchronize_session=False
             )
         if material_ids:
+            session.query(Price).filter(Price.material_id.in_(material_ids)).delete(
+                synchronize_session=False
+            )
             session.query(Material).filter(Material.id.in_(material_ids)).delete(
                 synchronize_session=False
             )
         if supplier_ids:
+            session.query(Price).filter(Price.supplier_id.in_(supplier_ids)).delete(
+                synchronize_session=False
+            )
             session.query(Supplier).filter(Supplier.id.in_(supplier_ids)).delete(
                 synchronize_session=False
             )
@@ -63,11 +82,19 @@ def db_session():
 def make_project(db_session):
     session, project_ids, _material_ids, _supplier_ids = db_session
 
-    def _make(title="Test Project", created_by=None, status="draft"):
+    def _make(items=None, title="Test Project", created_by=None, status="draft"):
+        """items: optional list of (material, quantity) tuples, added as
+        ProjectItem rows immediately."""
         project = Project(title=title, created_by=created_by, status=status)
         session.add(project)
         session.flush()
         project_ids.append(project.id)
+        for material, quantity in items or []:
+            session.add(
+                ProjectItem(project_id=project.id, material_id=material.id, quantity=quantity)
+            )
+        session.flush()
+        session.refresh(project)
         return project
 
     return _make
@@ -100,5 +127,27 @@ def make_supplier(db_session):
         session.flush()
         supplier_ids.append(supplier.id)
         return supplier
+
+    return _make
+
+
+@pytest.fixture
+def make_price(db_session):
+    session, *_ = db_session
+
+    def _make(material, supplier, price, availability=100, min_order_qty=1):
+        p = Price(
+            material=material,
+            supplier=supplier,
+            price=price,
+            currency="USD",
+            availability=availability,
+            min_order_qty=min_order_qty,
+            valid_from=datetime.date.today(),
+            valid_to=None,
+        )
+        session.add(p)
+        session.flush()
+        return p
 
     return _make

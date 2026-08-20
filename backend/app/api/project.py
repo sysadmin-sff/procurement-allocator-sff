@@ -3,8 +3,10 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.allocation.price_comparison import get_price_comparison
 from app.api.schemas.project import (
     LatestAllocationRunOut,
+    PriceComparisonOut,
     ProjectCreate,
     ProjectItemCreate,
     ProjectItemOut,
@@ -95,6 +97,15 @@ def get_project(project_id: uuid.UUID, db: Session = Depends(get_db)) -> Project
             LatestAllocationRunOut.model_validate(latest_run) if latest_run else None
         ),
     )
+
+
+@router.get("/{project_id}/price-comparison", response_model=PriceComparisonOut)
+def get_project_price_comparison(
+    project_id: uuid.UUID, db: Session = Depends(get_db)
+) -> PriceComparisonOut:
+    if db.get(Project, project_id) is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return PriceComparisonOut(rows=get_price_comparison(db, project_id))
 
 
 @router.post("/{project_id}/items", response_model=ProjectItemOut, status_code=201)

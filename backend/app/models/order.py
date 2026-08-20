@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, UUIDPKMixin
+from app.models.base import Base, TimestampMixin, UUIDPKMixin
 
 if TYPE_CHECKING:
     from app.models.material import Material
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from app.models.supplier import Supplier
 
 
-class Order(UUIDPKMixin, Base):
+class Order(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "orders"
 
     project_id: Mapped[uuid.UUID] = mapped_column(

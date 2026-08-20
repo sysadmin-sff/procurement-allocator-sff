@@ -187,7 +187,7 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                     <div className={styles.sectionTitle}>Ордера</div>
                     <Link to={`/projects/${projectId}/purchases`}>Фактическая закупка »</Link>
                   </div>
-                  <table className={styles.table}>
+                  <table className={`${styles.table} ${styles.rowClickable}`}>
                     <thead>
                       <tr>
                         <th>Поставщик</th>
@@ -201,12 +201,12 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                       {orders.map((order) => {
                         const supplier = suppliers.find((s) => s.id === order.supplier_id);
                         return (
-                          <tr key={order.id}>
+                          <tr key={order.id} onClick={() => navigate(`/orders/${order.id}`)}>
                             <td>{supplier?.name ?? order.supplier_id}</td>
                             <td>{order.status}</td>
                             <td>{formatMoney(order.total_amount)}</td>
                             <td>{formatMoney(order.delivery_fee)}</td>
-                            <td>
+                            <td onClick={(e) => e.stopPropagation()}>
                               <div className={styles.actionsCell}>
                                 <Link to={`/orders/${order.id}`}>Открыть »</Link>
                               </div>

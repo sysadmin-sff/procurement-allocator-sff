@@ -5,6 +5,7 @@ alembic>=1.13
 psycopg[binary]>=3.2
 pydantic>=2.7
 pydantic-settings>=2.3
+ortools>=9.10
 
 [dev]
 pytest>=8.0

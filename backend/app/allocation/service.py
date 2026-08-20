@@ -229,7 +229,11 @@ def _rebuild_supplier_summary(
 
 
 def override_allocation_line_supplier(
-    db: Session, run_id: uuid.UUID, line_id: uuid.UUID, new_supplier_id: uuid.UUID
+    db: Session,
+    run_id: uuid.UUID,
+    line_id: uuid.UUID,
+    new_supplier_id: uuid.UUID,
+    source_order_item_id: uuid.UUID | None = None,
 ) -> AllocationLine:
     """Manually reassign one AllocationLine to a different supplier — ADR-0006.
 
@@ -239,6 +243,12 @@ def override_allocation_line_supplier(
     Availability is intentionally not checked here: an explicit shortfall
     doesn't block a manual override, see ADR-0006 п.2. Money math stays on
     the backend per CLAUDE.md principle 4.
+
+    source_order_item_id — see ADR-0014 п.3/п.5. Passed only by the
+    find-replacement flow; every other caller (ordinary manual override on
+    AllocationResultPage) omits it, and this always resets
+    overridden_via_order_item_id to NULL — a later override must not keep
+    attributing the line's current state to an unrelated prior decline.
     """
     line = db.get(AllocationLine, line_id)
     if line is None or line.allocation_run_id != run_id:
@@ -264,6 +274,7 @@ def override_allocation_line_supplier(
     line.unit_price = new_price.price
     line.line_total = float(new_price.price) * line.quantity
     line.overridden_at = datetime.now(timezone.utc)
+    line.overridden_via_order_item_id = source_order_item_id
     db.flush()
 
     run = db.get(AllocationRun, run_id)

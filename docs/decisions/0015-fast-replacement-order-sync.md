@@ -1,6 +1,11 @@
 # ADR-0015: Быстрый перенос declined-позиции синхронизирует ордер
 
-Статус: Принято, не реализовано (2026-08-20).
+Статус: Принято, backend реализован (2026-08-20) — `POST
+/orders/{order_id}/items/{item_id}/replace-and-order`
+(`backend/app/api/order.py`), `replace_and_sync_order()`
+(`backend/app/allocation/order_service.py`). Frontend не реализован —
+`OrderDetailPage.tsx` пока вызывает старую связку `overrideLine` +
+`GET /projects/{id}` (§4 не выполнен).
 
 ## Контекст
 

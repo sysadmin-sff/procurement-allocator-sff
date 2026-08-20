@@ -51,7 +51,9 @@ def override_allocation_line(
         raise HTTPException(status_code=404, detail="Allocation run not found")
 
     try:
-        return override_allocation_line_supplier(db, run_id, line_id, payload.supplier_id)
+        return override_allocation_line_supplier(
+            db, run_id, line_id, payload.supplier_id, payload.source_order_item_id
+        )
     except LineNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Allocation line not found") from exc
     except InvalidOverrideSupplierError as exc:

@@ -32,6 +32,17 @@ class OrderItemOut(BaseModel):
     decline_reason: str | None = None
     price_delta: float | None = None
     price_delta_pct: float | None = None
+    replaced_by_supplier_id: uuid.UUID | None = None
+    replaced_by_supplier_name: str | None = None
+    """Derived, not persisted — see ADR-0014 п.3. Set only when the latest
+    AllocationRun's line for this item's material has
+    overridden_via_order_item_id == this item's id (a causal replacement
+    triggered by this declined item, not a timestamp coincidence). Null if
+    no replacement happened, the material dropped out of the latest run, or
+    the line was since overridden again by an unrelated PATCH."""
+    replacement_draft_order_id: uuid.UUID | None = None
+    """Non-null if replaced_by_supplier_id has an existing draft Order in
+    this project (reuses ADR-0012's conflict check) — see ADR-0014 п.3."""
 
 
 class OrderItemConfirmIn(BaseModel):
@@ -94,3 +105,36 @@ class OrderDraftConflictOut(BaseModel):
 
     detail: str = "draft_orders_exist"
     suppliers_with_existing_drafts: list[SupplierWithExistingDraftsOut]
+
+
+class ReplacementCandidateOut(BaseModel):
+    """One supplier candidate for POST .../find-replacement — see ADR-0014
+    п.1. All active-priced suppliers are included, even those with
+    insufficient/unknown availability (visible-risk philosophy, same as
+    ADR-0006 п.2) — availability_risk is True only when availability is
+    explicitly set and less than the declined item's quantity; NULL
+    availability is never a risk (symmetric with ADR-0005)."""
+
+    supplier_id: uuid.UUID
+    supplier_name: str
+    price: float
+    availability: int | None
+    availability_risk: bool
+
+
+class FindReplacementOut(BaseModel):
+    """Response body for POST .../find-replacement — see ADR-0014 п.5.
+    line_id is the AllocationLine in the project's latest AllocationRun for
+    this item's material, which the frontend then PATCHes (ADR-0006) with
+    source_order_item_id set to attribute the override to this decline."""
+
+    line_id: uuid.UUID
+    candidates: list[ReplacementCandidateOut]
+
+
+class ReplaceAndOrderIn(BaseModel):
+    """Body for POST .../items/{item_id}/replace-and-order — see ADR-0015 §1.
+    supplier_id is the chosen replacement candidate (one of
+    FindReplacementOut.candidates from the prior find-replacement call)."""
+
+    supplier_id: uuid.UUID

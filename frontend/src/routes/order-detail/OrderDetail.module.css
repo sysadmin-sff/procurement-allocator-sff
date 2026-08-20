@@ -77,7 +77,7 @@
 
 .materialColHeader,
 .materialColCell {
-  width: 28%;
+  width: 24%;
 }
 
 .table th {
@@ -107,6 +107,15 @@
 .numCell {
   text-align: right;
   font-variant-numeric: tabular-nums;
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+}
+
+.statusColHeader,
+.statusColCell {
+  width: 15%;
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
 }
 
 /* Row-level highlight for |price_delta_pct| > 10 — same danger-tint
@@ -121,21 +130,18 @@
   background: var(--color-danger-tint);
 }
 
-.statusColHeader,
-.statusColCell {
-  width: 14%;
-}
-
 .declineButton {
+  width: 100%;
   background: var(--color-control-fill);
   color: var(--color-text);
   border: none;
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm-alt2);
   font-weight: 600;
+  line-height: 1.3;
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .declineButton:hover {
@@ -143,15 +149,17 @@
 }
 
 .declineButtonActive {
+  width: 100%;
   background: var(--color-danger-tint);
   color: var(--color-danger-text);
   border: 1px solid var(--color-danger-border);
   border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-5);
+  padding: var(--space-2) var(--space-4);
   font-size: var(--text-sm-alt2);
   font-weight: 600;
+  line-height: 1.3;
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .declineReasonInput {
@@ -164,10 +172,12 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
+  box-sizing: border-box;
 }
 
 .priceInput {
-  width: 110px;
+  width: 100%;
+  max-width: 110px;
   text-align: right;
   font-variant-numeric: tabular-nums;
   font-size: var(--text-base-alt);
@@ -176,6 +186,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: var(--space-3) var(--space-4);
+  box-sizing: border-box;
 }
 
 .priceInput:focus {
@@ -271,4 +282,134 @@
   border-radius: var(--radius-sm);
   padding: var(--space-5);
   white-space: pre;
+}
+
+.replacementSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.findReplacementButton {
+  width: 100%;
+  background: var(--color-control-fill);
+  color: var(--color-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  white-space: normal;
+}
+
+.findReplacementButton:hover {
+  background: var(--color-control-fill-hover);
+}
+
+/* Permanent post-transfer marker (ADR-0014 п.3) — same danger-tint language
+   as belowMinOrderNotice/availabilityRisk, but persistent, not a transient
+   warning. */
+.replacedNotice {
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-danger-text);
+  background: var(--color-danger-tint);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.replacedLink {
+  color: var(--color-danger-text);
+  text-decoration: underline;
+}
+
+.replacedMuted {
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+/* Inline point-of-error panel under the row's own trigger button — not an
+   ErrorBanner, see ADR-0014 п.1 "точечная локализация ошибки". */
+.replacementPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+}
+
+.replacementLoading {
+  font-size: var(--text-xs-alt);
+  color: var(--color-text-secondary);
+}
+
+.replacementNotFound {
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-danger-text);
+}
+
+.candidateList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.candidateRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.candidateButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm-alt2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.candidateButton:hover {
+  background: var(--color-control-fill-hover);
+}
+
+.candidateButton:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.candidateSupplier {
+  font-weight: 600;
+}
+
+.candidatePrice {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* Same danger-tint warning language as AllocationResultPage's
+   .availabilityRisk (ADR-0006 §2 / ADR-0014 п.1). */
+.availabilityRisk {
+  display: block;
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-danger-text);
 }

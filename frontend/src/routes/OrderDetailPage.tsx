@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import type { OrderItemPatch } from '../api/orders';
 import { suppliersApi } from '../api/suppliers';
-import type { Material, Order, OrderItem, Supplier } from '../api/types';
+import type { FindReplacementResult, Material, Order, OrderItem, Supplier } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import styles from './order-detail/OrderDetail.module.css';
 
@@ -75,6 +76,21 @@ export function OrderDetailPage() {
     }
   }
 
+  // After a successful replacement override, re-fetch the whole Order
+  // rather than trust the PATCH's own response — the PATCH only returns the
+  // AllocationLine, not the updated OrderItemOut.replaced_by_* fields for
+  // this (or any other) declined row. See ADR-0014 п.6.
+  async function handleReplacementApplied() {
+    if (!data) return;
+    setSaveError(null);
+    try {
+      const refreshed = await ordersApi.get(data.order.id);
+      setData((prev) => (prev ? { ...prev, order: refreshed } : prev));
+    } catch (err) {
+      setSaveError(err);
+    }
+  }
+
   if (!orderId) {
     return <ErrorBanner error="Не указан ордер." />;
   }
@@ -99,6 +115,13 @@ export function OrderDetailPage() {
     (item) => item.price_delta_pct != null && Math.abs(item.price_delta_pct) > SIGNIFICANT_PRICE_DELTA_PCT,
   ).length;
   const declinedCount = order.items.filter((item) => item.declined_at != null).length;
+  // Declined items sort to the bottom, keeping their relative order (and the
+  // relative order of everything else) intact — Array.prototype.sort is a
+  // stable sort per spec, so a single boolean comparator is enough. Purely a
+  // display concern: order.items itself is untouched.
+  const sortedItems = order.items
+    .slice()
+    .sort((a, b) => Number(a.declined_at != null) - Number(b.declined_at != null));
 
   return (
     <div className={styles.page}>
@@ -143,13 +166,15 @@ export function OrderDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {order.items.map((item) => (
+            {sortedItems.map((item) => (
               <OrderItemRow
                 key={item.id}
                 item={item}
+                order={order}
                 material={materialById.get(item.material_id)}
                 saving={savingItemId === item.id}
                 onPatch={(patch) => void handleItemPatch(item, patch)}
+                onReplacementApplied={handleReplacementApplied}
               />
             ))}
           </tbody>
@@ -259,14 +284,18 @@ function buildOrderText({
 
 function OrderItemRow({
   item,
+  order,
   material,
   saving,
   onPatch,
+  onReplacementApplied,
 }: {
   item: OrderItem;
+  order: Order;
   material: Material | undefined;
   saving: boolean;
   onPatch: (patch: OrderItemPatch) => void;
+  onReplacementApplied: () => void;
 }) {
   const isDiscrepant =
     item.price_delta_pct != null && Math.abs(item.price_delta_pct) > SIGNIFICANT_PRICE_DELTA_PCT;
@@ -358,8 +387,154 @@ function OrderItemRow({
             }}
           />
         )}
+        {isDeclined && (
+          <ReplacementTrigger
+            item={item}
+            order={order}
+            material={material}
+            onReplacementApplied={onReplacementApplied}
+          />
+        )}
       </td>
     </tr>
+  );
+}
+
+function ReplacementTrigger({
+  item,
+  order,
+  material,
+  onReplacementApplied,
+}: {
+  item: OrderItem;
+  order: Order;
+  material: Material | undefined;
+  onReplacementApplied: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState<string | null>(null);
+  const [result, setResult] = useState<FindReplacementResult | null>(null);
+  const [applyingSupplierId, setApplyingSupplierId] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<unknown>(null);
+
+  async function handleFindReplacement() {
+    setOpen(true);
+    setLoading(true);
+    setNotFound(null);
+    setApplyError(null);
+    try {
+      const found = await ordersApi.findReplacement(order.id, item.id);
+      setResult(found);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setNotFound(
+          typeof err.detail === 'string'
+            ? err.detail
+            : `Материал ${material?.canonical_name ?? item.material_id} отсутствует в текущем плане проекта.`,
+        );
+        setResult(null);
+      } else {
+        setApplyError(err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSelectCandidate(supplierId: string) {
+    setApplyError(null);
+    setApplyingSupplierId(supplierId);
+    try {
+      // Single call: overrides the AllocationLine and syncs the target
+      // draft Order (creates it or adds an OrderItem to the existing one)
+      // in one backend transaction — see ADR-0015. Replaces the old
+      // allocationApi.overrideLine + projectsApi.get(run_id) combo.
+      await ordersApi.replaceAndOrder(order.id, item.id, supplierId);
+      onReplacementApplied();
+      setOpen(false);
+      setResult(null);
+    } catch (err) {
+      setApplyError(err);
+    } finally {
+      setApplyingSupplierId(null);
+    }
+  }
+
+  const replaced = item.replaced_by_supplier_id != null;
+
+  return (
+    <div className={styles.replacementSection}>
+      <button
+        type="button"
+        className={styles.findReplacementButton}
+        onClick={() => (open ? setOpen(false) : void handleFindReplacement())}
+      >
+        {open ? 'Скрыть кандидатов' : 'Найти замену'}
+      </button>
+
+      {replaced && (
+        <div className={styles.replacedNotice}>
+          → Перенесено на {item.replaced_by_supplier_name ?? item.replaced_by_supplier_id}
+          {item.replacement_draft_order_id != null ? (
+            <>
+              {' '}
+              —{' '}
+              <Link to={`/orders/${item.replacement_draft_order_id}`} className={styles.replacedLink}>
+                черновик уже создан »
+              </Link>
+            </>
+          ) : (
+            <span className={styles.replacedMuted}> — ордер ещё не создан</span>
+          )}
+        </div>
+      )}
+
+      {open && (
+        <div className={styles.replacementPanel}>
+          {loading && <div className={styles.replacementLoading}>Ищем кандидатов…</div>}
+
+          {notFound != null && <div className={styles.replacementNotFound}>⚠ {notFound}</div>}
+
+          {applyError != null && (
+            <div className={styles.replacementNotFound}>
+              {applyError instanceof ApiError ? applyError.message : 'Не удалось применить замену.'}
+            </div>
+          )}
+
+          {result != null && result.candidates.length === 0 && (
+            <div className={styles.replacementLoading}>Нет активных цен на этот материал у других поставщиков.</div>
+          )}
+
+          {result != null && result.candidates.length > 0 && (
+            <ul className={styles.candidateList}>
+              {result.candidates.map((candidate) => (
+                <li key={candidate.supplier_id} className={styles.candidateRow}>
+                  <button
+                    type="button"
+                    className={styles.candidateButton}
+                    disabled={applyingSupplierId != null}
+                    onClick={() => void handleSelectCandidate(candidate.supplier_id)}
+                  >
+                    <span className={styles.candidateSupplier}>
+                      {candidate.supplier_name}
+                      {applyingSupplierId === candidate.supplier_id && '…'}
+                    </span>
+                    <span className={styles.candidatePrice}>{formatMoney(candidate.price)}</span>
+                  </button>
+                  {candidate.availability_risk && (
+                    <span className={styles.availabilityRisk}>
+                      ⚠ у поставщика доступно {candidate.availability} {material?.unit ?? ''}, требуется{' '}
+                      {item.quantity}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

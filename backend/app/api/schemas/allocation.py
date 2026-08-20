@@ -34,9 +34,17 @@ class AllocationLineOut(BaseModel):
 
 class AllocationLineOverrideIn(BaseModel):
     """Body for PATCH .../lines/{line_id} — see ADR-0006 п.5. Single-field,
-    no diff-semantics, same style as ProjectUpdate (ADR-0004)."""
+    no diff-semantics, same style as ProjectUpdate (ADR-0004).
+
+    source_order_item_id — see ADR-0014 п.5. Set only by the find-replacement
+    flow: backend records it as AllocationLine.overridden_via_order_item_id.
+    Omitted (the ordinary manual override from AllocationResultPage) —
+    backend explicitly clears overridden_via_order_item_id to NULL on every
+    PATCH that doesn't pass it, so a later override loses attribution to an
+    unrelated prior decline. See ADR-0014 п.3."""
 
     supplier_id: uuid.UUID
+    source_order_item_id: uuid.UUID | None = None
 
 
 class OrphanedMaterialOut(BaseModel):

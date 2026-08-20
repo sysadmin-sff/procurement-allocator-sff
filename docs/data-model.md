@@ -121,6 +121,7 @@ erDiagram
         uuid supplier_id
         int quantity
         decimal unit_price
+        uuid overridden_via_order_item_id "nullable, FK -> OrderItem — добавлено сверх исходной диаграммы, см. ADR-0014"
     }
     Order {
         uuid id

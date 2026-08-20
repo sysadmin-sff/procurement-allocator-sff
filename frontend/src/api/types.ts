@@ -233,6 +233,30 @@ export interface OrderItem {
   decline_reason: string | null;
   price_delta: number | null;
   price_delta_pct: number | null;
+  /** Derived, not persisted — see ADR-0014 п.3. Set only when this declined
+   * item caused the current override of its material's line in the
+   * project's latest AllocationRun. */
+  replaced_by_supplier_id: string | null;
+  replaced_by_supplier_name: string | null;
+  /** Non-null if replaced_by_supplier_id has an existing draft Order in
+   * this project — see ADR-0014 п.3. */
+  replacement_draft_order_id: string | null;
+}
+
+/** One supplier candidate from POST .../find-replacement — see ADR-0014 п.1. */
+export interface ReplacementCandidate {
+  supplier_id: string;
+  supplier_name: string;
+  price: number;
+  availability: number | null;
+  availability_risk: boolean;
+}
+
+/** Response body for POST .../find-replacement — see ADR-0014 п.5. line_id
+ * is the AllocationLine to PATCH (ADR-0006) when a candidate is picked. */
+export interface FindReplacementResult {
+  line_id: string;
+  candidates: ReplacementCandidate[];
 }
 
 export interface Order {

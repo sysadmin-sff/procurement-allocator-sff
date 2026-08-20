@@ -67,6 +67,7 @@ function renderPage() {
       <Routes>
         <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
         <Route path="/projects/:projectId/allocation" element={<div>Allocation screen</div>} />
+        <Route path="/orders/:orderId" element={<div>Order detail screen</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -271,6 +272,52 @@ describe('ProjectDetailPage', () => {
     expect(await screen.findByText('Ордера')).toBeInTheDocument();
     expect(screen.getByText(supplier.name)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Открыть »' })).toHaveAttribute('href', '/orders/order-1');
+  });
+
+  it('navigates to the order screen when clicking anywhere on the order row, not just "Открыть »"', async () => {
+    const supplier: Supplier = {
+      id: 'sup-a',
+      name: 'ABC Supply',
+      contacts: null,
+      currency: 'USD',
+      delivery_policy: { flat_fee: 25, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },
+      website: null,
+      region: null,
+      catalog_link: null,
+      status: null,
+      payment_terms: null,
+      portal_url: null,
+      comments: null,
+    };
+    const order: Order = {
+      id: 'order-1',
+      project_id: 'proj-1',
+      supplier_id: 'sup-a',
+      status: 'draft',
+      total_amount: 150,
+      delivery_fee: 25,
+      items: [],
+    };
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: { id: 'run-1', created_at: '2026-08-17T12:00:00Z', status: 'ok' },
+    };
+    getMock.mockResolvedValue(project);
+    suppliersListMock.mockResolvedValue([supplier]);
+    ordersListForProjectMock.mockResolvedValue([order]);
+
+    renderPage();
+
+    const supplierCell = await screen.findByText(supplier.name);
+    const user = userEvent.setup();
+    await user.click(supplierCell);
+
+    expect(await screen.findByText('Order detail screen')).toBeInTheDocument();
   });
 
   it('hides the orders section when there are no orders yet', async () => {

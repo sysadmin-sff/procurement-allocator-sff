@@ -75,6 +75,17 @@ class AllocationLine(UUIDPKMixin, Base):
     переопределена позже (overridden_at > ordered_at), это сигнал для UI,
     что уже созданный Order расходится с текущим состоянием строки, не
     запрет на правку."""
+    overridden_via_order_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("order_items.id", ondelete="SET NULL")
+    )
+    """Не NULL, если текущий override этой строки был выполнен из
+    find-replacement-флоу declined-позиции (ADR-0014 п.3) — ссылка на тот
+    OrderItem. Однонаправленная связь AllocationLine -> OrderItem, не
+    нарушает ADR-0007 п.2 (OrderItem по-прежнему не хранит
+    allocation_line_id). Обычный ручной override (ADR-0006, без
+    source_order_item_id) всегда сбрасывает это поле в NULL — точный
+    причинный признак "перенесено из-за этого отказа", не эвристика по
+    timestamp'ам overridden_at > declined_at."""
 
     allocation_run: Mapped["AllocationRun"] = relationship(back_populates="lines")
     material: Mapped["Material"] = relationship()

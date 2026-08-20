@@ -10,7 +10,7 @@ from app.allocation.order_service import (
     RunNotFoundError,
     create_orders_for_run,
     price_delta,
-    set_confirmed_price,
+    set_order_item_fields,
 )
 from app.api.schemas.order import (
     CreateOrdersIn,
@@ -33,8 +33,11 @@ def _to_order_item_out(item) -> OrderItemOut:
         material_id=item.material_id,
         quantity=item.quantity,
         quoted_price=item.quoted_price,
+        received_price=item.received_price,
         confirmed_price=item.confirmed_price,
         confirmed_at=item.confirmed_at,
+        declined_at=item.declined_at,
+        decline_reason=item.decline_reason,
         price_delta=delta,
         price_delta_pct=delta_pct,
     )
@@ -100,7 +103,7 @@ def get_order(order_id: uuid.UUID, db: Session = Depends(get_db)) -> OrderOut:
 
 
 @router.patch("/orders/{order_id}/items/{item_id}", response_model=OrderItemOut)
-def patch_order_item_confirmed_price(
+def patch_order_item(
     order_id: uuid.UUID,
     item_id: uuid.UUID,
     payload: OrderItemConfirmIn,
@@ -109,8 +112,15 @@ def patch_order_item_confirmed_price(
     if db.get(Order, order_id) is None:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    fields_set = payload.model_fields_set
+    kwargs = {
+        field: getattr(payload, field)
+        for field in ("confirmed_price", "received_price", "declined", "decline_reason")
+        if field in fields_set
+    }
+
     try:
-        item = set_confirmed_price(db, order_id, item_id, payload.confirmed_price)
+        item = set_order_item_fields(db, order_id, item_id, **kwargs)
     except OrderItemNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Order item not found") from exc
     return _to_order_item_out(item)

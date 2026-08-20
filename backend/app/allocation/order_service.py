@@ -220,18 +220,52 @@ def price_delta(
     return delta, delta_pct
 
 
-def set_confirmed_price(
-    db: Session, order_id: uuid.UUID, item_id: uuid.UUID, confirmed_price: float | None
+_UNSET = object()
+"""Sentinel distinguishing "field omitted from PATCH" (leave untouched)
+from "field explicitly set to None" (clear it) — needed because every new
+field on this endpoint is independently optional, same semantics
+confirmed_price already had alone. See ADR-0013 п.3."""
+
+
+def set_order_item_fields(
+    db: Session,
+    order_id: uuid.UUID,
+    item_id: uuid.UUID,
+    *,
+    confirmed_price: float | None = _UNSET,
+    received_price: float | None = _UNSET,
+    declined: bool | None = _UNSET,
+    decline_reason: str | None = _UNSET,
 ) -> OrderItem:
-    """PATCH .../items/{item_id} — see ADR-0007 п.3. An explicit null clears
-    confirmed_at along with confirmed_price, rather than leaving a stale
-    timestamp next to an empty price."""
+    """PATCH .../items/{item_id} — see ADR-0007 п.3 and ADR-0013 п.3. Each
+    keyword is independently optional: omit it (leave at the _UNSET
+    default) to leave that field untouched, or pass None explicitly to
+    clear it. declined=True stamps declined_at=now(); declined=False clears
+    declined_at and decline_reason together. No field here validates
+    against any other — declined_at may coexist with received_price/
+    confirmed_price (ADR-0013 п.2), and confirmed_price may be set without
+    received_price ever being set (ADR-0013 п.1)."""
     item = db.get(OrderItem, item_id)
     if item is None or item.order_id != order_id:
         raise OrderItemNotFoundError(order_id, item_id)
 
-    item.confirmed_price = confirmed_price
-    item.confirmed_at = datetime.now(timezone.utc) if confirmed_price is not None else None
+    if confirmed_price is not _UNSET:
+        item.confirmed_price = confirmed_price
+        item.confirmed_at = datetime.now(timezone.utc) if confirmed_price is not None else None
+
+    if received_price is not _UNSET:
+        item.received_price = received_price
+
+    if declined is not _UNSET:
+        if declined:
+            item.declined_at = datetime.now(timezone.utc)
+        else:
+            item.declined_at = None
+            item.decline_reason = None
+
+    if decline_reason is not _UNSET:
+        item.decline_reason = decline_reason
+
     db.commit()
     db.refresh(item)
     return item

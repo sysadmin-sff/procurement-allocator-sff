@@ -14,6 +14,7 @@ from app.allocation.order_service import (
     RunNotFoundError,
     create_orders_for_run,
     price_delta,
+    set_order_item_fields,
 )
 from app.allocation.service import override_allocation_line_supplier, run_allocation
 from app.main import app
@@ -181,6 +182,191 @@ def test_set_confirmed_price_sets_and_clears_confirmed_at(
     cleared_body = cleared.json()
     assert cleared_body["confirmed_price"] is None
     assert cleared_body["confirmed_at"] is None
+
+
+def test_set_order_item_fields_sets_received_price_independent_of_confirmed(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """received_price can be set and read back without touching
+    confirmed_price/confirmed_at at all — ADR-0013 п.1."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    item = set_order_item_fields(session, orders[0].id, item_id, received_price=4.75)
+
+    assert float(item.received_price) == 4.75
+    assert item.confirmed_price is None
+    assert item.confirmed_at is None
+
+
+def test_set_order_item_fields_confirmed_price_allowed_without_received_price(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """confirmed_price does not require received_price to be set first —
+    ADR-0013 п.1 explicitly allows skipping the "received" step (e.g. phone
+    confirmation at quoted_price)."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    item = set_order_item_fields(session, orders[0].id, item_id, confirmed_price=5.00)
+
+    assert item.received_price is None
+    assert float(item.confirmed_price) == 5.00
+    assert item.confirmed_at is not None
+
+
+def test_set_order_item_fields_declined_stamps_and_clears_declined_at(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    declined = set_order_item_fields(
+        session, orders[0].id, item_id, declined=True, decline_reason="нет в наличии"
+    )
+    assert declined.declined_at is not None
+    assert declined.decline_reason == "нет в наличии"
+
+    undeclined = set_order_item_fields(session, orders[0].id, item_id, declined=False)
+    assert undeclined.declined_at is None
+    assert undeclined.decline_reason is None
+
+
+def test_set_order_item_fields_declined_coexists_with_received_and_confirmed_price(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0013 п.2: declined_at is not mutually exclusive with
+    received_price/confirmed_price — "declined, but offered a substitute
+    at another price" needs both facts on the same row."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    set_order_item_fields(session, orders[0].id, item_id, received_price=6.50)
+    item = set_order_item_fields(
+        session, orders[0].id, item_id, declined=True, decline_reason="снят с производства"
+    )
+
+    assert item.declined_at is not None
+    assert float(item.received_price) == 6.50  # not cleared by declining
+
+
+def test_set_order_item_fields_omitted_field_leaves_existing_value_untouched(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    set_order_item_fields(session, orders[0].id, item_id, received_price=4.75)
+    # Second call only touches confirmed_price; received_price must survive.
+    item = set_order_item_fields(session, orders[0].id, item_id, confirmed_price=5.00)
+
+    assert float(item.received_price) == 4.75
+    assert float(item.confirmed_price) == 5.00
+
+
+def test_patch_order_item_sets_received_price_via_api(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    response = client.patch(
+        f"/orders/{orders[0].id}/items/{item_id}", json={"received_price": 4.90}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["received_price"] == 4.90
+    assert body["confirmed_price"] is None
+
+
+def test_patch_order_item_declines_via_api(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    response = client.patch(
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"declined": True, "decline_reason": "нет в наличии"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["declined_at"] is not None
+    assert body["decline_reason"] == "нет в наличии"
+
+    undeclined = client.patch(
+        f"/orders/{orders[0].id}/items/{item_id}", json={"declined": False}
+    )
+    assert undeclined.status_code == 200
+    undeclined_body = undeclined.json()
+    assert undeclined_body["declined_at"] is None
+    assert undeclined_body["decline_reason"] is None
+
+
+def test_patch_order_item_partial_payload_leaves_other_fields_untouched_via_api(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    client.patch(f"/orders/{orders[0].id}/items/{item_id}", json={"received_price": 4.90})
+    response = client.patch(
+        f"/orders/{orders[0].id}/items/{item_id}", json={"confirmed_price": 5.00}
+    )
+
+    body = response.json()
+    assert body["received_price"] == 4.90
+    assert body["confirmed_price"] == 5.00
 
 
 def test_price_delta_correct_and_null_when_unconfirmed():

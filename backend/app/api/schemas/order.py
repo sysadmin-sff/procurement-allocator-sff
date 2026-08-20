@@ -3,6 +3,10 @@
 quoted_price/confirmed_price — раздельные снимок и сверка, не одно поле
 unit_price (переименовано под ADR-0007 п.1). price_delta/price_delta_pct —
 вычисляются на чтении (app/allocation/order_service.py), не хранятся в БД.
+
+received_price/declined_at/decline_reason — см. ADR-0013. received_price
+не имеет собственного price_delta аналога (ADR-0013 п.4: только quoted vs
+confirmed остаётся вычисляемым показателем).
 """
 
 from __future__ import annotations
@@ -10,7 +14,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrderItemOut(BaseModel):
@@ -21,18 +25,28 @@ class OrderItemOut(BaseModel):
     material_id: uuid.UUID
     quantity: int
     quoted_price: float
+    received_price: float | None = None
     confirmed_price: float | None = None
     confirmed_at: datetime | None = None
+    declined_at: datetime | None = None
+    decline_reason: str | None = None
     price_delta: float | None = None
     price_delta_pct: float | None = None
 
 
 class OrderItemConfirmIn(BaseModel):
-    """Body for PATCH /orders/{order_id}/items/{item_id} — see ADR-0007 п.3.
-    confirmed_price explicitly nullable: passing null clears the confirmation,
-    not just "field omitted"."""
+    """Body for PATCH /orders/{order_id}/items/{item_id} — see ADR-0007 п.3
+    and ADR-0013 п.3. Every field is independently optional: omitting a
+    field leaves it untouched; passing null explicitly clears it (for
+    confirmed_price/received_price) or, for declined, false clears
+    declined_at/decline_reason. Field omitted vs field=null is
+    distinguished server-side via `model_fields_set` in the API handler,
+    not by this schema alone."""
 
-    confirmed_price: float | None
+    confirmed_price: float | None = Field(default=None)
+    received_price: float | None = Field(default=None)
+    declined: bool | None = Field(default=None)
+    decline_reason: str | None = Field(default=None)
 
 
 class OrderOut(BaseModel):

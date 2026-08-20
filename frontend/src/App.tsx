@@ -4,6 +4,7 @@ import {
   AllocationResultPage,
   MaterialsPage,
   OrderDetailPage,
+  PriceComparisonPage,
   PriceReviewPage,
   ProjectBuilderPage,
   ProjectRouterPage,
@@ -23,6 +24,7 @@ function App() {
         <Route path="/projects/:projectId" element={<ProjectRouterPage />} />
         <Route path="/projects/:projectId/allocation" element={<AllocationResultPage />} />
         <Route path="/projects/:projectId/purchases" element={<PurchaseRecordsPage />} />
+        <Route path="/projects/:projectId/comparison" element={<PriceComparisonPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
         <Route path="/price-review" element={<PriceReviewPage />} />
         <Route path="/materials" element={<MaterialsPage />} />

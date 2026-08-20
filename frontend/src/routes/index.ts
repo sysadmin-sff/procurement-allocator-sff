@@ -5,6 +5,7 @@ export { ProjectRouterPage } from './ProjectRouterPage';
 export { AllocationResultPage } from './AllocationResultPage';
 export { OrderDetailPage } from './OrderDetailPage';
 export { PurchaseRecordsPage } from './PurchaseRecordsPage';
+export { PriceComparisonPage } from './PriceComparisonPage';
 export { PriceReviewPage } from './PriceReviewPage';
 export { MaterialsPage } from './MaterialsPage';
 export { SuppliersPage } from './SuppliersPage';

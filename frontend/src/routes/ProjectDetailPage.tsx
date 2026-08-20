@@ -222,6 +222,7 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
               <div className={styles.card}>
                 <div className={styles.sectionHeader}>
                   <div className={styles.sectionTitle}>Спецификация материалов</div>
+                  <Link to={`/projects/${projectId}/comparison`}>Сравнение цен »</Link>
                 </div>
                 <table className={styles.table}>
                   <thead>

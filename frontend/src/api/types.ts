@@ -168,6 +168,40 @@ export interface ProjectItemCreate {
   quantity: number;
 }
 
+/** One supplier's active Price for a material — "План" section, ADR-0016 §1/§4. */
+export interface PlanCandidate {
+  supplier_id: string;
+  supplier_name: string;
+  price: number;
+  availability: number | null;
+  is_cheapest: boolean;
+}
+
+/** One supplier's Order-derived response for a material — "Ответы поставщиков"
+ * section, ADR-0016 §1/§3/§4. Only suppliers with an Order containing the
+ * material appear. */
+export interface SupplierResponse {
+  supplier_id: string;
+  supplier_name: string;
+  quoted_price: number;
+  received_price: number | null;
+  confirmed_price: number | null;
+  declined_at: string | null;
+  decline_reason: string | null;
+  is_cheapest: boolean;
+}
+
+export interface MaterialComparisonRow {
+  project_item_id: string;
+  material_id: string;
+  plan: PlanCandidate[];
+  supplier_responses: SupplierResponse[];
+}
+
+export interface PriceComparisonOut {
+  rows: MaterialComparisonRow[];
+}
+
 export interface LatestAllocationRun {
   id: string;
   created_at: string;

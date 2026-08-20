@@ -133,7 +133,12 @@ erDiagram
         uuid order_id
         uuid material_id
         int quantity
-        decimal unit_price
+        decimal quoted_price
+        decimal received_price "nullable — первый ответ поставщика, до торга"
+        decimal confirmed_price "nullable — финальная договорённость"
+        datetime confirmed_at "nullable"
+        datetime declined_at "nullable — поставщик не может выполнить позицию"
+        string decline_reason "nullable, свободный текст"
     }
     PurchaseRecord {
         uuid id

@@ -53,6 +53,18 @@ class OrderItem(UUIDPKMixin, Base):
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """Когда сотрудник ввёл confirmed_price. Сбрасывается в NULL, если
     confirmed_price явно очищен."""
+    received_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    """Цена, которую поставщик прислал первым, до торга. NULL = ответа ещё
+    нет. Независимо от confirmed_price — может быть заполнено без него и
+    наоборот. См. ADR-0013."""
+    declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """Когда сотрудник явно пометил позицию как "поставщик не может
+    выполнить/нет в наличии". NULL = не отмечено (не значит "доступно").
+    Не эксклюзивно с received_price/confirmed_price — обе группы полей
+    могут быть заполнены одновременно (напр. отказался, но предложил
+    замену по другой цене). См. ADR-0013 п.2."""
+    decline_reason: Mapped[str | None] = mapped_column(String(500))
+    """Свободный текст, необязательный. См. ADR-0013 п.2."""
 
     order: Mapped["Order"] = relationship(back_populates="items")
     material: Mapped["Material"] = relationship()

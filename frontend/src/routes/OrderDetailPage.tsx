@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
+import type { OrderItemPatch } from '../api/orders';
 import { suppliersApi } from '../api/suppliers';
 import type { Material, Order, OrderItem, Supplier } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -50,12 +51,12 @@ export function OrderDetailPage() {
     };
   }, [orderId]);
 
-  async function handleConfirmedPriceChange(item: OrderItem, value: number | null) {
-    if (!data || value === item.confirmed_price) return;
+  async function handleItemPatch(item: OrderItem, patch: OrderItemPatch) {
+    if (!data) return;
     setSaveError(null);
     setSavingItemId(item.id);
     try {
-      const updated = await ordersApi.setConfirmedPrice(data.order.id, item.id, value);
+      const updated = await ordersApi.patchItem(data.order.id, item.id, patch);
       setData((prev) =>
         prev
           ? {
@@ -97,6 +98,7 @@ export function OrderDetailPage() {
   const discrepantCount = order.items.filter(
     (item) => item.price_delta_pct != null && Math.abs(item.price_delta_pct) > SIGNIFICANT_PRICE_DELTA_PCT,
   ).length;
+  const declinedCount = order.items.filter((item) => item.declined_at != null).length;
 
   return (
     <div className={styles.page}>
@@ -111,10 +113,20 @@ export function OrderDetailPage() {
 
         {saveError != null && <ErrorBanner error={saveError} />}
 
-        {discrepantCount > 0 && (
+        {(discrepantCount > 0 || declinedCount > 0) && (
           <div className={styles.discrepancyBanner} role="alert">
-            ⚠ {discrepantCount} {pluralizePositions(discrepantCount)} с расхождением цены больше{' '}
-            {SIGNIFICANT_PRICE_DELTA_PCT}%
+            {discrepantCount > 0 && (
+              <span>
+                ⚠ {discrepantCount} {pluralizePositions(discrepantCount)} с расхождением цены больше{' '}
+                {SIGNIFICANT_PRICE_DELTA_PCT}%
+              </span>
+            )}
+            {discrepantCount > 0 && declinedCount > 0 && <span> · </span>}
+            {declinedCount > 0 && (
+              <span>
+                ⚠ {declinedCount} {pluralizePositions(declinedCount)} отклонено поставщиком
+              </span>
+            )}
           </div>
         )}
 
@@ -124,8 +136,10 @@ export function OrderDetailPage() {
               <th className={styles.materialColHeader}>Материал</th>
               <th className={styles.numCell}>Кол-во</th>
               <th className={styles.numCell}>Отправленная цена</th>
+              <th className={styles.numCell}>Полученная цена</th>
               <th className={styles.numCell}>Подтверждённая цена</th>
               <th className={styles.numCell}>Расхождение</th>
+              <th className={styles.statusColHeader}>Статус</th>
             </tr>
           </thead>
           <tbody>
@@ -135,7 +149,7 @@ export function OrderDetailPage() {
                 item={item}
                 material={materialById.get(item.material_id)}
                 saving={savingItemId === item.id}
-                onConfirmedPriceChange={(value) => void handleConfirmedPriceChange(item, value)}
+                onPatch={(patch) => void handleItemPatch(item, patch)}
               />
             ))}
           </tbody>
@@ -247,23 +261,48 @@ function OrderItemRow({
   item,
   material,
   saving,
-  onConfirmedPriceChange,
+  onPatch,
 }: {
   item: OrderItem;
   material: Material | undefined;
   saving: boolean;
-  onConfirmedPriceChange: (value: number | null) => void;
+  onPatch: (patch: OrderItemPatch) => void;
 }) {
   const isDiscrepant =
     item.price_delta_pct != null && Math.abs(item.price_delta_pct) > SIGNIFICANT_PRICE_DELTA_PCT;
+  const isDeclined = item.declined_at != null;
+  const rowClassName =
+    [isDiscrepant ? styles.discrepantRow : '', isDeclined ? styles.declinedRow : '']
+      .filter(Boolean)
+      .join(' ') || undefined;
 
   return (
-    <tr className={isDiscrepant ? styles.discrepantRow : undefined}>
+    <tr className={rowClassName}>
       <td className={styles.materialColCell}>{material?.canonical_name ?? item.material_id}</td>
       <td className={styles.numCell}>
         {item.quantity} {material?.unit ?? ''}
       </td>
       <td className={styles.numCell}>{formatMoney(item.quoted_price)}</td>
+      <td className={styles.numCell}>
+        <input
+          key={item.received_price ?? 'empty'}
+          className={styles.priceInput}
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="—"
+          defaultValue={item.received_price ?? ''}
+          disabled={saving}
+          onBlur={(e) => {
+            const raw = e.target.value.trim();
+            const value = raw === '' ? null : Number(raw);
+            if (value !== item.received_price) onPatch({ received_price: value });
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+        />
+      </td>
       <td className={styles.numCell}>
         <input
           key={item.confirmed_price ?? 'empty'}
@@ -276,7 +315,8 @@ function OrderItemRow({
           disabled={saving}
           onBlur={(e) => {
             const raw = e.target.value.trim();
-            onConfirmedPriceChange(raw === '' ? null : Number(raw));
+            const value = raw === '' ? null : Number(raw);
+            if (value !== item.confirmed_price) onPatch({ confirmed_price: value });
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') e.currentTarget.blur();
@@ -292,6 +332,31 @@ function OrderItemRow({
           </span>
         ) : (
           <span className={styles.deltaEmpty}>—</span>
+        )}
+      </td>
+      <td className={styles.statusColCell}>
+        <button
+          type="button"
+          className={isDeclined ? styles.declineButtonActive : styles.declineButton}
+          disabled={saving}
+          onClick={() => onPatch({ declined: !isDeclined })}
+        >
+          {isDeclined ? 'Отклонено' : 'Отметить как недоступно'}
+        </button>
+        {isDeclined && (
+          <input
+            key={item.decline_reason ?? 'empty'}
+            className={styles.declineReasonInput}
+            type="text"
+            placeholder="Причина (необязательно)"
+            defaultValue={item.decline_reason ?? ''}
+            disabled={saving}
+            onBlur={(e) => {
+              const raw = e.target.value.trim();
+              const value = raw === '' ? null : raw;
+              if (value !== item.decline_reason) onPatch({ decline_reason: value });
+            }}
+          />
         )}
       </td>
     </tr>

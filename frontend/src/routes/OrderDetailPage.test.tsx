@@ -13,7 +13,7 @@ vi.mock('../api/orders', () => ({
     createForRun: vi.fn(),
     listForProject: vi.fn(),
     get: vi.fn(),
-    setConfirmedPrice: vi.fn(),
+    patchItem: vi.fn(),
   },
 }));
 vi.mock('../api/materials', () => ({
@@ -24,7 +24,7 @@ vi.mock('../api/suppliers', () => ({
 }));
 
 const getOrderMock = vi.mocked(ordersApi.get);
-const setConfirmedPriceMock = vi.mocked(ordersApi.setConfirmedPrice);
+const patchItemMock = vi.mocked(ordersApi.patchItem);
 const materialsListMock = vi.mocked(materialsApi.list);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 
@@ -59,8 +59,11 @@ function itemFixture(overrides: Partial<OrderItem> = {}): OrderItem {
     material_id: 'mat-1',
     quantity: 10,
     quoted_price: 25,
+    received_price: null,
     confirmed_price: null,
     confirmed_at: null,
+    declined_at: null,
+    decline_reason: null,
     price_delta: null,
     price_delta_pct: null,
     ...overrides,
@@ -81,7 +84,7 @@ function renderPage() {
 describe('OrderDetailPage', () => {
   beforeEach(() => {
     getOrderMock.mockReset();
-    setConfirmedPriceMock.mockReset();
+    patchItemMock.mockReset();
     materialsListMock.mockReset();
     suppliersListMock.mockReset();
     materialsListMock.mockResolvedValue([material]);
@@ -119,19 +122,44 @@ describe('OrderDetailPage', () => {
       items: [itemFixture()],
     };
     getOrderMock.mockResolvedValue(order);
-    setConfirmedPriceMock.mockResolvedValue(
+    patchItemMock.mockResolvedValue(
       itemFixture({ confirmed_price: 27.5, confirmed_at: '2026-08-18T10:00:00Z', price_delta: 2.5, price_delta_pct: 10.0 }),
     );
 
     renderPage();
 
-    const input = await screen.findByPlaceholderText('—');
+    const inputs = await screen.findAllByPlaceholderText('—');
+    const confirmedInput = inputs[1]; // received price, confirmed price, in column order
     const user = userEvent.setup();
-    await user.type(input, '27.50');
+    await user.type(confirmedInput, '27.50');
     await user.tab();
 
-    expect(setConfirmedPriceMock).toHaveBeenCalledWith('order-1', 'item-1', 27.5);
+    expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { confirmed_price: 27.5 });
     expect(await screen.findByText(/\+\$2\.50 \(\+10\.0%\)/)).toBeInTheDocument();
+  });
+
+  it('saves received_price on blur without touching confirmed_price', async () => {
+    const order: Order = {
+      id: 'order-1',
+      project_id: 'proj-1',
+      supplier_id: 'sup-a',
+      status: 'draft',
+      total_amount: 250,
+      delivery_fee: 25,
+      items: [itemFixture()],
+    };
+    getOrderMock.mockResolvedValue(order);
+    patchItemMock.mockResolvedValue(itemFixture({ received_price: 23.75 }));
+
+    renderPage();
+
+    const inputs = await screen.findAllByPlaceholderText('—');
+    const receivedInput = inputs[0];
+    const user = userEvent.setup();
+    await user.type(receivedInput, '23.75');
+    await user.tab();
+
+    expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { received_price: 23.75 });
   });
 
   it('highlights the row and shows the summary banner when |price_delta_pct| > 10', async () => {
@@ -183,6 +211,76 @@ describe('OrderDetailPage', () => {
 
     await screen.findByText(material.canonical_name);
     expect(screen.queryByText(/расхождением цены/)).not.toBeInTheDocument();
+  });
+
+  it('renders received_price and shows decline reason for a declined row', async () => {
+    const order: Order = {
+      id: 'order-1',
+      project_id: 'proj-1',
+      supplier_id: 'sup-a',
+      status: 'draft',
+      total_amount: 250,
+      delivery_fee: 25,
+      items: [
+        itemFixture({
+          received_price: 23.75,
+          declined_at: '2026-08-18T10:00:00Z',
+          decline_reason: 'нет в наличии',
+        }),
+      ],
+    };
+    getOrderMock.mockResolvedValue(order);
+
+    renderPage();
+
+    expect(await screen.findByDisplayValue('23.75')).toBeInTheDocument();
+    expect(screen.getByText('Отклонено')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('нет в наличии')).toBeInTheDocument();
+    expect(await screen.findByText(/1 позиция отклонено поставщиком/)).toBeInTheDocument();
+  });
+
+  it('marks a row as declined when the decline button is clicked', async () => {
+    const order: Order = {
+      id: 'order-1',
+      project_id: 'proj-1',
+      supplier_id: 'sup-a',
+      status: 'draft',
+      total_amount: 250,
+      delivery_fee: 25,
+      items: [itemFixture()],
+    };
+    getOrderMock.mockResolvedValue(order);
+    patchItemMock.mockResolvedValue(itemFixture({ declined_at: '2026-08-18T10:00:00Z' }));
+
+    renderPage();
+
+    const button = await screen.findByText('Отметить как недоступно');
+    const user = userEvent.setup();
+    await user.click(button);
+
+    expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { declined: true });
+  });
+
+  it('un-declines a row when the active decline button is clicked again', async () => {
+    const order: Order = {
+      id: 'order-1',
+      project_id: 'proj-1',
+      supplier_id: 'sup-a',
+      status: 'draft',
+      total_amount: 250,
+      delivery_fee: 25,
+      items: [itemFixture({ declined_at: '2026-08-18T10:00:00Z' })],
+    };
+    getOrderMock.mockResolvedValue(order);
+    patchItemMock.mockResolvedValue(itemFixture({ declined_at: null, decline_reason: null }));
+
+    renderPage();
+
+    const button = await screen.findByText('Отклонено');
+    const user = userEvent.setup();
+    await user.click(button);
+
+    expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { declined: false });
   });
 
   it('renders copyable material lists with and without prices', async () => {

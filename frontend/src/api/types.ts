@@ -226,8 +226,11 @@ export interface OrderItem {
   material_id: string;
   quantity: number;
   quoted_price: number;
+  received_price: number | null;
   confirmed_price: number | null;
   confirmed_at: string | null;
+  declined_at: string | null;
+  decline_reason: string | null;
   price_delta: number | null;
   price_delta_pct: number | null;
 }

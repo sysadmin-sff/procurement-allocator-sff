@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models import PriceListImport
-from app.price_ingestion.extraction import ExtractedPriceLine
+from app.price_ingestion.extraction import ExtractedPriceLine, PriceIngestionError
 from app.price_ingestion.matching import MatchDecision, MatchedLine
 
 client = TestClient(app)
@@ -219,3 +219,79 @@ def test_apply_returns_404_for_unknown_entry(db_session, make_supplier):
     )
 
     assert response.status_code == 404
+
+
+def _upload_single_entry(supplier):
+    matched = [
+        MatchedLine(
+            extracted=ExtractedPriceLine(
+                raw_name="Some Line", raw_sku=None, price=3.0, currency="USD",
+                availability=None, min_order_qty=None,
+            ),
+            decision=MatchDecision(
+                action="new", material_id=None, confidence=0.5,
+                reasoning="unsure", suggested_internal_sku="SKU-X",
+            ),
+            embedding=[0.1] * 1536,
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        upload_response = _upload(supplier.id)
+    return upload_response.json()
+
+
+def test_apply_match_without_material_id_returns_422(db_session, make_supplier):
+    session, _material_ids, _supplier_ids = db_session
+    supplier = make_supplier()
+    body = _upload_single_entry(supplier)
+    entry_id = body["entries"][0]["id"]
+
+    response = client.post(
+        f"/price-list-imports/{body['import_id']}/entries/{entry_id}/apply",
+        json={"action": "match"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_apply_new_without_internal_sku_returns_422(db_session, make_supplier):
+    session, _material_ids, _supplier_ids = db_session
+    supplier = make_supplier()
+    body = _upload_single_entry(supplier)
+    entry_id = body["entries"][0]["id"]
+
+    response = client.post(
+        f"/price-list-imports/{body['import_id']}/entries/{entry_id}/apply",
+        json={"action": "new", "canonical_name": "X"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_apply_match_with_nonexistent_material_id_returns_404(db_session, make_supplier):
+    session, _material_ids, _supplier_ids = db_session
+    supplier = make_supplier()
+    body = _upload_single_entry(supplier)
+    entry_id = body["entries"][0]["id"]
+
+    response = client.post(
+        f"/price-list-imports/{body['import_id']}/entries/{entry_id}/apply",
+        json={"action": "match", "material_id": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 404
+
+
+def test_upload_openai_failure_returns_clear_error_not_bare_500(db_session, make_supplier):
+    session, _material_ids, _supplier_ids = db_session
+    supplier = make_supplier()
+
+    with patch(
+        "app.price_ingestion.service.extract_price_list_lines",
+        side_effect=PriceIngestionError("Не удалось связаться с сервисом распознавания."),
+    ):
+        response = _upload(supplier.id)
+
+    assert response.status_code == 502
+    assert response.json()["detail"]

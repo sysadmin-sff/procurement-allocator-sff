@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class PriceListEntryOut(BaseModel):
@@ -35,3 +35,13 @@ class ApplyEntryIn(BaseModel):
     material_id: uuid.UUID | None = None
     internal_sku: str | None = None
     canonical_name: str | None = None
+
+    @model_validator(mode="after")
+    def _check_required_fields_for_action(self) -> ApplyEntryIn:
+        if self.action == "match" and self.material_id is None:
+            raise ValueError("material_id is required when action is 'match'")
+        if self.action == "new" and (self.internal_sku is None or self.canonical_name is None):
+            raise ValueError(
+                "internal_sku and canonical_name are required when action is 'new'"
+            )
+        return self

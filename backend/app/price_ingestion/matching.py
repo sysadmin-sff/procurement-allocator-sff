@@ -160,6 +160,27 @@ def match_price_list_lines(
         embedding = embed_text(material_embedding_input(line.raw_name, {}))
         candidates = find_top_candidates(db, embedding)
         decision = _decide_match(line.raw_name, line.raw_sku, candidates)
+
+        if decision.action == "match" and decision.material_id not in {
+            candidate.id for candidate in candidates
+        }:
+            # The LLM hallucinated a material_id that was never among the
+            # candidates shown to it in this call. Trusting it as-is would
+            # write a dangling FK and fail the whole batch's db.commit() —
+            # downgrade to "new" so only this one line needs re-review
+            # instead of losing the entire import (ADR-0019: nothing is
+            # trusted blindly, human reviews everything).
+            decision = MatchDecision(
+                action="new",
+                material_id=None,
+                confidence=min(decision.confidence, 0.3),
+                reasoning=(
+                    "LLM proposed material_id not among candidates shown "
+                    f"({decision.reasoning})"
+                ),
+                suggested_internal_sku=decision.suggested_internal_sku,
+            )
+
         results.append(MatchedLine(extracted=line, decision=decision, embedding=embedding))
 
     _flag_duplicate_new_lines(results)

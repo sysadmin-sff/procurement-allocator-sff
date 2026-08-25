@@ -6,6 +6,7 @@ LLM decision call. Duplicate-detection reuses embeddings already computed
 during matching, so no extra embed_text call is needed for that step.
 """
 
+import uuid
 from unittest.mock import patch
 
 from app.models import SupplierMaterialAlias
@@ -188,3 +189,39 @@ def test_matched_lines_are_not_considered_for_duplicate_detection(
 
     assert results[0].possible_duplicate_of == []
     assert results[1].possible_duplicate_of == []
+
+
+def test_hallucinated_material_id_is_downgraded_to_new(
+    db_session, make_supplier, make_material
+):
+    """If the LLM returns action="match" with a material_id that was not
+    among the candidates shown to it, the decision must be downgraded to
+    action="new" rather than trusted as-is — see ADR-0019 final review
+    Finding 3. Trusting a hallucinated id would write a dangling FK and
+    fail the whole batch's db.commit()."""
+    session, _material_ids, _supplier_ids = db_session
+    supplier = make_supplier()
+    candidate = make_material(canonical_name="Candidate Material")
+    candidate.embedding = [0.5] * 1536
+    session.commit()
+
+    line = _line(raw_name="New Raw Name")
+    hallucinated_decision = MatchDecision(
+        action="match",
+        material_id=uuid.uuid4(),
+        confidence=0.9,
+        reasoning="matches by attributes",
+        suggested_internal_sku=None,
+    )
+
+    with patch(
+        "app.price_ingestion.matching.embed_text", return_value=[0.5] * 1536
+    ), patch(
+        "app.price_ingestion.matching._decide_match", return_value=hallucinated_decision
+    ):
+        results = match_price_list_lines(session, supplier.id, [line])
+
+    assert len(results) == 1
+    assert results[0].decision.action == "new"
+    assert results[0].decision.material_id is None
+    assert "matches by attributes" in results[0].decision.reasoning

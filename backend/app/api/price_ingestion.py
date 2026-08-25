@@ -11,8 +11,13 @@ from app.api.schemas.price_ingestion import (
     PriceListImportOut,
 )
 from app.core.database import get_db
+from app.models import Material
 from app.price_ingestion.apply import EntryNotFoundError, apply_price_list_entry
-from app.price_ingestion.extraction import UnsupportedFileTypeError, validate_content_type
+from app.price_ingestion.extraction import (
+    PriceIngestionError,
+    UnsupportedFileTypeError,
+    validate_content_type,
+)
 from app.price_ingestion.service import (
     ImportNotFoundError,
     SupplierNotFoundError,
@@ -123,6 +128,8 @@ async def upload_price_list(
         )
     except SupplierNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Supplier not found") from exc
+    except PriceIngestionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return _to_import_out_with_matches(price_list_import)
 
@@ -148,6 +155,9 @@ def apply_entry(
     payload: ApplyEntryIn,
     db: Session = Depends(get_db),
 ) -> PriceListEntryOut:
+    if payload.action == "match" and db.get(Material, payload.material_id) is None:
+        raise HTTPException(status_code=404, detail="Material not found")
+
     try:
         entry = apply_price_list_entry(
             db,

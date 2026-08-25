@@ -149,10 +149,14 @@ def apply_price_list_entry(
 
     try:
         if action == "match":
-            assert material_id is not None
+            if material_id is None:
+                raise ValueError("material_id is required when action is 'match'")
             _apply_match(db, entry, supplier_id, material_id)
         else:
-            assert internal_sku is not None and canonical_name is not None
+            if internal_sku is None or canonical_name is None:
+                raise ValueError(
+                    "internal_sku and canonical_name are required when action is 'new'"
+                )
             _apply_new(db, entry, supplier_id, internal_sku, canonical_name)
     except Exception:
         db.rollback()

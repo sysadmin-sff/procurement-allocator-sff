@@ -59,6 +59,7 @@ erDiagram
         string canonical_name
         string category
         string unit
+        vector embedding "pgvector(1536), nullable — эмбеддинг canonical_name+attributes, ADR-0019"
     }
     SupplierMaterialAlias {
         uuid supplier_id
@@ -85,7 +86,7 @@ erDiagram
         string currency
         int availability
         int min_order_qty
-        string action "update/new/ignore"
+        string action "match/new/skip, NULL = не решено — заполняется на ревью, ADR-0019"
     }
     Price {
         uuid material_id
@@ -160,6 +161,18 @@ erDiagram
 
 `PriceListImport`/`PriceListEntry` добавлены сверх исходной диаграммы — см. `docs/decisions/0001-price-list-import-table.md`.
 `PriceListEntry` — черновые строки на ревью (до аппрува, не пишутся в `Price` напрямую).
+
+`Material.embedding` добавлено сверх исходной диаграммы — см.
+`docs/decisions/0019-price-list-ingestion-matching.md`. pgvector-расширение
+Postgres, колонка `vector(1536)`, эмбеддинг `text-embedding-3-small` от
+`canonical_name` + сериализованных `attributes`. `NULL` до бэкафилла
+(`backend/app/scripts/backfill_material_embeddings.py`) или при сбое
+embeddings API на `POST`/`PUT /materials` (graceful degradation — сбой
+внешнего API не блокирует ручной CRUD). Используется только для векторного
+поиска top-K кандидатов при матчинге строк прайс-листа
+(`backend/app/price_ingestion/candidates.py`) — материалы с `embedding IS
+NULL` естественно исключаются из результатов поиска, это деградация
+полноты поиска, не ошибка.
 
 `AllocationRun.orphaned_materials` добавлено сверх исходной диаграммы — см.
 `docs/decisions/0002-supplier-allocation-algorithm.md`. Список материалов проекта,

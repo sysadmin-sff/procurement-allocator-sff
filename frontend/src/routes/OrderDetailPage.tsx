@@ -4,10 +4,25 @@ import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import type { OrderItemPatch } from '../api/orders';
+import { purchaseRecordsApi } from '../api/purchaseRecords';
 import { suppliersApi } from '../api/suppliers';
-import type { FindReplacementResult, Material, Order, OrderItem, Supplier } from '../api/types';
+import type {
+  FindReplacementResult,
+  Material,
+  Order,
+  OrderItem,
+  ParsedExtraLine,
+  ParsedMatchedLine,
+  ParseOrderResponseResult,
+  Supplier,
+} from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import styles from './order-detail/OrderDetail.module.css';
+
+const LOW_CONFIDENCE_LEVELS = new Set(['low', 'medium']);
+/** Both "low" and "medium" get the same ⚠ treatment in MVP — see ADR-0018 §6:
+ * "confidence как таковой доступен в ответе endpoint'а на случай будущей
+ * дифференциации, но экран не обязан различать "low" и "medium" визуально". */
 
 const SIGNIFICANT_PRICE_DELTA_PCT = 10;
 /** Mirrors app/allocation/order_service.py SIGNIFICANT_PRICE_DELTA_PCT — the
@@ -91,6 +106,21 @@ export function OrderDetailPage() {
     }
   }
 
+  // Same full-refresh pattern as handleReplacementApplied — after bulk
+  // "Применить все совпадения" the individual PATCH responses were already
+  // applied to state per-row, but a full GET keeps this consistent with the
+  // rest of the page rather than trusting the accumulated PATCH responses.
+  async function handleParseApplied() {
+    if (!data) return;
+    setSaveError(null);
+    try {
+      const refreshed = await ordersApi.get(data.order.id);
+      setData((prev) => (prev ? { ...prev, order: refreshed } : prev));
+    } catch (err) {
+      setSaveError(err);
+    }
+  }
+
   if (!orderId) {
     return <ErrorBanner error="Не указан ордер." />;
   }
@@ -152,6 +182,8 @@ export function OrderDetailPage() {
             )}
           </div>
         )}
+
+        <ParseResponseSection order={order} materialById={materialById} onApplied={handleParseApplied} />
 
         <table className={styles.table}>
           <thead>
@@ -535,6 +567,345 @@ function ReplacementTrigger({
         </div>
       )}
     </div>
+  );
+}
+
+function ParseResponseSection({
+  order,
+  materialById,
+  onApplied,
+}: {
+  order: Order;
+  materialById: Map<string, Material>;
+  onApplied: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [parsing, setParsing] = useState(false);
+  const [parseError, setParseError] = useState<unknown>(null);
+  const [result, setResult] = useState<ParseOrderResponseResult | null>(null);
+
+  // Editable prices/inclusion for category (a), keyed by order_item_id —
+  // seeded from the parse result but independently editable per ADR-0018 §4.
+  const [matchedPrices, setMatchedPrices] = useState<Record<string, number>>({});
+  const [matchedIncluded, setMatchedIncluded] = useState<Record<string, boolean>>({});
+  const [applying, setApplying] = useState(false);
+  const [applyError, setApplyError] = useState<unknown>(null);
+  const [applySummary, setApplySummary] = useState<string | null>(null);
+
+  async function handleParse() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+    setParsing(true);
+    setParseError(null);
+    setApplySummary(null);
+    try {
+      const parsed = await ordersApi.parseResponse(order.id, file);
+      setResult(parsed);
+      const prices: Record<string, number> = {};
+      const included: Record<string, boolean> = {};
+      for (const line of parsed.matched) {
+        prices[line.order_item_id] = line.price;
+        included[line.order_item_id] = true; // default-checked, ADR-0018 §3a
+      }
+      setMatchedPrices(prices);
+      setMatchedIncluded(included);
+    } catch (err) {
+      setResult(null);
+      setParseError(err);
+    } finally {
+      setParsing(false);
+      // The file itself is never persisted (ADR-0018 §7) — clear the input
+      // so a re-upload of the same filename still fires onChange/works.
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  async function handleApplyAllMatched() {
+    if (!result) return;
+    const toApply = result.matched.filter((line) => matchedIncluded[line.order_item_id]);
+    if (toApply.length === 0) return;
+
+    setApplying(true);
+    setApplyError(null);
+    setApplySummary(null);
+    let succeeded = 0;
+    try {
+      for (const line of toApply) {
+        const price = matchedPrices[line.order_item_id];
+        await ordersApi.patchItem(order.id, line.order_item_id, { received_price: price });
+        succeeded += 1;
+      }
+      onApplied();
+    } catch (err) {
+      setApplyError(err);
+    } finally {
+      setApplying(false);
+      setApplySummary(`Применено ${succeeded} из ${toApply.length}`);
+    }
+  }
+
+  // OrderItems with no matched line at all — see ADR-0018 §3b.
+  const missing = result
+    ? order.items.filter((item) => !result.matched.some((line) => line.order_item_id === item.id))
+    : [];
+
+  return (
+    <div className={styles.parseSection}>
+      <div className={styles.parseSectionTitle}>Распознавание ответа поставщика</div>
+
+      <div className={styles.parseUploadRow}>
+        <input ref={fileInputRef} className={styles.parseFileInput} type="file" accept=".pdf,image/*" disabled={parsing} />
+        <button type="button" className={styles.parseButton} disabled={parsing} onClick={() => void handleParse()}>
+          {parsing ? 'Распознаём…' : 'Распознать цены из документа'}
+        </button>
+        {parsing && <span className={styles.parseLoading}>Обращаемся к ИИ — это может занять несколько секунд…</span>}
+      </div>
+
+      {parseError != null && (
+        <div className={styles.parseErrorBlock}>
+          {parseError instanceof ApiError
+            ? parseError.message
+            : 'Не удалось распознать документ. Проверьте качество файла или введите цены вручную построчно.'}
+        </div>
+      )}
+
+      {result != null && (
+        <>
+          <div className={styles.parseResultBlock}>
+            <div className={styles.parseCategoryHeader}>
+              <div className={styles.parseCategoryTitle}>Совпало ({result.matched.length})</div>
+              <button
+                type="button"
+                className={styles.parseButton}
+                disabled={applying || result.matched.every((l) => !matchedIncluded[l.order_item_id])}
+                onClick={() => void handleApplyAllMatched()}
+              >
+                {applying ? 'Применяем…' : 'Применить все совпадения'}
+              </button>
+            </div>
+
+            {applyError != null && <ErrorBanner error={applyError} />}
+            {applySummary != null && <div className={styles.parseApplySummary}>{applySummary}</div>}
+
+            {result.matched.length > 0 && (
+              <table className={styles.parseTable}>
+                <thead>
+                  <tr>
+                    <th className={styles.parseCheckboxCell} />
+                    <th>Наша позиция</th>
+                    <th className={styles.numCell}>Отправленная цена</th>
+                    <th className={styles.numCell}>Полученная цена</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.matched.map((line) => (
+                    <MatchedLineRow
+                      key={line.order_item_id}
+                      line={line}
+                      order={order}
+                      materialById={materialById}
+                      included={matchedIncluded[line.order_item_id] ?? true}
+                      price={matchedPrices[line.order_item_id] ?? line.price}
+                      onToggleIncluded={(value) =>
+                        setMatchedIncluded((prev) => ({ ...prev, [line.order_item_id]: value }))
+                      }
+                      onPriceChange={(value) =>
+                        setMatchedPrices((prev) => ({ ...prev, [line.order_item_id]: value }))
+                      }
+                    />
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div className={styles.parseResultBlock}>
+            <div className={styles.parseCategoryHeader}>
+              <div className={styles.parseCategoryTitle}>Отсутствует в ответе ({missing.length})</div>
+            </div>
+            {missing.length > 0 && (
+              <ul className={styles.parseMissingList}>
+                {missing.map((item) => (
+                  <li key={item.id} className={styles.parseMissingRow}>
+                    <span className={styles.parseMissingInfo}>
+                      {materialById.get(item.material_id)?.canonical_name ?? item.material_id}
+                    </span>
+                    <MissingItemMarkUnavailable item={item} order={order} onApplied={onApplied} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className={styles.parseResultBlock}>
+            <div className={styles.parseCategoryHeader}>
+              <div className={styles.parseCategoryTitle}>Лишнее ({result.extra.length})</div>
+            </div>
+            {result.extra.length > 0 && (
+              <ul className={styles.parseExtraList}>
+                {result.extra.map((line, index) => (
+                  <ExtraLineRow key={index} line={line} order={order} />
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MatchedLineRow({
+  line,
+  order,
+  materialById,
+  included,
+  price,
+  onToggleIncluded,
+  onPriceChange,
+}: {
+  line: ParsedMatchedLine;
+  order: Order;
+  materialById: Map<string, Material>;
+  included: boolean;
+  price: number;
+  onToggleIncluded: (value: boolean) => void;
+  onPriceChange: (value: number) => void;
+}) {
+  const orderItem = order.items.find((item) => item.id === line.order_item_id);
+  const material = orderItem ? materialById.get(orderItem.material_id) : undefined;
+  const lowConfidence = LOW_CONFIDENCE_LEVELS.has(line.confidence);
+
+  return (
+    <tr className={lowConfidence ? styles.parseLowConfidenceRow : undefined}>
+      <td className={styles.parseCheckboxCell}>
+        <input type="checkbox" checked={included} onChange={(e) => onToggleIncluded(e.target.checked)} />
+      </td>
+      <td>
+        {material?.canonical_name ?? orderItem?.material_id ?? line.raw_description}
+        {lowConfidence && (
+          <span className={styles.parseConfidenceWarning}>⚠ низкая уверенность распознавания</span>
+        )}
+        <span className={styles.parseReasoning}>{line.reasoning}</span>
+      </td>
+      <td className={styles.numCell}>{orderItem ? formatMoney(orderItem.quoted_price) : '—'}</td>
+      <td className={styles.numCell}>
+        <input
+          className={styles.priceInput}
+          type="number"
+          min="0"
+          step="0.01"
+          value={price}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            if (!Number.isNaN(value)) onPriceChange(value);
+          }}
+        />
+      </td>
+    </tr>
+  );
+}
+
+function MissingItemMarkUnavailable({
+  item,
+  order,
+  onApplied,
+}: {
+  item: OrderItem;
+  order: Order;
+  onApplied: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const isDeclined = item.declined_at != null;
+
+  async function handleClick() {
+    setSaving(true);
+    setError(null);
+    try {
+      await ordersApi.patchItem(order.id, item.id, { declined: !isDeclined });
+      onApplied();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <span>
+      <button
+        type="button"
+        className={isDeclined ? styles.declineButtonActive : styles.declineButton}
+        disabled={saving}
+        onClick={() => void handleClick()}
+      >
+        {isDeclined ? 'Отклонено' : 'Отметить как недоступно'}
+      </button>
+      {error != null && <span className={styles.parseConfidenceWarning}>Не удалось сохранить.</span>}
+    </span>
+  );
+}
+
+function ExtraLineRow({ line, order }: { line: ParsedExtraLine; order: Order }) {
+  const [quantity, setQuantity] = useState(line.quantity ?? 1);
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [added, setAdded] = useState(false);
+
+  async function handleAdd() {
+    setAdding(true);
+    setError(null);
+    try {
+      await purchaseRecordsApi.create(order.project_id, {
+        supplier_id: order.supplier_id,
+        raw_description: line.raw_description,
+        quantity,
+        unit_price: line.price,
+        material_id: null,
+      });
+      setAdded(true);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <li className={styles.parseExtraRow}>
+      <span className={styles.parseExtraInfo}>
+        <span className={styles.parseExtraDescription}>{line.raw_description}</span>
+        <span className={styles.parseExtraMeta}>
+          {formatMoney(line.price)} ×{' '}
+          <input
+            className={styles.parseQtyInput}
+            type="number"
+            min="1"
+            step="1"
+            value={quantity}
+            disabled={adding || added}
+            onChange={(e) => {
+              const value = Number(e.target.value);
+              if (Number.isFinite(value)) setQuantity(value);
+            }}
+          />
+        </span>
+      </span>
+      {added ? (
+        <span className={styles.parseAddedNotice}>Добавлено ✓</span>
+      ) : (
+        <button
+          type="button"
+          className={styles.parseButton}
+          disabled={adding || quantity <= 0}
+          onClick={() => void handleAdd()}
+        >
+          {adding ? 'Добавляем…' : 'Добавить'}
+        </button>
+      )}
+      {error != null && <span className={styles.parseConfidenceWarning}>Не удалось добавить.</span>}
+    </li>
   );
 }
 

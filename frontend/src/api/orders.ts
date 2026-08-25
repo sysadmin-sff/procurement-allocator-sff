@@ -1,5 +1,5 @@
 import { http } from './client';
-import type { FindReplacementResult, Order, OrderItem } from './types';
+import type { FindReplacementResult, Order, OrderItem, ParseOrderResponseResult } from './types';
 
 export interface OrderItemPatch {
   confirmed_price?: number | null;
@@ -27,4 +27,11 @@ export const ordersApi = {
     http.post<OrderItem>(`/orders/${orderId}/items/${itemId}/replace-and-order`, {
       supplier_id: supplierId,
     }),
+  /** POST .../parse-response — see ADR-0018 §3. Read-only preview, writes
+   * nothing server-side; the file is never persisted (ADR-0018 §7). */
+  parseResponse: (orderId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return http.postMultipart<ParseOrderResponseResult>(`/orders/${orderId}/parse-response`, formData);
+  },
 };

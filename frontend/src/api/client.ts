@@ -42,6 +42,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function requestMultipart<T>(path: string, formData: FormData): Promise<T> {
+  const response = await fetch(`${BASE_URL}${path}`, { method: 'POST', body: formData });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => undefined);
+    throw new ApiError(response.status, body);
+  }
+
+  return response.json() as Promise<T>;
+}
+
 export const http = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
@@ -51,6 +62,10 @@ export const http = {
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  /** No Content-Type header set — the browser fills in the multipart
+   * boundary itself, unlike the JSON helpers above which always send
+   * application/json. */
+  postMultipart: <T>(path: string, formData: FormData) => requestMultipart<T>(path, formData),
 };
 
 /**

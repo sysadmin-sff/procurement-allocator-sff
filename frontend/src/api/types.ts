@@ -350,6 +350,42 @@ export interface PurchaseRecordCreate {
 
 export type PurchaseRecordUpdate = PurchaseRecordCreate;
 
+/** One row of POST .../parse-response's "matched" category — see ADR-0018 §3a. */
+export interface ParsedMatchedLine {
+  order_item_id: string;
+  raw_description: string;
+  price: number;
+  quantity: number | null;
+  confidence: string;
+  reasoning: string;
+}
+
+/** One row of POST .../parse-response's "missing" category — see ADR-0018 §3b. */
+export interface ParsedMissingItem {
+  order_item_id: string;
+  material_id: string;
+  canonical_name: string;
+  quantity: number;
+  quoted_price: number;
+}
+
+/** One row of POST .../parse-response's "extra" category — see ADR-0018 §3c. */
+export interface ParsedExtraLine {
+  raw_description: string;
+  price: number;
+  quantity: number | null;
+  confidence: string;
+  reasoning: string;
+}
+
+/** Response body of POST /orders/{order_id}/parse-response — a preview,
+ * nothing here is persisted server-side. See ADR-0018 §3. */
+export interface ParseOrderResponseResult {
+  matched: ParsedMatchedLine[];
+  missing: ParsedMissingItem[];
+  extra: ParsedExtraLine[];
+}
+
 /** planned_total/delta/delta_pct are null (not 0) when there is no Order yet
  * to compare against — see ADR-0008 п.4. */
 export interface TotalComparison {

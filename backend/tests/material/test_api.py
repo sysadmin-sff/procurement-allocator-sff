@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -200,3 +201,118 @@ def test_search_materials_returns_empty_list_for_no_matches(db_session):
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_create_material_embeds_synchronously(db_session):
+    session, material_ids = db_session
+
+    with patch(
+        "app.api.material.embed_text", return_value=[0.2] * 1536
+    ) as mock_embed:
+        response = client.post(
+            "/materials",
+            json={
+                "internal_sku": f"SKU-{uuid.uuid4().hex[:8]}",
+                "canonical_name": "Embeddable Material",
+                "unit": "ft",
+            },
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    material_ids.append(uuid.UUID(body["id"]))
+    mock_embed.assert_called_once()
+
+    material_cls = __import__("app.models", fromlist=["Material"]).Material
+    material = session.get(material_cls, uuid.UUID(body["id"]))
+    assert material.embedding is not None
+    assert len(material.embedding) == 1536
+
+
+def test_create_material_survives_embedding_api_failure(db_session):
+    from app.price_ingestion.embeddings import EmbeddingError
+
+    session, material_ids = db_session
+
+    with patch(
+        "app.api.material.embed_text", side_effect=EmbeddingError("boom")
+    ):
+        response = client.post(
+            "/materials",
+            json={
+                "internal_sku": f"SKU-{uuid.uuid4().hex[:8]}",
+                "canonical_name": "Should Still Be Created",
+                "unit": "ft",
+            },
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    material_ids.append(uuid.UUID(body["id"]))
+
+    from app.models import Material
+
+    material = session.get(Material, uuid.UUID(body["id"]))
+    assert material.embedding is None
+
+
+def test_update_material_reembeds_when_canonical_name_changes(db_session, make_material):
+    material = make_material(canonical_name="Old Name")
+
+    with patch(
+        "app.api.material.embed_text", return_value=[0.3] * 1536
+    ) as mock_embed:
+        response = client.put(
+            f"/materials/{material.id}",
+            json={"canonical_name": "New Name"},
+        )
+
+    assert response.status_code == 200
+    mock_embed.assert_called_once()
+
+
+def test_update_material_reembeds_when_attributes_change(db_session, make_material):
+    material = make_material(canonical_name="Same Name", attributes={"gauge": "6"})
+
+    with patch(
+        "app.api.material.embed_text", return_value=[0.3] * 1536
+    ) as mock_embed:
+        response = client.put(
+            f"/materials/{material.id}",
+            json={"attributes": {"gauge": "8"}},
+        )
+
+    assert response.status_code == 200
+    mock_embed.assert_called_once()
+
+
+def test_update_material_does_not_reembed_when_only_category_changes(db_session, make_material):
+    material = make_material(canonical_name="Stable Name")
+
+    with patch("app.api.material.embed_text") as mock_embed:
+        response = client.put(
+            f"/materials/{material.id}",
+            json={"category": "new-category"},
+        )
+
+    assert response.status_code == 200
+    mock_embed.assert_not_called()
+
+
+def test_update_material_keeps_old_embedding_on_reembed_failure(db_session, make_material):
+    from app.price_ingestion.embeddings import EmbeddingError
+
+    session, material_ids = db_session
+    material = make_material(canonical_name="Old Name")
+    material.embedding = [0.5] * 1536
+    session.commit()
+
+    with patch("app.api.material.embed_text", side_effect=EmbeddingError("boom")):
+        response = client.put(
+            f"/materials/{material.id}",
+            json={"canonical_name": "New Name Triggers Reembed Attempt"},
+        )
+
+    assert response.status_code == 200
+    session.refresh(material)
+    assert material.embedding == [0.5] * 1536

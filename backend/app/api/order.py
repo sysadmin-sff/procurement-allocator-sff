@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -28,10 +28,27 @@ from app.api.schemas.order import (
     OrderOut,
     ReplaceAndOrderIn,
 )
+from app.api.schemas.order_response_parser import (
+    ExtraLineOut,
+    MatchedLineOut,
+    MissingItemOut,
+    ParseOrderResponseOut,
+)
 from app.core.database import get_db
 from app.models import Order, Project
+from app.order_response_parser.service import (
+    OrderNotFoundError,
+    OrderResponseParsingError,
+    UnsupportedFileTypeError,
+    parse_order_response,
+)
 
 router = APIRouter()
+
+MAX_ORDER_RESPONSE_FILE_SIZE = 10 * 1024 * 1024
+"""10MB — see ADR-0018 task description. The file is only ever held in
+memory for the duration of the OpenAI call (ADR-0018 §7), never written to
+disk, so this bound also caps peak request memory."""
 
 
 def _to_order_item_out(db: Session, item) -> OrderItemOut:
@@ -188,3 +205,74 @@ def replace_and_order(
         return JSONResponse(status_code=409, content={"detail": str(exc)})
 
     return _to_order_item_out(db, item)
+
+
+@router.post(
+    "/orders/{order_id}/parse-response",
+    response_model=ParseOrderResponseOut,
+)
+async def parse_order_response_endpoint(
+    order_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> ParseOrderResponseOut:
+    """Multipart upload of a supplier's response document (PDF/image) — see
+    ADR-0018. Read-only preview: never writes to OrderItem/PurchaseRecord:
+    the frontend applies the result via the existing PATCH .../items/{id}
+    (ADR-0007/ADR-0013) and POST .../purchase-records (ADR-0008) endpoints.
+    The file is held in memory only for this request, never persisted
+    (ADR-0018 §7)."""
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_ORDER_RESPONSE_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="Файл слишком большой (максимум 10MB).")
+
+    try:
+        matched, missing, extra = parse_order_response(
+            db,
+            order_id,
+            file_bytes=file_bytes,
+            content_type=file.content_type or "",
+        )
+    except OrderNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Order not found") from exc
+    except UnsupportedFileTypeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="Неподдерживаемый тип файла — загрузите PDF или изображение (PNG/JPEG/WEBP).",
+        ) from exc
+    except OrderResponseParsingError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    return ParseOrderResponseOut(
+        matched=[
+            MatchedLineOut(
+                order_item_id=line.matched_order_item_id,
+                raw_description=line.raw_description,
+                price=line.price,
+                quantity=line.quantity,
+                confidence=line.confidence,
+                reasoning=line.reasoning,
+            )
+            for line in matched
+        ],
+        missing=[
+            MissingItemOut(
+                order_item_id=item.id,
+                material_id=item.material_id,
+                canonical_name=item.material.canonical_name,
+                quantity=item.quantity,
+                quoted_price=float(item.quoted_price),
+            )
+            for item in missing
+        ],
+        extra=[
+            ExtraLineOut(
+                raw_description=line.raw_description,
+                price=line.price,
+                quantity=line.quantity,
+                confidence=line.confidence,
+                reasoning=line.reasoning,
+            )
+            for line in extra
+        ],
+    )

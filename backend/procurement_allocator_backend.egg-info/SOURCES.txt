@@ -5,6 +5,7 @@ app/main.py
 app/allocation/__init__.py
 app/allocation/order_service.py
 app/allocation/preprocess.py
+app/allocation/price_comparison.py
 app/allocation/service.py
 app/allocation/solver.py
 app/allocation/types.py
@@ -21,6 +22,7 @@ app/api/schemas/__init__.py
 app/api/schemas/allocation.py
 app/api/schemas/material.py
 app/api/schemas/order.py
+app/api/schemas/order_response_parser.py
 app/api/schemas/price.py
 app/api/schemas/project.py
 app/api/schemas/purchase_record.py
@@ -41,6 +43,9 @@ app/models/purchase_record.py
 app/models/supplier.py
 app/models/supplier_contact.py
 app/models/supplier_material_alias.py
+app/order_response_parser/__init__.py
+app/order_response_parser/client.py
+app/order_response_parser/service.py
 app/purchase_records/__init__.py
 app/purchase_records/service.py
 app/scripts/__init__.py

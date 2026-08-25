@@ -6,6 +6,8 @@ psycopg[binary]>=3.2
 pydantic>=2.7
 pydantic-settings>=2.3
 ortools>=9.10
+openai>=1.50
+python-multipart>=0.0.9
 
 [dev]
 pytest>=8.0

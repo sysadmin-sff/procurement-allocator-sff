@@ -80,21 +80,28 @@ def create_price_list_import(
             availability=line.extracted.availability,
             min_order_qty=line.extracted.min_order_qty,
             action=None,
+            suggested_internal_sku=line.decision.suggested_internal_sku,
         )
         db.add(entry)
         entries.append(entry)
 
+    db.flush()
+
+    # possible_duplicate_of references other PriceListEntry from this same
+    # batch by id — entries must be flushed (have ids) before it can be
+    # written. MatchedLine.possible_duplicate_of holds batch indices, not
+    # ids (see matching.py), translated to real entry ids here, once, at
+    # write time — see ADR-0020 (supersedes ADR-0019 §5's transient
+    # in-memory approach, which lost this data on any GET after the
+    # initial upload response).
+    for entry, line in zip(entries, matched, strict=True):
+        if line.possible_duplicate_of:
+            entry.possible_duplicate_of = [
+                str(entries[i].id) for i in line.possible_duplicate_of
+            ]
+
     db.commit()
     db.refresh(price_list_import)
-
-    # suggested_internal_sku / possible_duplicate_of are not columns on
-    # PriceListEntry (schema frozen — see Global Constraints), so they can
-    # only be surfaced right here, from the in-memory MatchedLine list that
-    # produced these rows. Stashed as a transient (non-persisted) attribute
-    # for the endpoint layer to zip with price_list_import.entries; a later
-    # GET re-reads from the DB alone and cannot reconstruct these two
-    # fields — accepted MVP gap, see docs/known-issues.md (ADR-0019 §5).
-    price_list_import._matched_lines = list(zip(entries, matched, strict=True))  # type: ignore[attr-defined]
 
     return price_list_import
 

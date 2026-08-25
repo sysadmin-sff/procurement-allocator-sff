@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,6 +52,14 @@ class PriceListEntry(UUIDPKMixin, Base):
     action: Mapped[str | None] = mapped_column(String(20))
     """match/new/skip — заполняется при применении строки на экране ревью,
     см. ADR-0019 §5. NULL = ещё не решено."""
+    suggested_internal_sku: Mapped[str | None] = mapped_column(String(100))
+    """Черновой SKU от LLM для action="new" — см. ADR-0019 §4, ADR-0020.
+    NULL для match/known-alias строк и когда LLM не предложил SKU."""
+    possible_duplicate_of: Mapped[list[str] | None] = mapped_column(JSON)
+    """Список id (UUID как строки) других PriceListEntry этого же импорта,
+    которые матчинг счёл вероятным дублем — см. ADR-0019 §4, ADR-0020.
+    NULL/пустой список = дублей не найдено. Записывается один раз при
+    создании импорта, не пересчитывается при последующих apply."""
 
     import_: Mapped["PriceListImport"] = relationship(back_populates="entries")
     matched_material: Mapped["Material | None"] = relationship(

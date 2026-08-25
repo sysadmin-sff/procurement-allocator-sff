@@ -130,6 +130,73 @@ def test_upload_response_includes_suggested_sku_and_duplicate_flags(
     assert entry_b["possible_duplicate_of"] == [entry_a["id"]]
 
 
+def test_get_after_upload_returns_same_suggested_sku_and_duplicates_as_upload(
+    db_session, make_supplier
+):
+    """ADR-0020: suggested_internal_sku/possible_duplicate_of are persisted
+    on PriceListEntry, not just returned transiently in the upload
+    response — a GET after the initial upload (e.g. after a page reload
+    mid-review) must return the exact same values, not null/[] as it did
+    before ADR-0020 (see docs/known-issues.md, now closed by this ADR)."""
+    session, _material_ids, _supplier_ids = db_session
+    supplier = make_supplier()
+
+    matched = [
+        MatchedLine(
+            extracted=ExtractedPriceLine(
+                raw_name="Screen Type A", raw_sku=None, price=5.0, currency="USD",
+                availability=None, min_order_qty=None,
+            ),
+            decision=MatchDecision(
+                action="new", material_id=None, confidence=0.6,
+                reasoning="no close candidate", suggested_internal_sku="SKU-A",
+            ),
+            embedding=[1.0] + [0.0] * 1535,
+            possible_duplicate_of=[1],
+        ),
+        MatchedLine(
+            extracted=ExtractedPriceLine(
+                raw_name="Screen Type A Variant", raw_sku=None, price=5.10, currency="USD",
+                availability=None, min_order_qty=None,
+            ),
+            decision=MatchDecision(
+                action="new", material_id=None, confidence=0.6,
+                reasoning="no close candidate", suggested_internal_sku="SKU-B",
+            ),
+            embedding=[0.99] + [0.01] * 1535,
+            possible_duplicate_of=[0],
+        ),
+    ]
+
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        upload_response = _upload(supplier.id)
+
+    upload_body = upload_response.json()
+    import_id = upload_body["import_id"]
+
+    get_response = client.get(f"/price-list-imports/{import_id}")
+
+    assert get_response.status_code == 200
+    get_body = get_response.json()
+
+    # Same import, same two fields — GET must not silently drop what POST
+    # returned. Compare by supplier_raw_name since entry ordering isn't
+    # guaranteed to match between the two responses.
+    upload_by_name = {e["supplier_raw_name"]: e for e in upload_body["entries"]}
+    get_by_name = {e["supplier_raw_name"]: e for e in get_body["entries"]}
+
+    assert set(upload_by_name) == set(get_by_name)
+    for raw_name, upload_entry in upload_by_name.items():
+        get_entry = get_by_name[raw_name]
+        assert get_entry["suggested_internal_sku"] == upload_entry["suggested_internal_sku"]
+        assert get_entry["suggested_internal_sku"] is not None
+        assert set(get_entry["possible_duplicate_of"]) == set(
+            upload_entry["possible_duplicate_of"]
+        )
+        assert get_entry["possible_duplicate_of"] != []
+
+
 def test_get_import_returns_current_entries(db_session, make_supplier):
     session, _material_ids, _supplier_ids = db_session
     supplier = make_supplier()

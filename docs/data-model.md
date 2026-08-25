@@ -87,6 +87,8 @@ erDiagram
         int availability
         int min_order_qty
         string action "match/new/skip, NULL = не решено — заполняется на ревью, ADR-0019"
+        string suggested_internal_sku "nullable, черновой SKU от LLM для action=new, ADR-0020"
+        json possible_duplicate_of "nullable, id других PriceListEntry этого импорта — вероятные дубли, ADR-0020"
     }
     Price {
         uuid material_id
@@ -161,6 +163,17 @@ erDiagram
 
 `PriceListImport`/`PriceListEntry` добавлены сверх исходной диаграммы — см. `docs/decisions/0001-price-list-import-table.md`.
 `PriceListEntry` — черновые строки на ревью (до аппрува, не пишутся в `Price` напрямую).
+
+`PriceListEntry.suggested_internal_sku`/`possible_duplicate_of` добавлены
+сверх исходной диаграммы — см. `docs/decisions/0020-price-list-entry-review-state-persistence.md`.
+Записываются один раз при создании импорта (черновик SKU от LLM для
+`action="new"`, список вероятных дублей внутри того же импорта) и не
+пересчитываются при последующем `apply` — снимок состояния на момент
+ИИ-анализа, не текущий статус вопроса. Персистентны намеренно: `GET`
+и `POST` читают их из одних и тех же колонок через один рендерер, чтобы
+обновление страницы посреди ревью не теряло эти подсказки (тот же принцип
+"не терять на reload то, что нужно для решения", что ADR-0004 уже применил
+к клиентскому черновику проекта).
 
 `Material.embedding` добавлено сверх исходной диаграммы — см.
 `docs/decisions/0019-price-list-ingestion-matching.md`. pgvector-расширение

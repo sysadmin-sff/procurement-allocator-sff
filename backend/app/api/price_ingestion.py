@@ -31,9 +31,7 @@ router = APIRouter()
 MAX_PRICE_LIST_FILE_SIZE = 10 * 1024 * 1024
 
 
-def _entry_out(
-    entry, *, suggested_internal_sku=None, possible_duplicate_of=None
-) -> PriceListEntryOut:
+def _entry_out(entry) -> PriceListEntryOut:
     return PriceListEntryOut(
         id=entry.id,
         supplier_raw_name=entry.supplier_raw_name,
@@ -46,48 +44,26 @@ def _entry_out(
         availability=entry.availability,
         min_order_qty=entry.min_order_qty,
         action=entry.action,
-        suggested_internal_sku=suggested_internal_sku,
-        possible_duplicate_of=possible_duplicate_of or [],
+        suggested_internal_sku=entry.suggested_internal_sku,
+        possible_duplicate_of=(
+            [uuid.UUID(i) for i in entry.possible_duplicate_of]
+            if entry.possible_duplicate_of
+            else []
+        ),
     )
 
 
 def _to_import_out(price_list_import) -> PriceListImportOut:
-    """Plain DB-only rendering — used by GET, where suggested_internal_sku
-    and possible_duplicate_of cannot be reconstructed (not persisted
-    columns, see ADR-0019 §5 / docs/known-issues.md)."""
+    """Reads suggested_internal_sku/possible_duplicate_of straight from
+    PriceListEntry — see ADR-0020. Used by both POST (upload) and GET:
+    they are guaranteed to return the same values for the same entry,
+    since both go through this one function reading the same columns
+    (supersedes ADR-0019 §5's transient in-memory-only rendering, which
+    GET could not reconstruct)."""
     return PriceListImportOut(
         import_id=price_list_import.id,
         status=price_list_import.status,
         entries=[_entry_out(e) for e in price_list_import.entries],
-    )
-
-
-def _to_import_out_with_matches(price_list_import) -> PriceListImportOut:
-    """Upload-time rendering — enriches each entry with
-    suggested_internal_sku / possible_duplicate_of from the in-memory
-    MatchedLine list that produced it (converting batch indices to the
-    actual persisted entry UUIDs). Only available right after creation;
-    see create_price_list_import's `_matched_lines` note."""
-    matched_lines = getattr(price_list_import, "_matched_lines", None)
-    if matched_lines is None:
-        return _to_import_out(price_list_import)
-
-    entries_by_index = [entry for entry, _line in matched_lines]
-    out_entries = []
-    for entry, line in matched_lines:
-        duplicate_uuids = [entries_by_index[i].id for i in line.possible_duplicate_of]
-        out_entries.append(
-            _entry_out(
-                entry,
-                suggested_internal_sku=line.decision.suggested_internal_sku,
-                possible_duplicate_of=duplicate_uuids,
-            )
-        )
-
-    return PriceListImportOut(
-        import_id=price_list_import.id,
-        status=price_list_import.status,
-        entries=out_entries,
     )
 
 
@@ -131,7 +107,7 @@ async def upload_price_list(
     except PriceIngestionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    return _to_import_out_with_matches(price_list_import)
+    return _to_import_out(price_list_import)
 
 
 @router.get("/price-list-imports/{import_id}", response_model=PriceListImportOut)

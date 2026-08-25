@@ -41,6 +41,12 @@ def db_session():
                 .all()
             ]
             if import_ids:
+                # Price.source_import_id references price_list_imports, so any
+                # Price row created by apply_price_list_entry() (Task 8) must be
+                # deleted before the import it points at, or the FK delete below fails.
+                session.query(Price).filter(Price.source_import_id.in_(import_ids)).delete(
+                    synchronize_session=False
+                )
                 session.query(PriceListEntry).filter(
                     PriceListEntry.import_id.in_(import_ids)
                 ).delete(synchronize_session=False)

@@ -50,7 +50,8 @@ class PriceListEntry(UUIDPKMixin, Base):
     availability: Mapped[int | None] = mapped_column()
     min_order_qty: Mapped[int | None] = mapped_column()
     action: Mapped[str | None] = mapped_column(String(20))
-    """update/new/ignore — заполняется на экране ревью"""
+    """match/new/skip — заполняется при применении строки на экране ревью,
+    см. ADR-0019 §5. NULL = ещё не решено."""
 
     import_: Mapped["PriceListImport"] = relationship(back_populates="entries")
     matched_material: Mapped["Material | None"] = relationship(

@@ -8,6 +8,7 @@ export interface DeliveryPolicy {
 export interface Supplier {
   id: string;
   name: string;
+  short_name: string | null;
   contacts: string | null;
   currency: string;
   delivery_policy: DeliveryPolicy;
@@ -30,6 +31,7 @@ export interface SupplierCreate {
 /** PATCH-семантика: только заданные поля отправляются на backend, см. diff(). */
 export interface SupplierUpdate {
   name?: string;
+  short_name?: string | null;
   contacts?: string | null;
   currency?: string;
   delivery_policy?: DeliveryPolicy;

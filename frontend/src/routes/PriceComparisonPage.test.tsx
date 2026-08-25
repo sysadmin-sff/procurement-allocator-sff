@@ -5,7 +5,8 @@ import { PriceComparisonPage } from './PriceComparisonPage';
 import { materialsApi } from '../api/materials';
 import { priceComparisonApi } from '../api/priceComparison';
 import { projectsApi } from '../api/projects';
-import type { Material, MaterialComparisonRow, ProjectWithItems } from '../api/types';
+import { suppliersApi } from '../api/suppliers';
+import type { Material, MaterialComparisonRow, ProjectWithItems, Supplier } from '../api/types';
 
 vi.mock('../api/priceComparison', () => ({
   priceComparisonApi: { get: vi.fn() },
@@ -26,10 +27,45 @@ vi.mock('../api/projects', () => ({
 vi.mock('../api/materials', () => ({
   materialsApi: { list: vi.fn(), search: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
+vi.mock('../api/suppliers', () => ({
+  suppliersApi: {
+    list: vi.fn(),
+    get: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    createOffice: vi.fn(),
+    updateOffice: vi.fn(),
+    removeOffice: vi.fn(),
+    createContact: vi.fn(),
+    updateContact: vi.fn(),
+    removeContact: vi.fn(),
+  },
+}));
 
 const getComparisonMock = vi.mocked(priceComparisonApi.get);
 const getProjectMock = vi.mocked(projectsApi.get);
 const materialsListMock = vi.mocked(materialsApi.list);
+const suppliersListMock = vi.mocked(suppliersApi.list);
+
+function supplierFixture(overrides: Partial<Supplier> = {}): Supplier {
+  return {
+    id: 'sup-a',
+    name: 'ABC Supply',
+    short_name: null,
+    contacts: null,
+    currency: 'USD',
+    delivery_policy: { flat_fee: 0, free_shipping_threshold: null, per_order_min_amount: 0, lead_time_days: 0 },
+    website: null,
+    region: null,
+    catalog_link: null,
+    status: null,
+    payment_terms: null,
+    portal_url: null,
+    comments: null,
+    ...overrides,
+  };
+}
 
 const material: Material = {
   id: 'mat-1',
@@ -68,8 +104,10 @@ describe('PriceComparisonPage', () => {
     getComparisonMock.mockReset();
     getProjectMock.mockReset();
     materialsListMock.mockReset();
+    suppliersListMock.mockReset();
     getProjectMock.mockResolvedValue(projectFixture());
     materialsListMock.mockResolvedValue([material]);
+    suppliersListMock.mockResolvedValue([]);
   });
 
   it('shows a dash for a supplier with no plan price on a material', async () => {
@@ -161,6 +199,121 @@ describe('PriceComparisonPage', () => {
     expect(screen.getByText('$25.00')).toBeInTheDocument();
   });
 
+  it('shows "Отправлена (план)" as the price source tooltip when only quoted_price is set', async () => {
+    const rows: MaterialComparisonRow[] = [
+      {
+        project_item_id: 'item-1',
+        material_id: 'mat-1',
+        plan: [],
+        supplier_responses: [
+          {
+            supplier_id: 'sup-a',
+            supplier_name: 'ABC Supply',
+            quoted_price: 25,
+            received_price: null,
+            confirmed_price: null,
+            declined_at: null,
+            decline_reason: null,
+            is_cheapest: true,
+          },
+        ],
+      },
+    ];
+    getComparisonMock.mockResolvedValue({ rows });
+
+    renderPage();
+
+    const cell = await screen.findByText('$25.00');
+    expect(cell).toHaveAttribute('title', 'Отправлена (план)');
+  });
+
+  it('shows "Получена" as the price source tooltip when received_price is set but not confirmed', async () => {
+    const rows: MaterialComparisonRow[] = [
+      {
+        project_item_id: 'item-1',
+        material_id: 'mat-1',
+        plan: [],
+        supplier_responses: [
+          {
+            supplier_id: 'sup-a',
+            supplier_name: 'ABC Supply',
+            quoted_price: 25,
+            received_price: 23.5,
+            confirmed_price: null,
+            declined_at: null,
+            decline_reason: null,
+            is_cheapest: true,
+          },
+        ],
+      },
+    ];
+    getComparisonMock.mockResolvedValue({ rows });
+
+    renderPage();
+
+    const cell = await screen.findByText('$23.50');
+    expect(cell).toHaveAttribute('title', 'Получена');
+  });
+
+  it('shows "Подтверждена" as the price source tooltip when confirmed_price is set', async () => {
+    const rows: MaterialComparisonRow[] = [
+      {
+        project_item_id: 'item-1',
+        material_id: 'mat-1',
+        plan: [],
+        supplier_responses: [
+          {
+            supplier_id: 'sup-a',
+            supplier_name: 'ABC Supply',
+            quoted_price: 25,
+            received_price: 23.5,
+            confirmed_price: 24,
+            declined_at: null,
+            decline_reason: null,
+            is_cheapest: true,
+          },
+        ],
+      },
+    ];
+    getComparisonMock.mockResolvedValue({ rows });
+
+    renderPage();
+
+    const cell = await screen.findByText('$24.00');
+    expect(cell).toHaveAttribute('title', 'Подтверждена');
+  });
+
+  it('shows the full supplier name as a tooltip in the "Ответы поставщиков" column header', async () => {
+    const rows: MaterialComparisonRow[] = [
+      {
+        project_item_id: 'item-1',
+        material_id: 'mat-1',
+        plan: [],
+        supplier_responses: [
+          {
+            supplier_id: 'sup-a',
+            supplier_name: 'Aluminum Distributors Int LLC',
+            quoted_price: 25,
+            received_price: null,
+            confirmed_price: null,
+            declined_at: null,
+            decline_reason: null,
+            is_cheapest: true,
+          },
+        ],
+      },
+    ];
+    getComparisonMock.mockResolvedValue({ rows });
+    suppliersListMock.mockResolvedValue([
+      supplierFixture({ id: 'sup-a', name: 'Aluminum Distributors Int LLC', short_name: 'ADI LLC' }),
+    ]);
+
+    renderPage();
+
+    const header = await screen.findByText('ADI LLC', { selector: 'th' });
+    expect(header).toHaveAttribute('title', 'Aluminum Distributors Int LLC');
+  });
+
   it('shows a struck-through received price next to "Отказался" for a declined response', async () => {
     const rows: MaterialComparisonRow[] = [
       {
@@ -187,6 +340,60 @@ describe('PriceComparisonPage', () => {
 
     expect(await screen.findByText('Отказался')).toBeInTheDocument();
     expect(screen.getByText('$23.50')).toBeInTheDocument();
+  });
+
+  it('uses short_name in the column header when set, with the full name as a tooltip', async () => {
+    const rows: MaterialComparisonRow[] = [
+      {
+        project_item_id: 'item-1',
+        material_id: 'mat-1',
+        plan: [
+          {
+            supplier_id: 'sup-a',
+            supplier_name: 'Aluminum Distributors Int LLC',
+            price: 25,
+            availability: 50,
+            is_cheapest: true,
+          },
+        ],
+        supplier_responses: [],
+      },
+    ];
+    getComparisonMock.mockResolvedValue({ rows });
+    suppliersListMock.mockResolvedValue([
+      supplierFixture({
+        id: 'sup-a',
+        name: 'Aluminum Distributors Int LLC',
+        short_name: 'ADI LLC',
+      }),
+    ]);
+
+    renderPage();
+
+    const header = await screen.findByText('ADI LLC');
+    expect(header.tagName).toBe('TH');
+    expect(header).toHaveAttribute('title', 'Aluminum Distributors Int LLC');
+    expect(screen.queryByText('Aluminum Distributors Int LLC')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the full supplier name in the column header when short_name is not set', async () => {
+    const rows: MaterialComparisonRow[] = [
+      {
+        project_item_id: 'item-1',
+        material_id: 'mat-1',
+        plan: [
+          { supplier_id: 'sup-a', supplier_name: 'ABC Supply', price: 25, availability: 50, is_cheapest: true },
+        ],
+        supplier_responses: [],
+      },
+    ];
+    getComparisonMock.mockResolvedValue({ rows });
+    suppliersListMock.mockResolvedValue([supplierFixture({ short_name: null })]);
+
+    renderPage();
+
+    const header = await screen.findByText('ABC Supply', { selector: 'th' });
+    expect(header).toHaveAttribute('title', 'ABC Supply');
   });
 
   it('shows the empty state for supplier responses when the project has no Order', async () => {

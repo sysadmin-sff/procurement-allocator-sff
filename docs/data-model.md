@@ -27,6 +27,7 @@ erDiagram
     Supplier {
         uuid id
         string name
+        string short_name "ручное сокращение для компактных таблиц, ADR-0017"
         string currency
         json delivery_policy
         string website
@@ -174,7 +175,10 @@ erDiagram
 
 `Office`/`SupplierContact` добавлены сверх исходной диаграммы, новые поля на `Supplier`
 (`website`, `region`, `catalog_link`, `status`, `payment_terms`, `portal_url`, `comments`) —
-см. `docs/decisions/0010-supplier-directory-expansion.md`. Все справочные, ни одно не читается
+см. `docs/decisions/0010-supplier-directory-expansion.md`. `Supplier.short_name` (nullable,
+свободный текст) добавлено отдельно, см. `docs/decisions/0017-supplier-short-name.md` —
+используется только в шапке таблиц `PriceComparisonPage` (ADR-0016), с fallback на `name`.
+Все справочные поля, ни одно не читается
 ILP-солвером — единственное поле `Supplier`, влияющее на расчёт, по-прежнему `delivery_policy`.
 `SupplierContact.office_id` nullable и удаление `Office` переводит `office_id` его контактов
 в `NULL` (не блокирует и не каскадит удаление контактов) — офис не обязателен для контакта.

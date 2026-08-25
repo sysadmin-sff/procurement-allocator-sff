@@ -34,6 +34,7 @@ class SupplierUpdate(BaseModel):
     мержится по ключам, а не заменяется целиком — см. update_supplier."""
 
     name: str | None = None
+    short_name: str | None = None
     contacts: str | None = None
     currency: str | None = None
     delivery_policy: DeliveryPolicy | None = None
@@ -51,6 +52,7 @@ class SupplierOut(BaseModel):
 
     id: uuid.UUID
     name: str
+    short_name: str | None
     contacts: str | None
     currency: str
     delivery_policy: DeliveryPolicy

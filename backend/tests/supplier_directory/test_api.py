@@ -369,6 +369,23 @@ def test_update_supplier_new_fields_partial_payload_preserves_omitted_fields(
     assert body["website"] == "https://old.example.com"
 
 
+def test_supplier_short_name_defaults_to_null_and_is_settable_via_patch(
+    db_session, make_supplier
+):
+    """ADR-0017: short_name is nullable, absent from SupplierCreate (п.4),
+    editable via PUT /suppliers/{id} like the rest of ADR-0010's scalar fields."""
+    supplier = make_supplier()
+    assert client.get(f"/suppliers/{supplier.id}").json()["short_name"] is None
+
+    response = client.put(
+        f"/suppliers/{supplier.id}",
+        json={"short_name": "ADI LLC"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["short_name"] == "ADI LLC"
+
+
 # --- GET /suppliers/{id} nested offices/contacts ---
 
 

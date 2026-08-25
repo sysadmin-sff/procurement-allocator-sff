@@ -65,6 +65,7 @@ const project: Project & { items: []; latest_allocation_run: null } = {
 const supplierA: Supplier = {
   id: 'sup-a',
   name: 'ABC Supply',
+  short_name: null,
   contacts: null,
   currency: 'USD',
   delivery_policy: { flat_fee: 25, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },
@@ -80,6 +81,7 @@ const supplierA: Supplier = {
 const supplierB: Supplier = {
   id: 'sup-b',
   name: 'Screenmobile Wholesale',
+  short_name: null,
   contacts: null,
   currency: 'USD',
   delivery_policy: { flat_fee: 15, free_shipping_threshold: null, per_order_min_amount: 0, lead_time_days: 5 },

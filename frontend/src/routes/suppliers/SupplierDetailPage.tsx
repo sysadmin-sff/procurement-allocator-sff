@@ -116,6 +116,7 @@ export function SupplierDetailPage() {
 
 interface BasicInfoFormValues {
   name: string;
+  short_name: string;
   website: string;
   region: string;
   catalog_link: string;
@@ -128,6 +129,7 @@ interface BasicInfoFormValues {
 function toBasicInfoValues(supplier: Supplier): BasicInfoFormValues {
   return {
     name: supplier.name,
+    short_name: supplier.short_name ?? '',
     website: supplier.website ?? '',
     region: supplier.region ?? '',
     catalog_link: supplier.catalog_link ?? '',
@@ -165,6 +167,7 @@ function BasicInfoSection({
     const after: Supplier = {
       ...supplier,
       name: values.name.trim(),
+      short_name: values.short_name.trim() || null,
       website: values.website.trim() || null,
       region: values.region.trim() || null,
       catalog_link: values.catalog_link.trim() || null,
@@ -203,6 +206,19 @@ function BasicInfoSection({
               value={values.name}
               onChange={(e) => update('name', e.target.value)}
               required
+            />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="basic-short-name">
+              Короткое имя
+            </label>
+            <input
+              id="basic-short-name"
+              className={styles.input}
+              value={values.short_name}
+              onChange={(e) => update('short_name', e.target.value)}
+              placeholder="ADI LLC"
+              maxLength={50}
             />
           </div>
           <div className={styles.field}>

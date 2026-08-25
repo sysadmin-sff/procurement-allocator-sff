@@ -19,6 +19,9 @@ class Supplier(UUIDPKMixin, Base):
     __tablename__ = "suppliers"
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    short_name: Mapped[str | None] = mapped_column(String(50))
+    """Ручное сокращение имени для компактных колонок (ADR-0017) — не участвует
+    в allocation, не заменяет name нигде, кроме шапки PriceComparisonPage."""
     contacts: Mapped[str | None] = mapped_column(String(1000))
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     delivery_policy: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)

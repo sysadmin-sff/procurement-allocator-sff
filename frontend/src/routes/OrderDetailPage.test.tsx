@@ -36,6 +36,7 @@ const suppliersListMock = vi.mocked(suppliersApi.list);
 const supplier: Supplier = {
   id: 'sup-a',
   name: 'ABC Supply',
+  short_name: null,
   contacts: null,
   currency: 'USD',
   delivery_policy: { flat_fee: 25, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },

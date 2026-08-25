@@ -3,11 +3,13 @@ import { Link, useParams } from 'react-router-dom';
 import { materialsApi } from '../api/materials';
 import { priceComparisonApi } from '../api/priceComparison';
 import { projectsApi } from '../api/projects';
+import { suppliersApi } from '../api/suppliers';
 import type {
   Material,
   MaterialComparisonRow,
   PlanCandidate,
   ProjectWithItems,
+  Supplier,
   SupplierResponse,
 } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -17,12 +19,15 @@ import styles from './price-comparison/PriceComparison.module.css';
 interface LoadedData {
   project: ProjectWithItems;
   materials: Material[];
+  suppliers: Supplier[];
   rows: MaterialComparisonRow[];
 }
 
 interface SupplierColumn {
   supplier_id: string;
   supplier_name: string;
+  /** short_name, if set on the Supplier — falls back to supplier_name in the header (ADR-0017 §3). */
+  column_label: string;
 }
 
 export function PriceComparisonPage() {
@@ -37,10 +42,15 @@ export function PriceComparisonPage() {
 
     setLoading(true);
     setLoadError(null);
-    Promise.all([projectsApi.get(projectId), materialsApi.list(), priceComparisonApi.get(projectId)])
-      .then(([project, materials, comparison]) => {
+    Promise.all([
+      projectsApi.get(projectId),
+      materialsApi.list(),
+      suppliersApi.list(),
+      priceComparisonApi.get(projectId),
+    ])
+      .then(([project, materials, suppliers, comparison]) => {
         if (cancelled) return;
-        setData({ project, materials, rows: comparison.rows });
+        setData({ project, materials, suppliers, rows: comparison.rows });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -73,11 +83,12 @@ export function PriceComparisonPage() {
     );
   }
 
-  const { project, materials, rows } = data;
+  const { project, materials, suppliers, rows } = data;
   const materialById = new Map(materials.map((m) => [m.id, m]));
+  const shortNameById = new Map(suppliers.map((s) => [s.id, s.short_name]));
 
-  const planColumns = collectSupplierColumns(rows, (row) => row.plan);
-  const responseColumns = collectSupplierColumns(rows, (row) => row.supplier_responses);
+  const planColumns = collectSupplierColumns(rows, (row) => row.plan, shortNameById);
+  const responseColumns = collectSupplierColumns(rows, (row) => row.supplier_responses, shortNameById);
   const hasAnyResponse = rows.some((row) => row.supplier_responses.length > 0);
 
   return (
@@ -131,14 +142,17 @@ export function PriceComparisonPage() {
 function collectSupplierColumns<T extends { supplier_id: string; supplier_name: string }>(
   rows: MaterialComparisonRow[],
   select: (row: MaterialComparisonRow) => T[],
+  shortNameById: Map<string, string | null>,
 ): SupplierColumn[] {
   const byId = new Map<string, SupplierColumn>();
   for (const row of rows) {
     for (const candidate of select(row)) {
       if (!byId.has(candidate.supplier_id)) {
+        const shortName = shortNameById.get(candidate.supplier_id);
         byId.set(candidate.supplier_id, {
           supplier_id: candidate.supplier_id,
           supplier_name: candidate.supplier_name,
+          column_label: shortName || candidate.supplier_name,
         });
       }
     }
@@ -166,7 +180,9 @@ function PlanMatrix({
           <tr>
             <th className={styles.materialColHeader}>Материал</th>
             {columns.map((col) => (
-              <th key={col.supplier_id}>{col.supplier_name}</th>
+              <th key={col.supplier_id} title={col.supplier_name}>
+                {col.column_label}
+              </th>
             ))}
           </tr>
         </thead>
@@ -249,7 +265,9 @@ function ResponseMatrix({
           <tr>
             <th className={styles.materialColHeader}>Материал</th>
             {columns.map((col) => (
-              <th key={col.supplier_id}>{col.supplier_name}</th>
+              <th key={col.supplier_id} title={col.supplier_name}>
+                {col.column_label}
+              </th>
             ))}
           </tr>
         </thead>
@@ -294,12 +312,20 @@ function ResponseCell({ response }: { response: SupplierResponse | undefined }) 
   }
 
   const effectivePrice = response.confirmed_price ?? response.received_price ?? response.quoted_price;
+  const source = priceSource(response);
 
   return (
-    <td className={`${styles.priceCell} ${response.is_cheapest ? styles.cheapest : ''}`}>
+    <td className={`${styles.priceCell} ${response.is_cheapest ? styles.cheapest : ''}`} title={source}>
       {formatMoney(effectivePrice)}
     </td>
   );
+}
+
+/** Matches the confirmed → received → quoted priority used for effectivePrice (ADR-0016 §4). */
+function priceSource(response: SupplierResponse): string {
+  if (response.confirmed_price != null) return 'Подтверждена';
+  if (response.received_price != null) return 'Получена';
+  return 'Отправлена (план)';
 }
 
 function AvailabilityWarning({

@@ -171,5 +171,64 @@ Backend (extraction + matching pipeline, эндпоинты, apply-транза�
 полагаться на то, что эти поля переживут обновление страницы без повторного
 запуска извлечения.
 
-Условие закрытия: пользователь предоставит реальные прайс-листы для проверки
+Условие закрытия: пользователь предоставит реальные прайс-листы для проверки.
+
+## Установка pgvector на Windows-машине разработки (ADR-0019)
+
+`pip install pgvector` ставит только Python/SQLAlchemy-адаптер — он ничего
+не знает про сам PostgreSQL и не устанавливает расширение `vector` на
+сервере БД. Без него `CREATE EXTENSION IF NOT EXISTS vector` (миграция
+`f1a6780bb7da_add_material_embedding_column.py`) падает с
+`FeatureNotSupported: расширение "vector" отсутствует`.
+
+Для PostgreSQL, установленного через официальный EDB-инсталлятор на
+Windows, **Stack Builder не содержит pgvector** (проверено на PG17,
+Stack Builder 4.2.2 — только PostGIS, pgAgent, pgBouncer в разделах
+Add-ons/Spatial Extensions). Расширение пришлось собирать из исходников:
+
+1. Установить **Visual Studio** (или отдельно **Build Tools for Visual
+   Studio**) с компонентом **Desktop development with C++** — проверяется/
+   ставится через Visual Studio Installer → выбрать установку → "Изменить"
+   → вкладка Workloads.
+2. Склонировать исходники pgvector (любой актуальный релиз, совместимый с
+   версией PostgreSQL — здесь использовался тег для PG17):
+   ```
+   git clone https://github.com/pgvector/pgvector.git
+   ```
+3. Открыть **x64 Native Tools Command Prompt for VS** (не обычный
+   cmd/PowerShell — там не настроены `nmake`/`cl` в PATH; ищется в Пуске
+   как отдельный ярлык) **от имени администратора** — сборка сама не
+   требует прав администратора, но `nmake install` копирует файлы в
+   `Program Files`, куда без повышения прав нет доступа на запись.
+4. В этом окне:
+   ```
+   set "PGROOT=C:\Program Files\PostgreSQL\17"
+   cd /d <путь-к-склонированному-pgvector>
+   nmake /F Makefile.win
+   nmake /F Makefile.win install
+   ```
+   Это компилирует `vector.dll` и копирует `vector.control`,
+   `vector--*.sql` в `%PGROOT%\share\extension\`, заголовки — в
+   `%PGROOT%\include\server\extension\vector\`.
+5. Перезапустить службу PostgreSQL, чтобы она подхватила новое
+   расширение (обязательный шаг — без него `CREATE EXTENSION` всё ещё не
+   находит `vector.control`, даже если файлы уже на месте):
+   ```
+   net stop postgresql-x64-17
+   net start postgresql-x64-17
+   ```
+   (тоже из-под администратора; либо через `services.msc` → перезапуск
+   службы `postgresql-x64-17`).
+6. Проверка готовности (можно от обычного пользователя):
+   ```
+   psql -U postgres -h localhost -c "SELECT * FROM pg_available_extensions WHERE name = 'vector';"
+   ```
+   Должна вернуться строка `('vector', '0.8.6', ...)` — тогда
+   `alembic upgrade head` пройдёт.
+
+Ни один из этих шагов Claude Code не может выполнить сам: `git worktree`/
+Bash-сессии в этой среде не имеют прав администратора Windows и не могут
+писать в `Program Files` или перезапускать системные службы — сборка и
+установка требуют участия человека за клавиатурой каждый раз на новой
+машине (новый dev-ноутбук, CI-раннер без готового образа с pgvector и т.п.).
 точности пайплайна.

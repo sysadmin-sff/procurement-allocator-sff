@@ -72,6 +72,64 @@ def test_upload_creates_import_and_entries(db_session, make_supplier):
     assert price_list_import.status == "pending_review"
 
 
+def test_upload_response_includes_suggested_sku_and_duplicate_flags(
+    db_session, make_supplier
+):
+    """suggested_internal_sku and possible_duplicate_of are populated only
+    on the upload response (transient, not persisted — see ADR-0019 §5 /
+    docs/known-issues.md). This test exercises both fields together on a
+    two-line batch where the lines flag each other as possible duplicates,
+    proving the batch-index-to-entry-UUID translation in
+    _to_import_out_with_matches actually happens, not just that the field
+    exists with a default value."""
+    session, _material_ids, _supplier_ids = db_session
+    supplier = make_supplier()
+
+    matched = [
+        MatchedLine(
+            extracted=ExtractedPriceLine(
+                raw_name="Screen Type A", raw_sku=None, price=5.0, currency="USD",
+                availability=None, min_order_qty=None,
+            ),
+            decision=MatchDecision(
+                action="new", material_id=None, confidence=0.6,
+                reasoning="no close candidate", suggested_internal_sku="SKU-A",
+            ),
+            embedding=[1.0] + [0.0] * 1535,
+            possible_duplicate_of=[1],
+        ),
+        MatchedLine(
+            extracted=ExtractedPriceLine(
+                raw_name="Screen Type A Variant", raw_sku=None, price=5.10, currency="USD",
+                availability=None, min_order_qty=None,
+            ),
+            decision=MatchDecision(
+                action="new", material_id=None, confidence=0.6,
+                reasoning="no close candidate", suggested_internal_sku="SKU-B",
+            ),
+            embedding=[0.99] + [0.01] * 1535,
+            possible_duplicate_of=[0],
+        ),
+    ]
+
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        response = _upload(supplier.id)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert len(body["entries"]) == 2
+
+    entry_a, entry_b = body["entries"]
+    assert entry_a["suggested_internal_sku"] == "SKU-A"
+    assert entry_b["suggested_internal_sku"] == "SKU-B"
+
+    # possible_duplicate_of must be the actual persisted entry UUIDs, not
+    # the raw batch indices [1]/[0] that MatchedLine carries internally.
+    assert entry_a["possible_duplicate_of"] == [entry_b["id"]]
+    assert entry_b["possible_duplicate_of"] == [entry_a["id"]]
+
+
 def test_get_import_returns_current_entries(db_session, make_supplier):
     session, _material_ids, _supplier_ids = db_session
     supplier = make_supplier()

@@ -17,6 +17,7 @@ dependencies = [
     "pydantic-settings>=2.3",
     "ortools>=9.10",
     "openai>=1.50",
+    "pgvector>=0.3.6",
     "python-multipart>=0.0.9",
 ]
 

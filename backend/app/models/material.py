@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,6 +22,10 @@ class Material(UUIDPKMixin, Base):
     unit: Mapped[str] = mapped_column(String(20), nullable=False)
     attributes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     """диаметр, материал, класс и т.д. — для будущего фасетного поиска"""
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    """text-embedding-3-small эмбеддинг canonical_name + attributes — см.
+    ADR-0019 §1. NULL до бэкафилла/при сбое embeddings API (graceful
+    degradation), исключается из векторного поиска матчинга."""
 
     prices: Mapped[list["Price"]] = relationship(back_populates="material")
     aliases: Mapped[list["SupplierMaterialAlias"]] = relationship(back_populates="material")

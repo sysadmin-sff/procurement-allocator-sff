@@ -45,6 +45,7 @@ class PurchaseRecordOut(BaseModel):
     quantity: int
     unit_price: float
     material_id: uuid.UUID | None
+    created_by_user_id: uuid.UUID | None
     created_at: datetime
 
 

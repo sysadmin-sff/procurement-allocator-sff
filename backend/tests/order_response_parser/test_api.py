@@ -17,15 +17,37 @@ from app.main import app
 from app.models import OrderItem, PurchaseRecord
 from app.order_response_parser.client import ExtractedLine, OrderResponseParsingError
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
 
 FAKE_PDF_BYTES = b"%PDF-1.4 fake content for tests"
 
 
-def _upload(order_id, content_type="application/pdf", filename="response.pdf", data=FAKE_PDF_BYTES):
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-order-response{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
+
+
+def _upload(
+    client,
+    order_id,
+    content_type="application/pdf",
+    filename="response.pdf",
+    data=FAKE_PDF_BYTES,
+):
     return client.post(
         f"/orders/{order_id}/parse-response",
         files={"file": (filename, data, content_type)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
 
@@ -37,7 +59,7 @@ def _mock_extraction(lines):
 
 
 def test_full_match_all_items_found_missing_empty(
-    db_session, make_supplier, make_material, make_order
+    db_session, make_supplier, make_material, make_order, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
@@ -48,6 +70,7 @@ def test_full_match_all_items_found_missing_empty(
         [(material_a, 10, 5.00), (material_b, 5, 12.00)],
     )
     item_a, item_b = order.items
+    client = _employee_client(make_user, make_session)
 
     lines = [
         ExtractedLine(
@@ -69,7 +92,7 @@ def test_full_match_all_items_found_missing_empty(
     ]
 
     with _mock_extraction(lines):
-        response = _upload(order.id)
+        response = _upload(client, order.id)
 
     assert response.status_code == 200
     body = response.json()
@@ -81,7 +104,7 @@ def test_full_match_all_items_found_missing_empty(
 
 
 def test_partial_match_splits_into_all_three_categories(
-    db_session, make_supplier, make_material, make_order
+    db_session, make_supplier, make_material, make_order, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
@@ -92,6 +115,7 @@ def test_partial_match_splits_into_all_three_categories(
         [(material_a, 10, 5.00), (material_b, 5, 12.00)],
     )
     item_a, item_b = order.items
+    client = _employee_client(make_user, make_session)
 
     lines = [
         ExtractedLine(
@@ -113,7 +137,7 @@ def test_partial_match_splits_into_all_three_categories(
     ]
 
     with _mock_extraction(lines):
-        response = _upload(order.id)
+        response = _upload(client, order.id)
 
     assert response.status_code == 200
     body = response.json()
@@ -130,13 +154,14 @@ def test_partial_match_splits_into_all_three_categories(
 
 
 def test_low_confidence_stays_in_matched_not_dropped_or_separated(
-    db_session, make_supplier, make_material, make_order
+    db_session, make_supplier, make_material, make_order, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
     material = make_material()
     order = make_order(supplier, [(material, 10, 5.00)])
     item = order.items[0]
+    client = _employee_client(make_user, make_session)
 
     lines = [
         ExtractedLine(
@@ -150,7 +175,7 @@ def test_low_confidence_stays_in_matched_not_dropped_or_separated(
     ]
 
     with _mock_extraction(lines):
-        response = _upload(order.id)
+        response = _upload(client, order.id)
 
     assert response.status_code == 200
     body = response.json()
@@ -161,16 +186,17 @@ def test_low_confidence_stays_in_matched_not_dropped_or_separated(
 
 
 def test_empty_extraction_puts_everything_in_missing_not_an_error(
-    db_session, make_supplier, make_material, make_order
+    db_session, make_supplier, make_material, make_order, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
     material_a = make_material()
     material_b = make_material()
     order = make_order(supplier, [(material_a, 10, 5.00), (material_b, 3, 7.00)])
+    client = _employee_client(make_user, make_session)
 
     with _mock_extraction([]):
-        response = _upload(order.id)
+        response = _upload(client, order.id)
 
     assert response.status_code == 200
     body = response.json()
@@ -180,18 +206,19 @@ def test_empty_extraction_puts_everything_in_missing_not_an_error(
 
 
 def test_invalid_content_type_rejected_before_openai_call(
-    db_session, make_supplier, make_material, make_order
+    db_session, make_supplier, make_material, make_order, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
     material = make_material()
     order = make_order(supplier, [(material, 10, 5.00)])
+    client = _employee_client(make_user, make_session)
 
     with patch(
         "app.order_response_parser.service.parse_order_response_document"
     ) as mock_call:
         response = _upload(
-            order.id, content_type="text/plain", filename="notes.txt", data=b"hello"
+            client, order.id, content_type="text/plain", filename="notes.txt", data=b"hello"
         )
 
     assert response.status_code == 422
@@ -199,31 +226,33 @@ def test_invalid_content_type_rejected_before_openai_call(
 
 
 def test_openai_failure_returns_clear_error_not_bare_500(
-    db_session, make_supplier, make_material, make_order
+    db_session, make_supplier, make_material, make_order, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
     material = make_material()
     order = make_order(supplier, [(material, 10, 5.00)])
+    client = _employee_client(make_user, make_session)
 
     with patch(
         "app.order_response_parser.service.parse_order_response_document",
         side_effect=OrderResponseParsingError("Не удалось связаться с сервисом распознавания."),
     ):
-        response = _upload(order.id)
+        response = _upload(client, order.id)
 
     assert response.status_code == 502
     assert response.json()["detail"]
 
 
-def test_order_not_found_returns_404(db_session):
+def test_order_not_found_returns_404(db_session, make_user, make_session):
+    client = _employee_client(make_user, make_session)
     with _mock_extraction([]):
-        response = _upload(uuid.uuid4())
+        response = _upload(client, uuid.uuid4())
     assert response.status_code == 404
 
 
 def test_endpoint_does_not_write_to_order_item_or_purchase_record(
-    db_session, make_supplier, make_material, make_order
+    db_session, make_supplier, make_material, make_order, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
@@ -231,6 +260,7 @@ def test_endpoint_does_not_write_to_order_item_or_purchase_record(
     material_b = make_material()
     order = make_order(supplier, [(material_a, 10, 5.00), (material_b, 5, 12.00)])
     item_a, item_b = order.items
+    client = _employee_client(make_user, make_session)
 
     before_item_a_confirmed = item_a.confirmed_price
     before_item_a_received = item_a.received_price
@@ -256,7 +286,7 @@ def test_endpoint_does_not_write_to_order_item_or_purchase_record(
     ]
 
     with _mock_extraction(lines):
-        response = _upload(order.id)
+        response = _upload(client, order.id)
 
     assert response.status_code == 200
 
@@ -271,3 +301,12 @@ def test_endpoint_does_not_write_to_order_item_or_purchase_record(
     assert refreshed_b.received_price is None
 
     assert session.query(PurchaseRecord).count() == before_purchase_record_count
+
+
+def test_parse_response_no_session_returns_401():
+    client = TestClient(app)
+    response = client.post(
+        f"/orders/{uuid.uuid4()}/parse-response",
+        files={"file": ("response.pdf", FAKE_PDF_BYTES, "application/pdf")},
+    )
+    assert response.status_code == 401

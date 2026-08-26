@@ -23,6 +23,7 @@ class AllocationLineOut(BaseModel):
     unit_price: float
     line_total: float
     overridden_at: datetime | None = None
+    overridden_by_user_id: uuid.UUID | None = None
     original_supplier_id: uuid.UUID | None = None
     original_unit_price: float | None = None
     ordered_at: datetime | None = None

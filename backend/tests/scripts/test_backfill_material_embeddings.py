@@ -9,7 +9,7 @@ from app.scripts.backfill_material_embeddings import run_backfill
 
 
 def test_backfill_embeds_materials_with_null_embedding(db_session, make_material):
-    session, _material_ids = db_session
+    session, _material_ids, _user_ids = db_session
     material = make_material(canonical_name="Needs Embedding")
     assert material.embedding is None
 
@@ -28,7 +28,7 @@ def test_backfill_embeds_materials_with_null_embedding(db_session, make_material
 def test_backfill_does_not_touch_materials_with_existing_embedding(
     db_session, make_material
 ):
-    session, _material_ids = db_session
+    session, _material_ids, _user_ids = db_session
     material = make_material(canonical_name="Already Embedded")
     material.embedding = [0.9] * 1536
     session.commit()
@@ -44,7 +44,7 @@ def test_backfill_does_not_touch_materials_with_existing_embedding(
 
 
 def test_backfill_is_idempotent_on_second_run(db_session, make_material):
-    session, _material_ids = db_session
+    session, _material_ids, _user_ids = db_session
     make_material(canonical_name="Needs Embedding Twice")
 
     with patch(

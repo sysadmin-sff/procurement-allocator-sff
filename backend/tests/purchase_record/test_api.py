@@ -20,13 +20,31 @@ from app.purchase_records.service import (
     update_purchase_record,
 )
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
 
 
-def test_create_purchase_record_via_api(db_session, make_supplier, make_project):
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-purchase-record{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
+
+
+def test_create_purchase_record_via_api(
+    db_session, make_supplier, make_project, make_user, make_session
+):
     session, *_ = db_session
     supplier = make_supplier()
     project = make_project([])
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/projects/{project.id}/purchase-records",
@@ -36,6 +54,7 @@ def test_create_purchase_record_via_api(db_session, make_supplier, make_project)
             "quantity": 3,
             "unit_price": 42.50,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 201
@@ -48,12 +67,13 @@ def test_create_purchase_record_via_api(db_session, make_supplier, make_project)
 
 
 def test_create_purchase_record_with_material_id(
-    db_session, make_supplier, make_material, make_project
+    db_session, make_supplier, make_material, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
     material = make_material()
     project = make_project([])
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/projects/{project.id}/purchase-records",
@@ -64,16 +84,20 @@ def test_create_purchase_record_with_material_id(
             "unit_price": 10.0,
             "material_id": str(material.id),
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 201
     assert response.json()["material_id"] == str(material.id)
 
 
-def test_create_purchase_record_rejects_zero_quantity(db_session, make_supplier, make_project):
+def test_create_purchase_record_rejects_zero_quantity(
+    db_session, make_supplier, make_project, make_user, make_session
+):
     session, *_ = db_session
     supplier = make_supplier()
     project = make_project([])
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/projects/{project.id}/purchase-records",
@@ -83,15 +107,19 @@ def test_create_purchase_record_rejects_zero_quantity(db_session, make_supplier,
             "quantity": 0,
             "unit_price": 10.0,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 422
 
 
-def test_create_purchase_record_rejects_negative_price(db_session, make_supplier, make_project):
+def test_create_purchase_record_rejects_negative_price(
+    db_session, make_supplier, make_project, make_user, make_session
+):
     session, *_ = db_session
     supplier = make_supplier()
     project = make_project([])
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/projects/{project.id}/purchase-records",
@@ -101,16 +129,20 @@ def test_create_purchase_record_rejects_negative_price(db_session, make_supplier
             "quantity": 1,
             "unit_price": -5.0,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 422
 
 
-def test_create_purchase_record_allows_zero_price(db_session, make_supplier, make_project):
+def test_create_purchase_record_allows_zero_price(
+    db_session, make_supplier, make_project, make_user, make_session
+):
     """unit_price >= 0, not > 0 — a free/promotional line is representable."""
     session, *_ = db_session
     supplier = make_supplier()
     project = make_project([])
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/projects/{project.id}/purchase-records",
@@ -120,14 +152,18 @@ def test_create_purchase_record_allows_zero_price(db_session, make_supplier, mak
             "quantity": 1,
             "unit_price": 0.0,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 201
 
 
-def test_create_purchase_record_returns_404_for_unknown_project(db_session, make_supplier):
+def test_create_purchase_record_returns_404_for_unknown_project(
+    db_session, make_supplier, make_user, make_session
+):
     session, *_ = db_session
     supplier = make_supplier()
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/projects/{uuid.uuid4()}/purchase-records",
@@ -137,13 +173,14 @@ def test_create_purchase_record_returns_404_for_unknown_project(db_session, make
             "quantity": 1,
             "unit_price": 1.0,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
 
 
 def test_create_purchase_record_for_supplier_with_no_order_in_project(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """Ordered "с колёс" from a supplier that never had an AllocationRun/Order
     in this project at all — must not fail. See ADR-0008 п.2."""
@@ -156,6 +193,7 @@ def test_create_purchase_record_for_supplier_with_no_order_in_project(
 
     run = run_allocation(session, project.id)
     create_orders_for_run(session, project.id, run.id)
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/projects/{project.id}/purchase-records",
@@ -165,12 +203,13 @@ def test_create_purchase_record_for_supplier_with_no_order_in_project(
             "quantity": 2,
             "unit_price": 15.0,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 201
 
 
-def test_update_purchase_record(db_session, make_supplier, make_project):
+def test_update_purchase_record(db_session, make_supplier, make_project, make_user, make_session):
     session, *_ = db_session
     supplier = make_supplier()
     other_supplier = make_supplier(name="Other")
@@ -184,6 +223,7 @@ def test_update_purchase_record(db_session, make_supplier, make_project):
         unit_price=10.0,
         material_id=None,
     )
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
         f"/projects/{project.id}/purchase-records/{record.id}",
@@ -193,6 +233,7 @@ def test_update_purchase_record(db_session, make_supplier, make_project):
             "quantity": 5,
             "unit_price": 20.0,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -204,11 +245,12 @@ def test_update_purchase_record(db_session, make_supplier, make_project):
 
 
 def test_update_purchase_record_returns_404_for_unknown_record(
-    db_session, make_supplier, make_project
+    db_session, make_supplier, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
     project = make_project([])
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
         f"/projects/{project.id}/purchase-records/{uuid.uuid4()}",
@@ -218,13 +260,14 @@ def test_update_purchase_record_returns_404_for_unknown_record(
             "quantity": 1,
             "unit_price": 1.0,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
 
 
 def test_update_purchase_record_returns_404_when_record_belongs_to_different_project(
-    db_session, make_supplier, make_project
+    db_session, make_supplier, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
@@ -239,6 +282,7 @@ def test_update_purchase_record_returns_404_when_record_belongs_to_different_pro
         unit_price=1.0,
         material_id=None,
     )
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
         f"/projects/{project_b.id}/purchase-records/{record.id}",
@@ -248,12 +292,13 @@ def test_update_purchase_record_returns_404_when_record_belongs_to_different_pro
             "quantity": 1,
             "unit_price": 1.0,
         },
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
 
 
-def test_delete_purchase_record(db_session, make_supplier, make_project):
+def test_delete_purchase_record(db_session, make_supplier, make_project, make_user, make_session):
     session, *_ = db_session
     supplier = make_supplier()
     project = make_project([])
@@ -266,8 +311,12 @@ def test_delete_purchase_record(db_session, make_supplier, make_project):
         unit_price=1.0,
         material_id=None,
     )
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project.id}/purchase-records/{record.id}")
+    response = client.delete(
+        f"/projects/{project.id}/purchase-records/{record.id}",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 204
     listed = client.get(f"/projects/{project.id}/purchase-records")
@@ -275,12 +324,16 @@ def test_delete_purchase_record(db_session, make_supplier, make_project):
 
 
 def test_delete_purchase_record_returns_404_for_unknown_record(
-    db_session, make_supplier, make_project
+    db_session, make_supplier, make_project, make_user, make_session
 ):
     session, *_ = db_session
     project = make_project([])
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project.id}/purchase-records/{uuid.uuid4()}")
+    response = client.delete(
+        f"/projects/{project.id}/purchase-records/{uuid.uuid4()}",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 404
 
@@ -342,14 +395,15 @@ def test_delete_purchase_record_service_raises_for_mismatched_project(
         pass
 
 
-def test_list_returns_404_for_unknown_project():
+def test_list_returns_404_for_unknown_project(make_user, make_session):
+    client = _employee_client(make_user, make_session)
     response = client.get(f"/projects/{uuid.uuid4()}/purchase-records")
 
     assert response.status_code == 404
 
 
 def test_aggregates_null_when_no_order_exists_for_project(
-    db_session, make_supplier, make_project
+    db_session, make_supplier, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
@@ -363,6 +417,7 @@ def test_aggregates_null_when_no_order_exists_for_project(
         unit_price=10.0,
         material_id=None,
     )
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/purchase-records")
 
@@ -381,7 +436,7 @@ def test_aggregates_null_when_no_order_exists_for_project(
 
 
 def test_aggregates_compare_against_order_total_amount_when_order_exists(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(name="Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
@@ -402,6 +457,7 @@ def test_aggregates_compare_against_order_total_amount_when_order_exists(
         unit_price=11.00,  # 110.00 actual vs 100.00 planned
         material_id=None,
     )
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/purchase-records")
     body = response.json()
@@ -420,7 +476,7 @@ def test_aggregates_compare_against_order_total_amount_when_order_exists(
 
 
 def test_aggregates_sum_multiple_records_for_same_supplier(
-    db_session, make_supplier, make_project
+    db_session, make_supplier, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
@@ -443,6 +499,7 @@ def test_aggregates_sum_multiple_records_for_same_supplier(
         unit_price=4.0,
         material_id=None,
     )
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/purchase-records")
     body = response.json()
@@ -455,7 +512,9 @@ def test_aggregates_sum_multiple_records_for_same_supplier(
     assert supplier_total["purchased_total"] == 22.0
 
 
-def test_aggregates_keep_multiple_suppliers_separate(db_session, make_supplier, make_project):
+def test_aggregates_keep_multiple_suppliers_separate(
+    db_session, make_supplier, make_project, make_user, make_session
+):
     session, *_ = db_session
     supplier_a = make_supplier(name="A")
     supplier_b = make_supplier(name="B")
@@ -478,6 +537,7 @@ def test_aggregates_keep_multiple_suppliers_separate(db_session, make_supplier, 
         unit_price=50.0,
         material_id=None,
     )
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/purchase-records")
     body = response.json()
@@ -489,7 +549,7 @@ def test_aggregates_keep_multiple_suppliers_separate(db_session, make_supplier, 
 
 
 def test_aggregates_include_unplanned_supplier_with_null_planned_total(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """A supplier bought from "с колёс" (no Order in this project) still
     appears in supplier_totals, with planned_total=None. See ADR-0008 п.2."""
@@ -512,6 +572,7 @@ def test_aggregates_include_unplanned_supplier_with_null_planned_total(
         unit_price=15.0,
         material_id=None,
     )
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/purchase-records")
     body = response.json()
@@ -528,3 +589,30 @@ def test_aggregates_include_unplanned_supplier_with_null_planned_total(
     )
     assert planned_total["purchased_total"] == 0.0
     assert planned_total["planned_total"] == 50.0
+
+
+def test_list_purchase_records_no_session_returns_401():
+    client = TestClient(app)
+    response = client.get(f"/projects/{uuid.uuid4()}/purchase-records")
+    assert response.status_code == 401
+
+
+def test_create_purchase_record_as_employee_succeeds(
+    db_session, make_supplier, make_project, make_user, make_session
+):
+    supplier = make_supplier()
+    project = make_project([])
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/projects/{project.id}/purchase-records",
+        json={
+            "supplier_id": str(supplier.id),
+            "raw_description": "Employee-created line",
+            "quantity": 1,
+            "unit_price": 5.0,
+        },
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201

@@ -16,6 +16,7 @@ from app.api.schemas.supplier import (
     SupplierOut,
     SupplierUpdate,
 )
+from app.auth.dependencies import require_role
 from app.core.database import get_db
 from app.models import Office, Supplier, SupplierContact
 from app.supplier_directory.service import (
@@ -30,7 +31,7 @@ from app.supplier_directory.service import (
     update_office,
 )
 
-router = APIRouter(prefix="/suppliers")
+router = APIRouter(prefix="/suppliers", dependencies=[Depends(require_role("admin"))])
 
 
 @router.post("", response_model=SupplierOut, status_code=201)

@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.api.schemas.material import MaterialCreate, MaterialOut, MaterialUpdate
 from app.api.schemas.price import PriceOut
+from app.auth.dependencies import require_role
 from app.core.database import get_db
 from app.models import Material, Price
 from app.price_ingestion.embeddings import EmbeddingError, embed_text, material_embedding_input
 
-router = APIRouter(prefix="/materials")
+router = APIRouter(prefix="/materials", dependencies=[Depends(require_role("admin"))])
 
 
 @router.get("/search", response_model=list[MaterialOut])

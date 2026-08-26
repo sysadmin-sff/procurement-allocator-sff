@@ -10,6 +10,7 @@ from app.api.schemas.price_ingestion import (
     PriceListEntryOut,
     PriceListImportOut,
 )
+from app.auth.dependencies import require_role
 from app.core.database import get_db
 from app.models import Material
 from app.price_ingestion.apply import EntryNotFoundError, apply_price_list_entry
@@ -26,7 +27,7 @@ from app.price_ingestion.service import (
     maybe_mark_import_approved,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_role("admin"))])
 
 MAX_PRICE_LIST_FILE_SIZE = 10 * 1024 * 1024
 

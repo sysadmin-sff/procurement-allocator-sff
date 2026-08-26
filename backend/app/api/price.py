@@ -6,10 +6,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.schemas.price import PriceCreate, PriceOut, PriceUpdate
+from app.auth.dependencies import require_role
 from app.core.database import get_db
 from app.models import Material, Price, Supplier
 
-router = APIRouter(prefix="/prices")
+router = APIRouter(prefix="/prices", dependencies=[Depends(require_role("admin"))])
 
 
 def _active_price_query(db: Session, material_id: uuid.UUID, supplier_id: uuid.UUID):

@@ -11,6 +11,7 @@ from app.api.price_ingestion import router as price_ingestion_router
 from app.api.project import router as project_router
 from app.api.purchase_record import router as purchase_record_router
 from app.api.supplier import router as supplier_router
+from app.api.user import router as user_router
 
 app = FastAPI(title="procurement-allocator")
 
@@ -27,6 +28,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(user_router)
 app.include_router(project_router)
 app.include_router(allocation_router)
 app.include_router(order_router)

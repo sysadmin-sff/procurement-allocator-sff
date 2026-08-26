@@ -121,7 +121,7 @@ def parse_order_response_document(
             "OpenAI API не настроен (отсутствует OPENAI_API_KEY) — введите цены вручную."
         )
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
     prompt = _PROMPT_TEMPLATE.format(order_items_context=_order_items_context(order_items))
 
     file_field = _SUPPORTED_CONTENT_TYPES[content_type]

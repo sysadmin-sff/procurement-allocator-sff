@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PriceListImportReviewPage } from './PriceListImportReviewPage';
 import { priceListImportsApi } from '../../api/priceListImports';
 import { materialsApi } from '../../api/materials';
-import type { PriceListEntry, PriceListImport } from '../../api/types';
+import { AuthContext } from '../../auth/AuthContext';
+import type { CurrentUser, PriceListEntry, PriceListImport } from '../../api/types';
 
 vi.mock('../../api/priceListImports', () => ({
   priceListImportsApi: { upload: vi.fn(), get: vi.fn(), applyEntry: vi.fn() },
@@ -37,15 +38,17 @@ function entryFixture(overrides: Partial<PriceListEntry> = {}): PriceListEntry {
   };
 }
 
-function renderPage(priceListImport: PriceListImport) {
+function renderPage(priceListImport: PriceListImport, role: CurrentUser['role'] = 'admin') {
   getImportMock.mockResolvedValue(priceListImport);
   materialsListMock.mockResolvedValue([]);
   return render(
     <MemoryRouter initialEntries={['/price-list-imports/import-1']}>
-      <Routes>
-        <Route path="/price-list-imports/:importId" element={<PriceListImportReviewPage />} />
-        <Route path="/suppliers" element={<div>Suppliers screen</div>} />
-      </Routes>
+      <AuthContext.Provider value={{ id: 'u1', email: 'a@b.com', name: 'A', role }}>
+        <Routes>
+          <Route path="/price-list-imports/:importId" element={<PriceListImportReviewPage />} />
+          <Route path="/suppliers" element={<div>Suppliers screen</div>} />
+        </Routes>
+      </AuthContext.Provider>
     </MemoryRouter>,
   );
 }
@@ -158,9 +161,11 @@ describe('PriceListImportReviewPage', () => {
 
     render(
       <MemoryRouter initialEntries={['/price-list-imports/import-1']}>
-        <Routes>
-          <Route path="/price-list-imports/:importId" element={<PriceListImportReviewPage />} />
-        </Routes>
+        <AuthContext.Provider value={{ id: 'u1', email: 'a@b.com', name: 'A', role: 'admin' }}>
+          <Routes>
+            <Route path="/price-list-imports/:importId" element={<PriceListImportReviewPage />} />
+          </Routes>
+        </AuthContext.Provider>
       </MemoryRouter>,
     );
 
@@ -179,5 +184,33 @@ describe('PriceListImportReviewPage', () => {
 
     await waitFor(() => expect(applyEntryMock).toHaveBeenCalledTimes(2)); // 1 skip + 1 apply for row b
     expect(applyEntryMock).not.toHaveBeenCalledWith('import-1', 'a', expect.objectContaining({ action: 'new' }));
+  });
+
+  describe('admin-only actions (ADR-0024 §7 — UI convenience only)', () => {
+    function pendingImport(): PriceListImport {
+      return {
+        import_id: 'import-1',
+        status: 'pending_review',
+        entries: [entryFixture({ id: 'a' })],
+      };
+    }
+
+    it('disables apply/skip actions for employee role', async () => {
+      renderPage(pendingImport(), 'employee');
+
+      await screen.findByText('Screen mesh 18x14');
+
+      expect(screen.getByRole('button', { name: /Применить выбранные/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Пропустить/ })).toBeDisabled();
+    });
+
+    it('enables apply/skip actions for admin role', async () => {
+      renderPage(pendingImport(), 'admin');
+
+      await screen.findByText('Screen mesh 18x14');
+
+      expect(screen.getByRole('button', { name: /Применить выбранные/ })).toBeEnabled();
+      expect(screen.getByRole('button', { name: /Пропустить/ })).toBeEnabled();
+    });
   });
 });

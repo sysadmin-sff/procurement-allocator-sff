@@ -6,6 +6,7 @@ import io
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 from pypdf import PdfReader, PdfWriter
 
 from app.price_ingestion.extraction import (
@@ -61,7 +62,7 @@ def test_extract_returns_parsed_lines():
     ]
     with _mock_parse(lines):
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
             result = extract_price_list_lines(
                 file_bytes=FAKE_PDF_BYTES, content_type="application/pdf"
@@ -87,7 +88,7 @@ def test_extract_raises_price_ingestion_error_on_api_failure():
     )
     with patch("app.price_ingestion.extraction.OpenAI", return_value=mock_client):
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
             with pytest.raises(PriceIngestionError):
                 extract_price_list_lines(
@@ -98,7 +99,7 @@ def test_extract_raises_price_ingestion_error_on_api_failure():
 def test_extract_returns_empty_list_when_model_finds_nothing():
     with _mock_parse([]):
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
             result = extract_price_list_lines(
                 file_bytes=FAKE_PDF_BYTES, content_type="application/pdf"
@@ -154,7 +155,7 @@ def test_multipage_pdf_makes_one_call_per_chunk_and_concatenates_in_order():
 
     with patch("app.price_ingestion.extraction.OpenAI", return_value=mock_client):
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
             result = extract_price_list_lines(
                 file_bytes=pdf_bytes, content_type="application/pdf"
@@ -176,7 +177,7 @@ def test_document_fitting_in_one_chunk_makes_a_single_call():
     ]
     with _mock_parse(lines) as mock_openai:
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
             result = extract_price_list_lines(
                 file_bytes=pdf_bytes, content_type="application/pdf"
@@ -193,7 +194,7 @@ def test_single_chunk_pdf_prompt_carries_absolute_page_range():
     pdf_bytes = _make_pdf_bytes(2)
     with _mock_parse([]) as mock_openai:
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
             extract_price_list_lines(file_bytes=pdf_bytes, content_type="application/pdf")
 
@@ -225,7 +226,7 @@ def test_multipage_pdf_each_chunk_call_contains_correct_pages():
 
     with patch("app.price_ingestion.extraction.OpenAI", return_value=mock_client):
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
             extract_price_list_lines(file_bytes=pdf_bytes, content_type="application/pdf")
 
@@ -246,7 +247,7 @@ def test_input_image_is_not_chunked():
     }
     with _mock_parse([mock_line]) as mock_openai:
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
             result = extract_price_list_lines(
                 file_bytes=b"not-a-real-image-but-never-parsed-as-pdf",

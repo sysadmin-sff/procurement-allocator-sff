@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { ApiError, diff } from './client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiError, diff, http } from './client';
 
 describe('ApiError', () => {
   it('exposes the full response body, not just its detail field', () => {
@@ -59,5 +59,69 @@ describe('diff', () => {
     const after = { name: 'Alutex' };
 
     expect(diff(before, after)).toEqual({});
+  });
+});
+
+describe('http credentials and CSRF (ADR-0024 §7)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      json: async () => undefined,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    document.cookie = 'csrf_token=abc123; path=/';
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.cookie = 'csrf_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+  });
+
+  it('sends credentials: include on GET requests', async () => {
+    await http.get('/materials');
+
+    const init = fetchMock.mock.calls[0][1];
+    expect(init.credentials).toBe('include');
+  });
+
+  it('does not send X-CSRF-Token on GET requests', async () => {
+    await http.get('/materials');
+
+    const init = fetchMock.mock.calls[0][1];
+    expect(init.headers['X-CSRF-Token']).toBeUndefined();
+  });
+
+  it('sends credentials: include and X-CSRF-Token on POST requests', async () => {
+    await http.post('/materials', { name: 'foo' });
+
+    const init = fetchMock.mock.calls[0][1];
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-CSRF-Token']).toBe('abc123');
+  });
+
+  it('sends X-CSRF-Token on PUT requests', async () => {
+    await http.put('/materials/1', { name: 'foo' });
+    expect(fetchMock.mock.calls[0][1].headers['X-CSRF-Token']).toBe('abc123');
+  });
+
+  it('sends X-CSRF-Token on PATCH requests', async () => {
+    await http.patch('/materials/1', { name: 'foo' });
+    expect(fetchMock.mock.calls[0][1].headers['X-CSRF-Token']).toBe('abc123');
+  });
+
+  it('sends X-CSRF-Token on DELETE requests', async () => {
+    await http.delete('/materials/1');
+    expect(fetchMock.mock.calls[0][1].headers['X-CSRF-Token']).toBe('abc123');
+  });
+
+  it('sends credentials: include and X-CSRF-Token on postMultipart requests', async () => {
+    await http.postMultipart('/suppliers/1/price-lists', new FormData());
+
+    const init = fetchMock.mock.calls[0][1];
+    expect(init.credentials).toBe('include');
+    expect(init.headers['X-CSRF-Token']).toBe('abc123');
   });
 });

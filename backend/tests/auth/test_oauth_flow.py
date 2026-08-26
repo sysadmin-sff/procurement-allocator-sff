@@ -3,6 +3,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from app.auth.google import GoogleClaims
 from app.core.config import settings
@@ -15,7 +16,7 @@ DOMAIN = "screen-factory-florida.com"
 
 def _configure_settings(monkeypatch):
     monkeypatch.setattr(settings, "google_client_id", "test-client-id")
-    monkeypatch.setattr(settings, "google_client_secret", "test-client-secret")
+    monkeypatch.setattr(settings, "google_client_secret", SecretStr("test-client-secret"))
     monkeypatch.setattr(settings, "google_workspace_domain", DOMAIN)
 
 
@@ -66,7 +67,7 @@ def test_callback_success_creates_session_and_sets_cookies(monkeypatch, db_sessi
         response = client.get(f"/auth/callback?code=fake-code&state={state}")
 
     assert response.status_code in (302, 307)
-    assert response.headers["location"] == "/"
+    assert response.headers["location"] == settings.frontend_url
     assert "session_id" in response.cookies
     assert "csrf_token" in response.cookies
 

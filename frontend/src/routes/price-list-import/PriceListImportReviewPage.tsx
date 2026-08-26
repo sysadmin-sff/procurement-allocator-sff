@@ -4,6 +4,7 @@ import { ApiError } from '../../api/client';
 import { materialsApi } from '../../api/materials';
 import { priceListImportsApi } from '../../api/priceListImports';
 import type { Material, PriceListEntry, PriceListImport } from '../../api/types';
+import { useCurrentUser } from '../../auth/AuthContext';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { MaterialCombobox } from '../project-builder/MaterialCombobox';
 import styles from './PriceListImportReview.module.css';
@@ -21,6 +22,9 @@ interface LoadedData {
 }
 
 export function PriceListImportReviewPage() {
+  /* UI convenience only, not a security boundary — real enforcement is
+     require_role("admin") on the backend router (ADR-0024 §4/§5). */
+  const isAdmin = useCurrentUser().role === 'admin';
   const { importId } = useParams<{ importId: string }>();
   const [data, setData] = useState<LoadedData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -202,7 +206,7 @@ export function PriceListImportReviewPage() {
           <button
             type="button"
             className={styles.applyButton}
-            disabled={applying || pendingCount === 0}
+            disabled={!isAdmin || applying || pendingCount === 0}
             onClick={() => void handleApplySelected()}
           >
             {applying ? 'Применяем…' : 'Применить выбранные'}
@@ -261,6 +265,7 @@ export function PriceListImportReviewPage() {
                   onSkip={() => void handleSkip(entry)}
                   skipping={skippingId === entry.id}
                   rowError={rowErrors[entry.id]}
+                  disabled={!isAdmin}
                 />
               );
             })}
@@ -331,6 +336,7 @@ function EntryRow({
   onSkip,
   skipping,
   rowError,
+  disabled,
 }: {
   entry: PriceListEntry;
   entriesById: Map<string, PriceListEntry>;
@@ -349,6 +355,7 @@ function EntryRow({
   onSkip: () => void;
   skipping: boolean;
   rowError: string | undefined;
+  disabled: boolean;
 }) {
   const resolved = entry.action != null;
   const isProposedMatch = entry.matched_material_id != null;
@@ -365,7 +372,12 @@ function EntryRow({
     <tr className={rowClassNames || undefined}>
       <td className={styles.checkboxCell}>
         {!resolved && (
-          <input type="checkbox" checked={included} onChange={(e) => onToggleIncluded(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={included}
+            disabled={disabled}
+            onChange={(e) => onToggleIncluded(e.target.checked)}
+          />
         )}
       </td>
       <td>
@@ -430,7 +442,7 @@ function EntryRow({
           <button
             type="button"
             className={styles.skipButton}
-            disabled={skipping}
+            disabled={disabled || skipping}
             onClick={onSkip}
           >
             {skipping ? 'Пропускаем…' : 'Пропустить'}

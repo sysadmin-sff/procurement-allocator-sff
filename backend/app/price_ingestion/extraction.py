@@ -269,7 +269,7 @@ def extract_price_list_lines(
             "OpenAI API не настроен (отсутствует OPENAI_API_KEY)"
         )
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
 
     if _SUPPORTED_CONTENT_TYPES[content_type] != "input_file":
         file_content = _build_file_content(file_bytes, content_type)

@@ -45,7 +45,7 @@ def _require_google_settings() -> tuple[str, str, str]:
         raise HTTPException(status_code=500, detail="Google OAuth is not configured")
     return (
         settings.google_client_id,
-        settings.google_client_secret,
+        settings.google_client_secret.get_secret_value(),
         settings.google_workspace_domain,
     )
 
@@ -128,7 +128,7 @@ def callback(
 
     session = create_session(db, user)
 
-    redirect = RedirectResponse(url="/")
+    redirect = RedirectResponse(url=settings.frontend_url)
     set_session_cookies(redirect, str(session.id), session.csrf_token)
     clear_oauth_flow_cookie(redirect)
     return redirect

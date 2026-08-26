@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { materialsApi } from '../api/materials';
 import { suppliersApi } from '../api/suppliers';
 import type { Material, MaterialCreate, Supplier } from '../api/types';
+import { useCurrentUser } from '../auth/AuthContext';
 import { Button } from '../components/Button';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { EmptyState } from '../components/EmptyState';
@@ -15,6 +16,9 @@ type SortColumn = 'internal_sku' | 'canonical_name';
 type SortDirection = 'asc' | 'desc';
 
 export function MaterialsPage() {
+  /* UI convenience only, not a security boundary — real enforcement is
+     require_role("admin") on the backend router (ADR-0024 §4/§5). */
+  const isAdmin = useCurrentUser().role === 'admin';
   const [materials, setMaterials] = useState<Material[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [status, setStatus] = useState<Status>('loading');
@@ -132,7 +136,7 @@ export function MaterialsPage() {
         <div className={styles.header}>
           <h1 className={styles.title}>Материалы</h1>
           {!formOpen && (
-            <Button variant="primary" onClick={openCreate}>
+            <Button variant="primary" disabled={!isAdmin} onClick={openCreate}>
               + Добавить материал
             </Button>
           )}
@@ -184,7 +188,7 @@ export function MaterialsPage() {
                 title="Материалов пока нет"
                 description="Добавьте первый материал в каталог, чтобы можно было заносить цены и включать его в проекты."
                 action={
-                  <Button variant="primary" onClick={openCreate}>
+                  <Button variant="primary" disabled={!isAdmin} onClick={openCreate}>
                     Добавить материал »
                   </Button>
                 }
@@ -257,10 +261,14 @@ export function MaterialsPage() {
                               className={styles.actionsCell}
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <Button variant="ghost" onClick={() => openEdit(material)}>
+                              <Button variant="ghost" disabled={!isAdmin} onClick={() => openEdit(material)}>
                                 Изменить
                               </Button>
-                              <ConfirmButton label="Удалить" onConfirm={() => handleDelete(material)} />
+                              <ConfirmButton
+                                label="Удалить"
+                                disabled={!isAdmin}
+                                onConfirm={() => handleDelete(material)}
+                              />
                             </div>
                           </td>
                         </tr>

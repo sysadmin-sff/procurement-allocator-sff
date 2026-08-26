@@ -143,7 +143,7 @@ def _decide_match(
             "OpenAI API не настроен (отсутствует OPENAI_API_KEY)"
         )
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
     prompt = _PROMPT_TEMPLATE.format(
         raw_name=raw_name,
         raw_sku=raw_sku,

@@ -1,3 +1,35 @@
+export type UserRole = 'admin' | 'employee';
+
+/** Response body of GET /auth/me — see ADR-0024 §2/§4. */
+export interface CurrentUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: UserRole;
+}
+
+/** Row shape from GET/POST/PATCH /users — admin-only, ADR-0024 §2. */
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  role: UserRole;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface UserCreate {
+  email: string;
+  role: UserRole;
+}
+
+/** PATCH-семантика: только заданные поля отправляются на backend, см. diff(). */
+export interface UserUpdate {
+  role?: UserRole;
+  is_active?: boolean;
+}
+
 export interface DeliveryPolicy {
   flat_fee: number;
   free_shipping_threshold: number | null;

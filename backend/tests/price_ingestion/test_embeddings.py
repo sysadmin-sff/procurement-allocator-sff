@@ -7,6 +7,7 @@ suite) — this file only tests input serialization and error handling.
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 from app.price_ingestion.embeddings import (
     EmbeddingError,
@@ -41,7 +42,7 @@ def test_embed_text_returns_vector_from_openai():
     fake_vector = [0.01] * 1536
     with _mock_openai_embeddings(fake_vector):
         with patch("app.price_ingestion.embeddings.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_embedding_model = "text-embedding-3-small"
             result = embed_text("some material text")
     assert result == fake_vector
@@ -63,7 +64,7 @@ def test_embed_text_raises_embedding_error_on_api_failure():
     )
     with patch("app.price_ingestion.embeddings.OpenAI", return_value=mock_client):
         with patch("app.price_ingestion.embeddings.settings") as mock_settings:
-            mock_settings.openai_api_key = "fake-key"
+            mock_settings.openai_api_key = SecretStr("fake-key")
             mock_settings.openai_embedding_model = "text-embedding-3-small"
             with pytest.raises(EmbeddingError):
                 embed_text("some material text")

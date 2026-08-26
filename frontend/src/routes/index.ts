@@ -1,3 +1,4 @@
+export { LoginPage } from './LoginPage';
 export { ProjectBuilderPage } from './ProjectBuilderPage';
 export { ProjectsListPage } from './ProjectsListPage';
 export { ProjectDetailPage } from './ProjectDetailPage';
@@ -10,3 +11,4 @@ export { PriceListImportReviewPage } from './price-list-import/PriceListImportRe
 export { MaterialsPage } from './MaterialsPage';
 export { SuppliersPage } from './SuppliersPage';
 export { SupplierDetailPage } from './suppliers/SupplierDetailPage';
+export { UsersPage } from './UsersPage';

@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 export class ApiError extends Error {
   status: number;
@@ -21,9 +21,23 @@ export class ApiError extends Error {
   }
 }
 
+/** Reads the `csrf_token` cookie set by the backend at login (ADR-0024 §3) —
+ * not httpOnly, specifically so the frontend can read it and echo it back in
+ * the X-CSRF-Token header (double-submit cookie pattern). */
+function readCsrfToken(): string | null {
+  const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function csrfHeaders(): Record<string, string> {
+  const token = readCsrfToken();
+  return token != null ? { 'X-CSRF-Token': token } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...init?.headers,
@@ -43,7 +57,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function requestMultipart<T>(path: string, formData: FormData): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, { method: 'POST', body: formData });
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    body: formData,
+    credentials: 'include',
+    headers: csrfHeaders(),
+  });
 
   if (!response.ok) {
     const body = await response.json().catch(() => undefined);
@@ -56,12 +75,12 @@ async function requestMultipart<T>(path: string, formData: FormData): Promise<T>
 export const http = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
+    request<T>(path, { method: 'POST', body: JSON.stringify(body), headers: csrfHeaders() }),
   put: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
+    request<T>(path, { method: 'PUT', body: JSON.stringify(body), headers: csrfHeaders() }),
   patch: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+    request<T>(path, { method: 'PATCH', body: JSON.stringify(body), headers: csrfHeaders() }),
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE', headers: csrfHeaders() }),
   /** No Content-Type header set — the browser fills in the multipart
    * boundary itself, unlike the JSON helpers above which always send
    * application/json. */

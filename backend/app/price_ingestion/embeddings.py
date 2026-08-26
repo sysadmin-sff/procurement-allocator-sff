@@ -38,7 +38,7 @@ def embed_text(text: str) -> list[float]:
     if not settings.openai_api_key:
         raise EmbeddingError("OpenAI API не настроен (отсутствует OPENAI_API_KEY)")
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
     try:
         response = client.embeddings.create(
             model=settings.openai_embedding_model,

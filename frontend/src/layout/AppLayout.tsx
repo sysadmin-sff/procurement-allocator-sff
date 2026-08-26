@@ -1,4 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { authApi } from '../api/auth';
+import { useCurrentUser } from '../auth/AuthContext';
 import styles from './AppLayout.module.css';
 
 const NAV_ITEMS = [
@@ -11,6 +13,16 @@ const NAV_ITEMS = [
    поэтому нет и отдельного пункта верхней навигации. */
 
 export function AppLayout() {
+  const user = useCurrentUser();
+  const navigate = useNavigate();
+  const navItems =
+    user.role === 'admin' ? [...NAV_ITEMS, { to: '/users', label: 'Пользователи' }] : NAV_ITEMS;
+
+  async function handleLogout() {
+    await authApi.logout();
+    navigate('/login', { replace: true });
+  }
+
   return (
     <div className={styles.shell}>
       <header className={styles.topbar}>
@@ -22,7 +34,7 @@ export function AppLayout() {
         </div>
         <div className={styles.divider} />
         <nav className={styles.nav}>
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -32,6 +44,15 @@ export function AppLayout() {
             </NavLink>
           ))}
         </nav>
+        <div className={styles.userBlock}>
+          <div className={styles.userInfo}>
+            <span className={styles.userName}>{user.name ?? user.email}</span>
+            <span className={styles.userEmail}>{user.email}</span>
+          </div>
+          <button type="button" className={styles.logoutButton} onClick={() => void handleLogout()}>
+            Выйти
+          </button>
+        </div>
       </header>
       <main className={styles.content}>
         <Outlet />

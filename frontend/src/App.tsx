@@ -1,7 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './layout/AppLayout';
+import { RequireAuth } from './auth/RequireAuth';
 import {
   AllocationResultPage,
+  LoginPage,
   MaterialsPage,
   OrderDetailPage,
   PriceComparisonPage,
@@ -12,12 +14,20 @@ import {
   PurchaseRecordsPage,
   SupplierDetailPage,
   SuppliersPage,
+  UsersPage,
 } from './routes';
 
 function App() {
   return (
     <Routes>
-      <Route element={<AppLayout />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
         <Route path="/" element={<Navigate to="/projects" replace />} />
         <Route path="/projects" element={<ProjectsListPage />} />
         <Route path="/projects/new" element={<ProjectBuilderPage />} />
@@ -30,6 +40,7 @@ function App() {
         <Route path="/materials" element={<MaterialsPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/suppliers/:supplierId" element={<SupplierDetailPage />} />
+        <Route path="/users" element={<UsersPage />} />
       </Route>
     </Routes>
   );

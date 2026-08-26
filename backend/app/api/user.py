@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.schemas.user import UserCreate, UserOut, UserUpdate
-from app.auth.dependencies import require_role
+from app.auth.dependencies import get_current_user, require_role
 from app.core.database import get_db
 from app.models import User
 
@@ -32,7 +32,7 @@ def update_user(
     user_id: uuid.UUID,
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
 ) -> User:
     user = db.get(User, user_id)
     if user is None:

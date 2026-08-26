@@ -234,6 +234,7 @@ def override_allocation_line_supplier(
     line_id: uuid.UUID,
     new_supplier_id: uuid.UUID,
     source_order_item_id: uuid.UUID | None = None,
+    overridden_by_user_id: uuid.UUID | None = None,
 ) -> AllocationLine:
     """Manually reassign one AllocationLine to a different supplier — ADR-0006.
 
@@ -275,6 +276,7 @@ def override_allocation_line_supplier(
     line.line_total = float(new_price.price) * line.quantity
     line.overridden_at = datetime.now(timezone.utc)
     line.overridden_via_order_item_id = source_order_item_id
+    line.overridden_by_user_id = overridden_by_user_id
     db.flush()
 
     run = db.get(AllocationRun, run_id)

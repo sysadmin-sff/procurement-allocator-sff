@@ -108,6 +108,7 @@ def create_purchase_record(
     quantity: int,
     unit_price: float,
     material_id: uuid.UUID | None,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> PurchaseRecord:
     record = PurchaseRecord(
         project_id=project_id,
@@ -116,6 +117,7 @@ def create_purchase_record(
         quantity=quantity,
         unit_price=unit_price,
         material_id=material_id,
+        created_by_user_id=created_by_user_id,
     )
     db.add(record)
     db.commit()

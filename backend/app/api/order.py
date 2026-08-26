@@ -34,8 +34,9 @@ from app.api.schemas.order_response_parser import (
     MissingItemOut,
     ParseOrderResponseOut,
 )
+from app.auth.dependencies import get_current_user
 from app.core.database import get_db
-from app.models import Order, Project
+from app.models import Order, Project, User
 from app.order_response_parser.service import (
     OrderNotFoundError,
     OrderResponseParsingError,
@@ -43,7 +44,7 @@ from app.order_response_parser.service import (
     parse_order_response,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 MAX_ORDER_RESPONSE_FILE_SIZE = 10 * 1024 * 1024
 """10MB — see ADR-0018 task description. The file is only ever held in
@@ -97,10 +98,15 @@ def create_orders(
     run_id: uuid.UUID,
     payload: CreateOrdersIn = CreateOrdersIn(),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> list[OrderOut] | JSONResponse:
     try:
         orders = create_orders_for_run(
-            db, project_id, run_id, replace_drafts=payload.replace_drafts
+            db,
+            project_id,
+            run_id,
+            replace_drafts=payload.replace_drafts,
+            created_by_user_id=current_user.id,
         )
     except RunNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Allocation run not found") from exc
@@ -187,12 +193,15 @@ def replace_and_order(
     item_id: uuid.UUID,
     payload: ReplaceAndOrderIn,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> OrderItemOut | JSONResponse:
     if db.get(Order, order_id) is None:
         raise HTTPException(status_code=404, detail="Order not found")
 
     try:
-        item = replace_and_sync_order(db, order_id, item_id, payload.supplier_id)
+        item = replace_and_sync_order(
+            db, order_id, item_id, payload.supplier_id, overridden_by_user_id=current_user.id
+        )
     except OrderItemNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Order item not found") from exc
     except MaterialNotInLatestRunError as exc:

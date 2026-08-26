@@ -15,6 +15,7 @@ from app.api.schemas.project import (
     ProjectUpdate,
     ProjectWithItemsOut,
 )
+from app.auth.dependencies import get_current_user
 from app.core.database import get_db
 from app.models import (
     AllocationLine,
@@ -25,9 +26,10 @@ from app.models import (
     Project,
     ProjectItem,
     PurchaseRecord,
+    User,
 )
 
-router = APIRouter(prefix="/projects")
+router = APIRouter(prefix="/projects", dependencies=[Depends(get_current_user)])
 
 
 @router.get("", response_model=list[ProjectOut])
@@ -36,8 +38,12 @@ def list_projects(db: Session = Depends(get_db)) -> list[Project]:
 
 
 @router.post("", response_model=ProjectOut, status_code=201)
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)) -> Project:
-    project = Project(title=payload.title, created_by=payload.created_by)
+def create_project(
+    payload: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Project:
+    project = Project(title=payload.title, created_by_user_id=current_user.id)
     db.add(project)
     db.commit()
     db.refresh(project)

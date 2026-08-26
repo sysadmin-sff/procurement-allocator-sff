@@ -14,7 +14,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ProjectCreate(BaseModel):
     title: str
-    created_by: str | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -26,7 +25,7 @@ class ProjectOut(BaseModel):
 
     id: uuid.UUID
     title: str
-    created_by: str | None
+    created_by_user_id: uuid.UUID | None
     status: str
     created_at: datetime
 

@@ -11,10 +11,11 @@ from app.allocation.service import (
     run_allocation,
 )
 from app.api.schemas.allocation import AllocationLineOut, AllocationLineOverrideIn, AllocationRunOut
+from app.auth.dependencies import get_current_user
 from app.core.database import get_db
-from app.models import AllocationRun, Project
+from app.models import AllocationRun, Project, User
 
-router = APIRouter(prefix="/projects/{project_id}")
+router = APIRouter(prefix="/projects/{project_id}", dependencies=[Depends(get_current_user)])
 
 
 @router.post("/allocate", response_model=AllocationRunOut)
@@ -45,6 +46,7 @@ def override_allocation_line(
     line_id: uuid.UUID,
     payload: AllocationLineOverrideIn,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     run = db.get(AllocationRun, run_id)
     if run is None or run.project_id != project_id:
@@ -52,7 +54,12 @@ def override_allocation_line(
 
     try:
         return override_allocation_line_supplier(
-            db, run_id, line_id, payload.supplier_id, payload.source_order_item_id
+            db,
+            run_id,
+            line_id,
+            payload.supplier_id,
+            payload.source_order_item_id,
+            overridden_by_user_id=current_user.id,
         )
     except LineNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Allocation line not found") from exc

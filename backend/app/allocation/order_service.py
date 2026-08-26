@@ -250,7 +250,11 @@ def replacement_info_for_item(
 
 
 def replace_and_sync_order(
-    db: Session, order_id: uuid.UUID, item_id: uuid.UUID, supplier_id: uuid.UUID
+    db: Session,
+    order_id: uuid.UUID,
+    item_id: uuid.UUID,
+    supplier_id: uuid.UUID,
+    overridden_by_user_id: uuid.UUID | None = None,
 ) -> OrderItem:
     """POST .../items/{item_id}/replace-and-order — ADR-0015 §1.
 
@@ -308,6 +312,7 @@ def replace_and_sync_order(
         line_id=line_id,
         new_supplier_id=supplier_id,
         source_order_item_id=item_id,
+        overridden_by_user_id=overridden_by_user_id,
     )
 
     if target_order is None:
@@ -385,7 +390,11 @@ def _delete_orders(db: Session, orders: list[Order]) -> None:
 
 
 def create_orders_for_run(
-    db: Session, project_id: uuid.UUID, run_id: uuid.UUID, replace_drafts: bool = False
+    db: Session,
+    project_id: uuid.UUID,
+    run_id: uuid.UUID,
+    replace_drafts: bool = False,
+    created_by_user_id: uuid.UUID | None = None,
 ) -> list[Order]:
     """Create one Order per supplier in the run's current supplier_summaries
     (i.e. after any ADR-0006 overrides), snapshotting each supplier's current
@@ -440,6 +449,7 @@ def create_orders_for_run(
             status="draft",
             total_amount=sum(float(line.line_total) for line in lines),
             delivery_fee=summary["delivery_fee"],
+            created_by_user_id=created_by_user_id,
         )
         db.add(order)
         db.flush()

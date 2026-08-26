@@ -11,8 +11,9 @@ from app.api.schemas.purchase_record import (
     SupplierTotalOut,
     TotalComparisonOut,
 )
+from app.auth.dependencies import get_current_user
 from app.core.database import get_db
-from app.models import Project, PurchaseRecord
+from app.models import Project, PurchaseRecord, User
 from app.purchase_records.service import (
     PurchaseRecordNotFoundError,
     create_purchase_record,
@@ -22,7 +23,9 @@ from app.purchase_records.service import (
     update_purchase_record,
 )
 
-router = APIRouter(prefix="/projects/{project_id}/purchase-records")
+router = APIRouter(
+    prefix="/projects/{project_id}/purchase-records", dependencies=[Depends(get_current_user)]
+)
 
 
 def _to_total_comparison_out(comparison) -> TotalComparisonOut:
@@ -36,7 +39,10 @@ def _to_total_comparison_out(comparison) -> TotalComparisonOut:
 
 @router.post("", response_model=PurchaseRecordOut, status_code=201)
 def create_record(
-    project_id: uuid.UUID, payload: PurchaseRecordCreate, db: Session = Depends(get_db)
+    project_id: uuid.UUID,
+    payload: PurchaseRecordCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> PurchaseRecord:
     if db.get(Project, project_id) is None:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -49,6 +55,7 @@ def create_record(
         quantity=payload.quantity,
         unit_price=payload.unit_price,
         material_id=payload.material_id,
+        created_by_user_id=current_user.id,
     )
 
 

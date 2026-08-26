@@ -1,8 +1,10 @@
-"""Alias short-circuit and pgvector top-K candidate search — see ADR-0019
-§2/§3. TOP_K and DUPLICATE_DISTANCE_THRESHOLD are shared constants: the
-same distance cutoff used to decide "is this Material a match candidate"
-is reused in matching.py to decide "are two new lines probably the same
-material" (ADR-0019 §4 — deliberately one threshold, not two).
+"""Alias short-circuit (ADR-0019 §2, still used by matching.py) and
+pgvector top-K candidate search (ADR-0019 §3). find_top_candidates/TOP_K/
+DUPLICATE_DISTANCE_THRESHOLD are no longer used by matching.py — ADR-0025
+§1 removed vector prefiltering from the matching path (fixed, small
+catalog passed whole instead) — but are left in place here, not deleted:
+ADR-0025 §6 explicitly keeps Material's vector infrastructure untouched,
+and this module belongs to it, not to the matching path specifically.
 """
 
 from __future__ import annotations

@@ -1,7 +1,9 @@
 """Tests for ADR-0022: early chunk-overlap dedup (skip expensive matching
 call for lines grouped with an earlier representative) and parallel
-matching (ThreadPoolExecutor for _decide_match/embed_text, retry/backoff
-isolation per line) — see docs/decisions/0022-price-list-matching-dedup-and-concurrency.md.
+matching (ThreadPoolExecutor for _decide_match, retry/backoff isolation
+per line) — see docs/decisions/0022-price-list-matching-dedup-and-concurrency.md.
+Updated for ADR-0025: no embedding/vector-search step exists in this path
+any more, so tests no longer mock or assert on embed_text.
 """
 
 import threading
@@ -35,11 +37,10 @@ def _rate_limit_error():
 
 def _decision(**overrides):
     defaults = dict(
-        action="new",
+        action="not_found",
         material_id=None,
         confidence=0.8,
         reasoning="no close match found",
-        suggested_internal_sku="NEW-SKU-1",
     )
     defaults.update(overrides)
     return MatchDecision(**defaults)
@@ -59,28 +60,20 @@ class TestEarlyDedup:
         line_a = _line(raw_name="Screen Type A", page_number=3)
         line_b = _line(raw_name="  screen type a  ", page_number=3)
 
-        embedding_a = [1.0] + [0.0] * 1535
-        embedding_b = [0.99] + [0.01] * 1535
-        decision = _decision(reasoning="looks new")
+        decision = _decision(reasoning="looks unmatched")
 
         with patch(
-            "app.price_ingestion.matching.embed_text",
-            side_effect=[embedding_a, embedding_b],
-        ) as mock_embed, patch(
             "app.price_ingestion.matching._decide_match", return_value=decision
         ) as mock_llm:
             results = match_price_list_lines(session, supplier.id, [line_a, line_b])
 
-        # embed_text is still called once per line (used later for
-        # post-match new-line dedup, ADR-0019 §4) but _decide_match must be
-        # called only once — the follower reuses the representative's
-        # decision instead of making its own LLM call.
-        assert mock_embed.call_count == 2
+        # _decide_match must be called only once — the follower reuses the
+        # representative's decision instead of making its own LLM call.
         mock_llm.assert_called_once()
 
         assert len(results) == 2
-        assert results[0].decision.action == "new"
-        assert results[1].decision.action == "new"
+        assert results[0].decision.action == "not_found"
+        assert results[1].decision.action == "not_found"
         assert results[1].decision.reasoning != results[0].decision.reasoning
         assert "унаследовано от строки-представителя" in results[1].decision.reasoning
         assert results[1].possible_duplicate_of == [0]
@@ -94,19 +87,12 @@ class TestEarlyDedup:
         line_a = _line(raw_name="Screen Type A", page_number=3)
         line_b = _line(raw_name="Completely Different Item", page_number=3)
 
-        embedding_a = [1.0] + [0.0] * 1535
-        embedding_b = [0.0, 1.0] + [0.0] * 1534
-
         with patch(
-            "app.price_ingestion.matching.embed_text",
-            side_effect=[embedding_a, embedding_b],
-        ) as mock_embed, patch(
             "app.price_ingestion.matching._decide_match",
             side_effect=[_decision(reasoning="a"), _decision(reasoning="b")],
         ) as mock_llm:
             results = match_price_list_lines(session, supplier.id, [line_a, line_b])
 
-        assert mock_embed.call_count == 2
         assert mock_llm.call_count == 2
         assert results[0].decision.reasoning == "a"
         assert results[1].decision.reasoning == "b"
@@ -123,13 +109,7 @@ class TestEarlyDedup:
         line_a = _line(raw_name="Screen Type A", page_number=2)
         line_b = _line(raw_name="Screen Type A", page_number=9)
 
-        embedding_a = [1.0] + [0.0] * 1535
-        embedding_b = [0.99] + [0.01] * 1535
-
         with patch(
-            "app.price_ingestion.matching.embed_text",
-            side_effect=[embedding_a, embedding_b],
-        ), patch(
             "app.price_ingestion.matching._decide_match",
             side_effect=[_decision(reasoning="a"), _decision(reasoning="b")],
         ) as mock_llm:
@@ -148,12 +128,6 @@ class TestConcurrentOrdering:
         supplier = make_supplier()
 
         lines = [_line(raw_name=f"Distinct Item {i}") for i in range(8)]
-        # Orthogonal-ish embeddings so nothing groups as a duplicate.
-        embeddings = []
-        for i in range(8):
-            vec = [0.0] * 1536
-            vec[i] = 1.0
-            embeddings.append(vec)
 
         # Slower calls for earlier lines, faster for later ones, so thread
         # completion order is reversed relative to input order.
@@ -163,8 +137,6 @@ class TestConcurrentOrdering:
             return _decision(reasoning=f"decision for {index}")
 
         with patch(
-            "app.price_ingestion.matching.embed_text", side_effect=embeddings
-        ), patch(
             "app.price_ingestion.matching._decide_match", side_effect=_delayed_decide
         ):
             results = match_price_list_lines(session, supplier.id, lines)
@@ -185,20 +157,12 @@ class TestRetryIsolation:
         line_b = _line(raw_name="Line B (always rate limited)")
         line_c = _line(raw_name="Line C")
 
-        embeddings = [
-            [1.0, 0.0] + [0.0] * 1534,
-            [0.0, 1.0] + [0.0] * 1534,
-            [0.0, 0.0, 1.0] + [0.0] * 1533,
-        ]
-
         def _decide(raw_name, raw_sku, candidates):
             if raw_name == "Line B (always rate limited)":
                 raise _rate_limit_error()
             return _decision(reasoning=f"ok:{raw_name}")
 
         with patch(
-            "app.price_ingestion.matching.embed_text", side_effect=embeddings
-        ), patch(
             "app.price_ingestion.matching._decide_match", side_effect=_decide
         ), patch("app.price_ingestion.retry.time.sleep"):
             results = match_price_list_lines(session, supplier.id, [line_a, line_b, line_c])
@@ -217,7 +181,6 @@ class TestRetryIsolation:
         supplier = make_supplier()
 
         line = _line(raw_name="Flaky Line")
-        embedding = [1.0] + [0.0] * 1535
 
         attempts = {"count": 0}
 
@@ -228,8 +191,6 @@ class TestRetryIsolation:
             return _decision(reasoning="succeeded eventually")
 
         with patch(
-            "app.price_ingestion.matching.embed_text", return_value=embedding
-        ), patch(
             "app.price_ingestion.matching._decide_match", side_effect=_decide
         ), patch("app.price_ingestion.retry.time.sleep"):
             results = match_price_list_lines(session, supplier.id, [line])
@@ -246,23 +207,17 @@ class TestEarlyDedupInteractsWithRetryFailure:
         """If the representative's retry is exhausted, a follower that
         inherited its decision has nothing valid to inherit — it must be
         marked processing_status="failed" too, not silently presented as
-        a normal action="new" decision."""
+        a normal decision."""
         session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
 
         line_a = _line(raw_name="Screen Type A", page_number=3)
         line_b = _line(raw_name="screen type a", page_number=3)
 
-        embedding_a = [1.0] + [0.0] * 1535
-        embedding_b = [0.99] + [0.01] * 1535
-
         def _always_rate_limited(raw_name, raw_sku, candidates):
             raise _rate_limit_error()
 
         with patch(
-            "app.price_ingestion.matching.embed_text",
-            side_effect=[embedding_a, embedding_b],
-        ), patch(
             "app.price_ingestion.matching._decide_match",
             side_effect=_always_rate_limited,
         ), patch("app.price_ingestion.retry.time.sleep"):
@@ -273,13 +228,12 @@ class TestEarlyDedupInteractsWithRetryFailure:
 
 
 class TestDbCallsStayOnMainThread:
-    def test_alias_and_candidate_lookups_only_happen_from_main_thread(
+    def test_alias_and_catalog_lookups_only_happen_from_main_thread(
         self, db_session, make_supplier, make_material
     ):
         session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
-        candidate = make_material(canonical_name="Candidate Material")
-        candidate.embedding = [0.5] * 1536
+        make_material(canonical_name="Candidate Material")
         session.commit()
 
         main_thread_id = threading.get_ident()
@@ -292,17 +246,10 @@ class TestDbCallsStayOnMainThread:
             return original_execute(*args, **kwargs)
 
         lines = [_line(raw_name=f"Unique Item {i}") for i in range(4)]
-        embeddings = []
-        for i in range(4):
-            vec = [0.0] * 1536
-            vec[i] = 1.0
-            embeddings.append(vec)
 
         with patch.object(session, "execute", side_effect=_tracking_execute), patch(
-            "app.price_ingestion.matching.embed_text", side_effect=embeddings
-        ), patch(
             "app.price_ingestion.matching._decide_match",
-            return_value=_decision(action="new"),
+            return_value=_decision(action="not_found"),
         ):
             match_price_list_lines(session, supplier.id, lines)
 

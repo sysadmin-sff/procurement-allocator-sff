@@ -47,15 +47,20 @@ describe('AppLayout', () => {
     expect(await screen.findByText('Страница входа')).toBeInTheDocument();
   });
 
-  it('hides the "Пользователи" nav link for employee role', () => {
+  it('hides admin-only nav links (Поставщики/Материалы/Пользователи) for employee role', () => {
     renderLayout({ id: 'u1', email: 'jane@screen-factory-florida.com', name: 'Jane Doe', role: 'employee' });
 
+    expect(screen.queryByRole('link', { name: /поставщики/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /материалы/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /пользователи/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /проекты/i })).toBeInTheDocument();
   });
 
-  it('shows the "Пользователи" nav link for admin role', () => {
+  it('shows admin-only nav links (Поставщики/Материалы/Пользователи) for admin role', () => {
     renderLayout({ id: 'u1', email: 'admin@screen-factory-florida.com', name: 'Admin', role: 'admin' });
 
+    expect(screen.getByRole('link', { name: /поставщики/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /материалы/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /пользователи/i })).toBeInTheDocument();
   });
 });

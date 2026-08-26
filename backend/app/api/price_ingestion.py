@@ -45,7 +45,6 @@ def _entry_out(entry) -> PriceListEntryOut:
         availability=entry.availability,
         min_order_qty=entry.min_order_qty,
         action=entry.action,
-        suggested_internal_sku=entry.suggested_internal_sku,
         possible_duplicate_of=(
             [uuid.UUID(i) for i in entry.possible_duplicate_of]
             if entry.possible_duplicate_of
@@ -56,8 +55,8 @@ def _entry_out(entry) -> PriceListEntryOut:
 
 
 def _to_import_out(price_list_import) -> PriceListImportOut:
-    """Reads suggested_internal_sku/possible_duplicate_of straight from
-    PriceListEntry — see ADR-0020. Used by both POST (upload) and GET:
+    """Reads possible_duplicate_of straight from PriceListEntry — see
+    ADR-0020. Used by both POST (upload) and GET:
     they are guaranteed to return the same values for the same entry,
     since both go through this one function reading the same columns
     (supersedes ADR-0019 §5's transient in-memory-only rendering, which

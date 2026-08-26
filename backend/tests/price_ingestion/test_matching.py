@@ -1,11 +1,12 @@
-"""Tests for app.price_ingestion.matching — see ADR-0019 §2-4.
+"""Tests for app.price_ingestion.matching — see ADR-0019 §2/§4, ADR-0025.
 
-Alias short-circuit must skip embedding + LLM calls entirely (asserted via
-mock.assert_not_called on both). Normal path mocks both embed_text and the
-LLM decision call. Duplicate-detection reuses embeddings already computed
-during matching, so no extra embed_text call is needed for that step.
+Alias short-circuit must skip the LLM call entirely (asserted via
+mock.assert_not_called). The normal path mocks _decide_match only — there
+is no embedding/vector-search step left in this path at all (ADR-0025 §1);
+tests assert find_top_candidates/embed_text are never called to prove that.
 """
 
+import logging
 import uuid
 from unittest.mock import patch
 
@@ -26,14 +27,7 @@ def _line(raw_name="Some Material", price=10.0, raw_sku=None, page_number=1):
     )
 
 
-def test_known_alias_skips_llm_entirely(
-    db_session, make_supplier, make_material
-):
-    """embed_text still runs for every line up front regardless of
-    EARLY_DEDUP_ENABLED (ADR-0022 §1's grouping is currently disabled,
-    see matching.py, but embedding computation itself was not rolled
-    back), so alias-hit lines no longer skip embed_text — but they still
-    skip the alias/candidate-search/LLM path entirely (ADR-0019 §2)."""
+def test_known_alias_skips_llm_entirely(db_session, make_supplier, make_material):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     material = make_material()
@@ -48,12 +42,14 @@ def test_known_alias_skips_llm_entirely(
 
     line = _line(raw_name="Known Raw Name")
 
-    with patch(
-        "app.price_ingestion.matching.embed_text", return_value=[0.5] * 1536
-    ), patch("app.price_ingestion.matching._decide_match") as mock_llm:
+    with patch("app.price_ingestion.matching._decide_match") as mock_llm, patch(
+        "app.price_ingestion.candidates.find_top_candidates"
+    ) as mock_candidates, patch("app.price_ingestion.embeddings.embed_text") as mock_embed:
         results = match_price_list_lines(session, supplier.id, [line])
 
     mock_llm.assert_not_called()
+    mock_candidates.assert_not_called()
+    mock_embed.assert_not_called()
     assert len(results) == 1
     assert results[0].decision.action == "match"
     assert results[0].decision.material_id == material.id
@@ -61,13 +57,16 @@ def test_known_alias_skips_llm_entirely(
     assert results[0].decision.reasoning == "known alias"
 
 
-def test_unknown_line_goes_through_vector_search_and_llm(
+def test_unknown_line_goes_through_llm_against_full_catalog_no_vector_search(
     db_session, make_supplier, make_material
 ):
+    """ADR-0025 §1: no vector prefiltering step exists in this path at all
+    — _decide_match must be called with the full Material list, and
+    find_top_candidates/embed_text must never be called from matching."""
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     candidate = make_material(canonical_name="Candidate Material")
-    candidate.embedding = [0.5] * 1536
+    other = make_material(canonical_name="Other Material")
     session.commit()
 
     line = _line(raw_name="New Raw Name")
@@ -75,125 +74,95 @@ def test_unknown_line_goes_through_vector_search_and_llm(
         action="match",
         material_id=candidate.id,
         confidence=0.9,
-        reasoning="matches by attributes",
-        suggested_internal_sku=None,
+        reasoning="matches by name",
     )
 
     with patch(
-        "app.price_ingestion.matching.embed_text", return_value=[0.5] * 1536
-    ) as mock_embed, patch(
         "app.price_ingestion.matching._decide_match", return_value=fake_decision
-    ) as mock_llm:
+    ) as mock_llm, patch(
+        "app.price_ingestion.candidates.find_top_candidates"
+    ) as mock_candidates, patch("app.price_ingestion.embeddings.embed_text") as mock_embed:
         results = match_price_list_lines(session, supplier.id, [line])
 
-    mock_embed.assert_called_once()
+    mock_candidates.assert_not_called()
+    mock_embed.assert_not_called()
     mock_llm.assert_called_once()
+    call_args = mock_llm.call_args.args
+    passed_candidates = call_args[2]
+    passed_ids = {m.id for m in passed_candidates}
+    assert candidate.id in passed_ids
+    assert other.id in passed_ids
+
     assert results[0].decision.action == "match"
     assert results[0].decision.material_id == candidate.id
 
 
-def test_two_new_lines_with_close_embeddings_flag_each_other_as_duplicates(
-    db_session, make_supplier
-):
+def test_not_found_decision_is_kept_as_is(db_session, make_supplier, make_material):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
-
-    line_a = _line(raw_name="Screen Type A")
-    line_b = _line(raw_name="Screen Type A Variant")
-
-    decision_new = MatchDecision(
-        action="new",
-        material_id=None,
-        confidence=0.8,
-        reasoning="no close match found",
-        suggested_internal_sku="NEW-SKU-1",
-    )
-
-    close_embedding_a = [1.0] + [0.0] * 1535
-    close_embedding_b = [0.99] + [0.01] * 1535
-
-    with patch(
-        "app.price_ingestion.matching.embed_text",
-        side_effect=[close_embedding_a, close_embedding_b],
-    ), patch(
-        "app.price_ingestion.matching._decide_match", return_value=decision_new
-    ):
-        results = match_price_list_lines(session, supplier.id, [line_a, line_b])
-
-    assert results[0].possible_duplicate_of == [1]
-    assert results[1].possible_duplicate_of == [0]
-
-
-def test_new_lines_with_far_embeddings_do_not_flag_each_other(
-    db_session, make_supplier
-):
-    session, _material_ids, _supplier_ids, _user_ids = db_session
-    supplier = make_supplier()
-
-    line_a = _line(raw_name="Screen Type A")
-    line_b = _line(raw_name="Completely Different Item")
-
-    decision_new = MatchDecision(
-        action="new",
-        material_id=None,
-        confidence=0.8,
-        reasoning="no close match found",
-        suggested_internal_sku="NEW-SKU-1",
-    )
-
-    far_embedding_a = [1.0] + [0.0] * 1535
-    far_embedding_b = [0.0, 1.0] + [0.0] * 1534
-
-    with patch(
-        "app.price_ingestion.matching.embed_text",
-        side_effect=[far_embedding_a, far_embedding_b],
-    ), patch(
-        "app.price_ingestion.matching._decide_match", return_value=decision_new
-    ):
-        results = match_price_list_lines(session, supplier.id, [line_a, line_b])
-
-    assert results[0].possible_duplicate_of == []
-    assert results[1].possible_duplicate_of == []
-
-
-def test_matched_lines_are_not_considered_for_duplicate_detection(
-    db_session, make_supplier, make_material
-):
-    session, _material_ids, _supplier_ids, _user_ids = db_session
-    supplier = make_supplier()
-    candidate = make_material()
-    candidate.embedding = [1.0] + [0.0] * 1535
+    make_material(canonical_name="Unrelated Material")
     session.commit()
 
-    line_a = _line(raw_name="Matched Line")
-    line_b = _line(raw_name="New Line")
-
-    decision_match = MatchDecision(
-        action="match",
-        material_id=candidate.id,
-        confidence=0.9,
-        reasoning="matches",
-        suggested_internal_sku=None,
-    )
-    decision_new = MatchDecision(
-        action="new",
+    line = _line(raw_name="Nothing Like It")
+    decision_not_found = MatchDecision(
+        action="not_found",
         material_id=None,
-        confidence=0.8,
-        reasoning="no match",
-        suggested_internal_sku="NEW-SKU-2",
+        confidence=0.9,
+        reasoning="no candidate resembles this line",
     )
 
     with patch(
-        "app.price_ingestion.matching.embed_text",
-        side_effect=[[1.0] + [0.0] * 1535, [0.0, 1.0] + [0.0] * 1534],
-    ), patch(
-        "app.price_ingestion.matching._decide_match",
-        side_effect=[decision_match, decision_new],
+        "app.price_ingestion.matching._decide_match", return_value=decision_not_found
     ):
-        results = match_price_list_lines(session, supplier.id, [line_a, line_b])
+        results = match_price_list_lines(session, supplier.id, [line])
 
-    assert results[0].possible_duplicate_of == []
-    assert results[1].possible_duplicate_of == []
+    assert results[0].decision.action == "not_found"
+    assert results[0].decision.material_id is None
+
+
+def test_not_found_high_confidence_logs_structured_warning(
+    db_session, make_supplier, caplog
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+
+    line = _line(raw_name="Mystery Line")
+    decision_not_found = MatchDecision(
+        action="not_found",
+        material_id=None,
+        confidence=0.65,
+        reasoning="close but no exact match",
+    )
+
+    with patch(
+        "app.price_ingestion.matching._decide_match", return_value=decision_not_found
+    ), caplog.at_level(logging.INFO, logger="app.price_ingestion.matching"):
+        match_price_list_lines(session, supplier.id, [line])
+
+    assert any(
+        "not_found" in record.message and "Mystery Line" in record.message
+        for record in caplog.records
+    )
+
+
+def test_not_found_low_confidence_does_not_log(db_session, make_supplier, caplog):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+
+    line = _line(raw_name="Totally Unrelated Line")
+    decision_not_found = MatchDecision(
+        action="not_found",
+        material_id=None,
+        confidence=0.1,
+        reasoning="nothing close",
+    )
+
+    with patch(
+        "app.price_ingestion.matching._decide_match", return_value=decision_not_found
+    ), caplog.at_level(logging.INFO, logger="app.price_ingestion.matching"):
+        match_price_list_lines(session, supplier.id, [line])
+
+    assert not any("not_found" in record.message for record in caplog.records)
 
 
 def test_two_match_lines_on_same_material_id_flag_each_other_as_duplicates(
@@ -208,24 +177,16 @@ def test_two_match_lines_on_same_material_id_flag_each_other_as_duplicates(
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     candidate = make_material()
-    candidate.embedding = [1.0] + [0.0] * 1535
     session.commit()
 
     line_a = _line(raw_name="Duplicated Match Line")
     line_b = _line(raw_name="Duplicated Match Line")
 
     decision_match = MatchDecision(
-        action="match",
-        material_id=candidate.id,
-        confidence=0.9,
-        reasoning="matches",
-        suggested_internal_sku=None,
+        action="match", material_id=candidate.id, confidence=0.9, reasoning="matches",
     )
 
     with patch(
-        "app.price_ingestion.matching.embed_text",
-        side_effect=[[1.0] + [0.0] * 1535, [1.0] + [0.0] * 1535],
-    ), patch(
         "app.price_ingestion.matching._decide_match",
         side_effect=[decision_match, decision_match],
     ):
@@ -241,27 +202,20 @@ def test_match_lines_on_different_material_ids_do_not_flag_each_other(
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     candidate_a = make_material()
-    candidate_a.embedding = [1.0] + [0.0] * 1535
     candidate_b = make_material()
-    candidate_b.embedding = [0.0, 1.0] + [0.0] * 1534
     session.commit()
 
     line_a = _line(raw_name="Line A")
     line_b = _line(raw_name="Line B")
 
     decision_a = MatchDecision(
-        action="match", material_id=candidate_a.id, confidence=0.9,
-        reasoning="matches a", suggested_internal_sku=None,
+        action="match", material_id=candidate_a.id, confidence=0.9, reasoning="matches a",
     )
     decision_b = MatchDecision(
-        action="match", material_id=candidate_b.id, confidence=0.9,
-        reasoning="matches b", suggested_internal_sku=None,
+        action="match", material_id=candidate_b.id, confidence=0.9, reasoning="matches b",
     )
 
     with patch(
-        "app.price_ingestion.matching.embed_text",
-        side_effect=[[1.0] + [0.0] * 1535, [0.0, 1.0] + [0.0] * 1534],
-    ), patch(
         "app.price_ingestion.matching._decide_match",
         side_effect=[decision_a, decision_b],
     ):
@@ -297,11 +251,8 @@ def test_known_alias_duplicate_match_lines_are_flagged_too(
 
     line_a = _line(raw_name="Known Raw Name")
     line_b = _line(raw_name="Known Raw Name")
-    identical_embedding = [1.0] + [0.0] * 1535
 
-    with patch(
-        "app.price_ingestion.matching.embed_text", return_value=identical_embedding
-    ), patch("app.price_ingestion.matching._decide_match") as mock_llm:
+    with patch("app.price_ingestion.matching._decide_match") as mock_llm:
         results = match_price_list_lines(session, supplier.id, [line_a, line_b])
 
     mock_llm.assert_not_called()
@@ -313,18 +264,18 @@ def test_known_alias_duplicate_match_lines_are_flagged_too(
     assert results[1].possible_duplicate_of == [0]
 
 
-def test_hallucinated_material_id_is_downgraded_to_new(
+def test_hallucinated_material_id_is_downgraded_to_not_found(
     db_session, make_supplier, make_material
 ):
     """If the LLM returns action="match" with a material_id that was not
     among the candidates shown to it, the decision must be downgraded to
-    action="new" rather than trusted as-is — see ADR-0019 final review
-    Finding 3. Trusting a hallucinated id would write a dangling FK and
-    fail the whole batch's db.commit()."""
+    action="not_found" rather than trusted as-is — see ADR-0019 final
+    review Finding 3, updated by ADR-0025 §3 (there is no "new" action to
+    downgrade to any more). Trusting a hallucinated id would write a
+    dangling FK and fail the whole batch's db.commit()."""
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
-    candidate = make_material(canonical_name="Candidate Material")
-    candidate.embedding = [0.5] * 1536
+    make_material(canonical_name="Candidate Material")
     session.commit()
 
     line = _line(raw_name="New Raw Name")
@@ -333,17 +284,14 @@ def test_hallucinated_material_id_is_downgraded_to_new(
         material_id=uuid.uuid4(),
         confidence=0.9,
         reasoning="matches by attributes",
-        suggested_internal_sku=None,
     )
 
     with patch(
-        "app.price_ingestion.matching.embed_text", return_value=[0.5] * 1536
-    ), patch(
         "app.price_ingestion.matching._decide_match", return_value=hallucinated_decision
     ):
         results = match_price_list_lines(session, supplier.id, [line])
 
     assert len(results) == 1
-    assert results[0].decision.action == "new"
+    assert results[0].decision.action == "not_found"
     assert results[0].decision.material_id is None
     assert "matches by attributes" in results[0].decision.reasoning

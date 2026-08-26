@@ -3,20 +3,27 @@ import { authApi } from '../api/auth';
 import { useCurrentUser } from '../auth/AuthContext';
 import styles from './AppLayout.module.css';
 
-const NAV_ITEMS = [
-  { to: '/projects', label: 'Проекты' },
+/* Видны всем аутентифицированным (project/allocation/order/purchase_record —
+   get_current_user, ADR-0024 §4). */
+const NAV_ITEMS = [{ to: '/projects', label: 'Проекты' }];
+
+/* admin-only целиком на backend (require_role("admin") на весь роутер,
+   ADR-0024 §4) — ссылка скрывается полностью, не дизейблится, иначе
+   employee кликает и видит "недостаточно прав" вместо рабочего экрана. */
+const ADMIN_NAV_ITEMS = [
   { to: '/suppliers', label: 'Поставщики' },
   { to: '/materials', label: 'Материалы' },
+  { to: '/users', label: 'Пользователи' },
 ];
 /* Импорт прайс-листа запускается со страницы конкретного поставщика
    (SupplierDetailPage → "Прайс-лист") — нет отдельного списка импортов,
-   поэтому нет и отдельного пункта верхней навигации. */
+   поэтому нет и отдельного пункта верхней навигации. Сам /suppliers уже
+   скрыт от employee выше, так что вложенный флоу тоже недостижим. */
 
 export function AppLayout() {
   const user = useCurrentUser();
   const navigate = useNavigate();
-  const navItems =
-    user.role === 'admin' ? [...NAV_ITEMS, { to: '/users', label: 'Пользователи' }] : NAV_ITEMS;
+  const navItems = user.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
 
   async function handleLogout() {
     await authApi.logout();

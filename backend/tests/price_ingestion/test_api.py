@@ -1,4 +1,4 @@
-"""Tests for the price-list-import endpoints — see ADR-0019 §5.
+"""Tests for the price-list-import endpoints — see ADR-0019 §5, ADR-0025.
 
 The extraction + matching pipeline is always mocked at the service
 boundary (match_price_list_lines) — these tests exercise routing, status
@@ -54,23 +54,28 @@ def _mock_pipeline(matched_lines):
     )
 
 
-def test_upload_creates_import_and_entries(db_session, make_supplier, make_user, make_session):
+def _extracted(raw_name="Screen A", price=5.0, page_number=1):
+    return ExtractedPriceLine(
+        raw_name=raw_name, raw_sku=None, price=price, currency="USD",
+        availability=None, min_order_qty=None, page_number=page_number,
+    )
+
+
+def test_upload_creates_import_and_entries(
+    db_session, make_supplier, make_material, make_user, make_session
+):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    material = make_material()
     client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Screen A", raw_sku=None, price=5.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Screen A"),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.7,
-                reasoning="no candidate close enough", suggested_internal_sku="SKU-A",
+                action="match", material_id=material.id, confidence=0.85,
+                reasoning="close match",
             ),
-            embedding=[0.1] * 1536,
         )
     ]
 
@@ -84,52 +89,97 @@ def test_upload_creates_import_and_entries(db_session, make_supplier, make_user,
     assert len(body["entries"]) == 1
     entry = body["entries"][0]
     assert entry["action"] is None
-    assert entry["confidence"] == 0.7
-    assert entry["suggested_internal_sku"] == "SKU-A"
+    assert entry["confidence"] == 0.85
+    assert "suggested_internal_sku" not in entry
 
     price_list_import = session.get(PriceListImport, uuid.UUID(body["import_id"]))
     assert price_list_import.status == "pending_review"
 
 
-def test_upload_response_includes_suggested_sku_and_duplicate_flags(
+def test_not_found_line_is_not_persisted_as_entry(
     db_session, make_supplier, make_user, make_session
 ):
-    """suggested_internal_sku and possible_duplicate_of are populated only
-    on the upload response (transient, not persisted — see ADR-0019 §5 /
-    docs/known-issues.md). This test exercises both fields together on a
-    two-line batch where the lines flag each other as possible duplicates,
-    proving the batch-index-to-entry-UUID translation in
-    _to_import_out_with_matches actually happens, not just that the field
-    exists with a default value."""
+    """ADR-0025 §5: action="not_found" lines are never created as
+    PriceListEntry — not shown as skipped, not shown at all."""
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     client = _admin_client(make_user, make_session)
 
+    before_count = session.query(PriceListImport).count()
+
     matched = [
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Screen Type A", raw_sku=None, price=5.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="No Match Here"),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.6,
-                reasoning="no close candidate", suggested_internal_sku="SKU-A",
+                action="not_found", material_id=None, confidence=0.9,
+                reasoning="nothing close in catalog",
             ),
-            embedding=[1.0] + [0.0] * 1535,
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        response = _upload(client, supplier.id)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["entries"] == []
+
+    import_id = uuid.UUID(body["import_id"])
+    price_list_import = session.get(PriceListImport, import_id)
+    assert price_list_import is not None
+    assert len(price_list_import.entries) == 0
+    assert session.query(PriceListImport).count() == before_count + 1
+
+
+def test_response_schema_never_includes_suggested_internal_sku(
+    db_session, make_supplier, make_material, make_user, make_session
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+    client = _admin_client(make_user, make_session)
+
+    matched = [
+        MatchedLine(
+            extracted=_extracted(raw_name="Screen A"),
+            decision=MatchDecision(
+                action="match", material_id=material.id, confidence=0.6,
+                reasoning="uncertain match",
+            ),
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        response = _upload(client, supplier.id)
+
+    body = response.json()
+    for entry in body["entries"]:
+        assert "suggested_internal_sku" not in entry
+
+
+def test_upload_response_includes_duplicate_flags(
+    db_session, make_supplier, make_material, make_user, make_session
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material_a = make_material()
+    client = _admin_client(make_user, make_session)
+
+    matched = [
+        MatchedLine(
+            extracted=_extracted(raw_name="Screen Type A"),
+            decision=MatchDecision(
+                action="match", material_id=material_a.id, confidence=0.6,
+                reasoning="close candidate",
+            ),
             possible_duplicate_of=[1],
         ),
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Screen Type A Variant", raw_sku=None, price=5.10, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Screen Type A Variant", price=5.10),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.6,
-                reasoning="no close candidate", suggested_internal_sku="SKU-B",
+                action="match", material_id=material_a.id, confidence=0.6,
+                reasoning="close candidate",
             ),
-            embedding=[0.99] + [0.01] * 1535,
             possible_duplicate_of=[0],
         ),
     ]
@@ -143,52 +193,33 @@ def test_upload_response_includes_suggested_sku_and_duplicate_flags(
     assert len(body["entries"]) == 2
 
     entry_a, entry_b = body["entries"]
-    assert entry_a["suggested_internal_sku"] == "SKU-A"
-    assert entry_b["suggested_internal_sku"] == "SKU-B"
-
-    # possible_duplicate_of must be the actual persisted entry UUIDs, not
-    # the raw batch indices [1]/[0] that MatchedLine carries internally.
     assert entry_a["possible_duplicate_of"] == [entry_b["id"]]
     assert entry_b["possible_duplicate_of"] == [entry_a["id"]]
 
 
-def test_get_after_upload_returns_same_suggested_sku_and_duplicates_as_upload(
-    db_session, make_supplier, make_user, make_session
+def test_get_after_upload_returns_same_duplicates_as_upload(
+    db_session, make_supplier, make_material, make_user, make_session
 ):
-    """ADR-0020: suggested_internal_sku/possible_duplicate_of are persisted
-    on PriceListEntry, not just returned transiently in the upload
-    response — a GET after the initial upload (e.g. after a page reload
-    mid-review) must return the exact same values, not null/[] as it did
-    before ADR-0020 (see docs/known-issues.md, now closed by this ADR)."""
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    material_a = make_material()
     client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Screen Type A", raw_sku=None, price=5.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Screen Type A"),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.6,
-                reasoning="no close candidate", suggested_internal_sku="SKU-A",
+                action="match", material_id=material_a.id, confidence=0.6,
+                reasoning="close candidate",
             ),
-            embedding=[1.0] + [0.0] * 1535,
             possible_duplicate_of=[1],
         ),
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Screen Type A Variant", raw_sku=None, price=5.10, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Screen Type A Variant", price=5.10),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.6,
-                reasoning="no close candidate", suggested_internal_sku="SKU-B",
+                action="match", material_id=material_a.id, confidence=0.6,
+                reasoning="close candidate",
             ),
-            embedding=[0.99] + [0.01] * 1535,
             possible_duplicate_of=[0],
         ),
     ]
@@ -205,40 +236,33 @@ def test_get_after_upload_returns_same_suggested_sku_and_duplicates_as_upload(
     assert get_response.status_code == 200
     get_body = get_response.json()
 
-    # Same import, same two fields — GET must not silently drop what POST
-    # returned. Compare by supplier_raw_name since entry ordering isn't
-    # guaranteed to match between the two responses.
     upload_by_name = {e["supplier_raw_name"]: e for e in upload_body["entries"]}
     get_by_name = {e["supplier_raw_name"]: e for e in get_body["entries"]}
 
     assert set(upload_by_name) == set(get_by_name)
     for raw_name, upload_entry in upload_by_name.items():
         get_entry = get_by_name[raw_name]
-        assert get_entry["suggested_internal_sku"] == upload_entry["suggested_internal_sku"]
-        assert get_entry["suggested_internal_sku"] is not None
         assert set(get_entry["possible_duplicate_of"]) == set(
             upload_entry["possible_duplicate_of"]
         )
         assert get_entry["possible_duplicate_of"] != []
 
 
-def test_get_import_returns_current_entries(db_session, make_supplier, make_user, make_session):
+def test_get_import_returns_current_entries(
+    db_session, make_supplier, make_material, make_user, make_session
+):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    material = make_material()
     client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Screen B", raw_sku=None, price=8.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Screen B", price=8.0),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.6,
-                reasoning="no match", suggested_internal_sku="SKU-B",
+                action="match", material_id=material.id, confidence=0.6,
+                reasoning="match",
             ),
-            embedding=[0.1] * 1536,
         )
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
@@ -262,16 +286,11 @@ def test_apply_match_entry_updates_status_when_all_entries_resolved(
 
     matched = [
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Known Screen", raw_sku=None, price=4.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Known Screen", price=4.0),
             decision=MatchDecision(
                 action="match", material_id=material.id, confidence=0.95,
-                reasoning="matches", suggested_internal_sku=None,
+                reasoning="matches",
             ),
-            embedding=[0.1] * 1536,
         )
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
@@ -295,36 +314,28 @@ def test_apply_match_entry_updates_status_when_all_entries_resolved(
 
 
 def test_apply_skip_leaves_import_pending_until_all_entries_resolved(
-    db_session, make_supplier, make_user, make_session
+    db_session, make_supplier, make_material, make_user, make_session
 ):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    material_1 = make_material()
+    material_2 = make_material()
     client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Line 1", raw_sku=None, price=1.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Line 1", price=1.0),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.5,
-                reasoning="unsure", suggested_internal_sku="SKU-1",
+                action="match", material_id=material_1.id, confidence=0.5,
+                reasoning="unsure",
             ),
-            embedding=[0.1] * 1536,
         ),
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Line 2", raw_sku=None, price=2.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Line 2", price=2.0),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.5,
-                reasoning="unsure", suggested_internal_sku="SKU-2",
+                action="match", material_id=material_2.id, confidence=0.5,
+                reasoning="unsure",
             ),
-            embedding=[0.1] * 1536,
         ),
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
@@ -386,19 +397,14 @@ def test_apply_returns_404_for_unknown_entry(db_session, make_supplier, make_use
     assert response.status_code == 404
 
 
-def _upload_single_entry(client, supplier):
+def _upload_single_entry(client, supplier, material):
     matched = [
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Some Line", raw_sku=None, price=3.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Some Line", price=3.0),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.5,
-                reasoning="unsure", suggested_internal_sku="SKU-X",
+                action="match", material_id=material.id, confidence=0.5,
+                reasoning="unsure",
             ),
-            embedding=[0.1] * 1536,
         )
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
@@ -408,12 +414,13 @@ def _upload_single_entry(client, supplier):
 
 
 def test_apply_match_without_material_id_returns_422(
-    db_session, make_supplier, make_user, make_session
+    db_session, make_supplier, make_material, make_user, make_session
 ):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    material = make_material()
     client = _admin_client(make_user, make_session)
-    body = _upload_single_entry(client, supplier)
+    body = _upload_single_entry(client, supplier, material)
     entry_id = body["entries"][0]["id"]
 
     response = client.post(
@@ -426,12 +433,13 @@ def test_apply_match_without_material_id_returns_422(
 
 
 def test_apply_new_without_internal_sku_returns_422(
-    db_session, make_supplier, make_user, make_session
+    db_session, make_supplier, make_material, make_user, make_session
 ):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    material = make_material()
     client = _admin_client(make_user, make_session)
-    body = _upload_single_entry(client, supplier)
+    body = _upload_single_entry(client, supplier, material)
     entry_id = body["entries"][0]["id"]
 
     response = client.post(
@@ -444,12 +452,13 @@ def test_apply_new_without_internal_sku_returns_422(
 
 
 def test_apply_match_with_nonexistent_material_id_returns_404(
-    db_session, make_supplier, make_user, make_session
+    db_session, make_supplier, make_material, make_user, make_session
 ):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    material = make_material()
     client = _admin_client(make_user, make_session)
-    body = _upload_single_entry(client, supplier)
+    body = _upload_single_entry(client, supplier, material)
     entry_id = body["entries"][0]["id"]
 
     response = client.post(
@@ -466,24 +475,20 @@ def test_upload_response_includes_processing_status_for_failed_line(
 ):
     """A line whose retry was exhausted during matching (ADR-0022 §2)
     still comes back as a normal PriceListEntry with
-    processing_status="failed" and empty matching fields — not dropped,
-    not a 5xx for the whole import."""
+    processing_status="failed" and empty matching fields — not dropped
+    (even though its placeholder decision is action="not_found",
+    ADR-0025 §5's not-persisted rule applies only to real not_found
+    decisions, not failure placeholders), not a 5xx for the whole import."""
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
-            extracted=ExtractedPriceLine(
-                raw_name="Unmatchable Line", raw_sku=None, price=9.0, currency="USD",
-                availability=None, min_order_qty=None,
-                page_number=1,
-            ),
+            extracted=_extracted(raw_name="Unmatchable Line", price=9.0),
             decision=MatchDecision(
-                action="new", material_id=None, confidence=0.0,
-                reasoning="", suggested_internal_sku=None,
+                action="not_found", material_id=None, confidence=0.0, reasoning="",
             ),
-            embedding=[0.1] * 1536,
             processing_status="failed",
         )
     ]

@@ -52,9 +52,6 @@ class PriceListEntry(UUIDPKMixin, Base):
     action: Mapped[str | None] = mapped_column(String(20))
     """match/new/skip — заполняется при применении строки на экране ревью,
     см. ADR-0019 §5. NULL = ещё не решено."""
-    suggested_internal_sku: Mapped[str | None] = mapped_column(String(100))
-    """Черновой SKU от LLM для action="new" — см. ADR-0019 §4, ADR-0020.
-    NULL для match/known-alias строк и когда LLM не предложил SKU."""
     possible_duplicate_of: Mapped[list[str] | None] = mapped_column(JSON)
     """Список id (UUID как строки) других PriceListEntry этого же импорта,
     которые матчинг счёл вероятным дублем — см. ADR-0019 §4, ADR-0020.
@@ -67,8 +64,7 @@ class PriceListEntry(UUIDPKMixin, Base):
     принято/принято), `processing_status` — смогла ли система в принципе
     произвести решение для этой строки. Строка с processing_status="failed"
     имеет заполненные raw-поля (supplier_raw_name/supplier_sku/price/...) и
-    пустые matching-поля (matched_material_id/confidence/reasoning/
-    suggested_internal_sku)."""
+    пустые matching-поля (matched_material_id/confidence/reasoning)."""
 
     import_: Mapped["PriceListImport"] = relationship(back_populates="entries")
     matched_material: Mapped["Material | None"] = relationship(

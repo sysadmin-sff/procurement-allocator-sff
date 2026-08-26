@@ -20,7 +20,7 @@ def test_material_embedding_column_exists_and_is_nullable(db_session, make_mater
 
 
 def test_material_embedding_column_stores_a_vector(db_session, make_material):
-    session, _material_ids = db_session
+    session, _material_ids, _user_ids = db_session
     material = make_material()
     material.embedding = [0.1] * 1536
     session.commit()

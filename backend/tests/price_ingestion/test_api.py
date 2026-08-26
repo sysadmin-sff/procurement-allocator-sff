@@ -16,15 +16,32 @@ from app.models import PriceListImport
 from app.price_ingestion.extraction import ExtractedPriceLine, PriceIngestionError
 from app.price_ingestion.matching import MatchDecision, MatchedLine
 
-client = TestClient(app)
-
 FAKE_PDF_BYTES = b"%PDF-1.4 fake price list"
+CSRF = "test-csrf-token"
+_admin_email_counter = [0]
 
 
-def _upload(supplier_id, content_type="application/pdf", data=FAKE_PDF_BYTES):
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _admin_client(make_user, make_session):
+    _admin_email_counter[0] += 1
+    admin = make_user(
+        email=f"admin-price-ingestion{_admin_email_counter[0]}@screen-factory-florida.com",
+        role="admin",
+    )
+    admin_session = make_session(admin, csrf_token=CSRF)
+    return _client_as(admin_session)
+
+
+def _upload(client, supplier_id, content_type="application/pdf", data=FAKE_PDF_BYTES):
     return client.post(
         f"/suppliers/{supplier_id}/price-lists",
         files={"file": ("pricelist.pdf", data, content_type)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
 
@@ -37,9 +54,10 @@ def _mock_pipeline(matched_lines):
     )
 
 
-def test_upload_creates_import_and_entries(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+def test_upload_creates_import_and_entries(db_session, make_supplier, make_user, make_session):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
@@ -58,7 +76,7 @@ def test_upload_creates_import_and_entries(db_session, make_supplier):
 
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        response = _upload(supplier.id)
+        response = _upload(client, supplier.id)
 
     assert response.status_code == 201
     body = response.json()
@@ -74,7 +92,7 @@ def test_upload_creates_import_and_entries(db_session, make_supplier):
 
 
 def test_upload_response_includes_suggested_sku_and_duplicate_flags(
-    db_session, make_supplier
+    db_session, make_supplier, make_user, make_session
 ):
     """suggested_internal_sku and possible_duplicate_of are populated only
     on the upload response (transient, not persisted — see ADR-0019 §5 /
@@ -83,8 +101,9 @@ def test_upload_response_includes_suggested_sku_and_duplicate_flags(
     proving the batch-index-to-entry-UUID translation in
     _to_import_out_with_matches actually happens, not just that the field
     exists with a default value."""
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
@@ -117,7 +136,7 @@ def test_upload_response_includes_suggested_sku_and_duplicate_flags(
 
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        response = _upload(supplier.id)
+        response = _upload(client, supplier.id)
 
     assert response.status_code == 201
     body = response.json()
@@ -134,15 +153,16 @@ def test_upload_response_includes_suggested_sku_and_duplicate_flags(
 
 
 def test_get_after_upload_returns_same_suggested_sku_and_duplicates_as_upload(
-    db_session, make_supplier
+    db_session, make_supplier, make_user, make_session
 ):
     """ADR-0020: suggested_internal_sku/possible_duplicate_of are persisted
     on PriceListEntry, not just returned transiently in the upload
     response — a GET after the initial upload (e.g. after a page reload
     mid-review) must return the exact same values, not null/[] as it did
     before ADR-0020 (see docs/known-issues.md, now closed by this ADR)."""
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
@@ -175,7 +195,7 @@ def test_get_after_upload_returns_same_suggested_sku_and_duplicates_as_upload(
 
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        upload_response = _upload(supplier.id)
+        upload_response = _upload(client, supplier.id)
 
     upload_body = upload_response.json()
     import_id = upload_body["import_id"]
@@ -202,9 +222,10 @@ def test_get_after_upload_returns_same_suggested_sku_and_duplicates_as_upload(
         assert get_entry["possible_duplicate_of"] != []
 
 
-def test_get_import_returns_current_entries(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+def test_get_import_returns_current_entries(db_session, make_supplier, make_user, make_session):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
@@ -222,7 +243,7 @@ def test_get_import_returns_current_entries(db_session, make_supplier):
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        upload_response = _upload(supplier.id)
+        upload_response = _upload(client, supplier.id)
     import_id = upload_response.json()["import_id"]
 
     response = client.get(f"/price-list-imports/{import_id}")
@@ -232,11 +253,12 @@ def test_get_import_returns_current_entries(db_session, make_supplier):
 
 
 def test_apply_match_entry_updates_status_when_all_entries_resolved(
-    db_session, make_supplier, make_material
+    db_session, make_supplier, make_material, make_user, make_session
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     material = make_material()
+    client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
@@ -254,7 +276,7 @@ def test_apply_match_entry_updates_status_when_all_entries_resolved(
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        upload_response = _upload(supplier.id)
+        upload_response = _upload(client, supplier.id)
     body = upload_response.json()
     import_id = body["import_id"]
     entry_id = body["entries"][0]["id"]
@@ -262,6 +284,7 @@ def test_apply_match_entry_updates_status_when_all_entries_resolved(
     response = client.post(
         f"/price-list-imports/{import_id}/entries/{entry_id}/apply",
         json={"action": "match", "material_id": str(material.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -272,10 +295,11 @@ def test_apply_match_entry_updates_status_when_all_entries_resolved(
 
 
 def test_apply_skip_leaves_import_pending_until_all_entries_resolved(
-    db_session, make_supplier
+    db_session, make_supplier, make_user, make_session
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
@@ -305,7 +329,7 @@ def test_apply_skip_leaves_import_pending_until_all_entries_resolved(
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        upload_response = _upload(supplier.id)
+        upload_response = _upload(client, supplier.id)
     body = upload_response.json()
     import_id = body["import_id"]
     entry_1_id = body["entries"][0]["id"]
@@ -313,6 +337,7 @@ def test_apply_skip_leaves_import_pending_until_all_entries_resolved(
     response = client.post(
         f"/price-list-imports/{import_id}/entries/{entry_1_id}/apply",
         json={"action": "skip"},
+        headers={"X-CSRF-Token": CSRF},
     )
     assert response.status_code == 200
 
@@ -321,41 +346,47 @@ def test_apply_skip_leaves_import_pending_until_all_entries_resolved(
     assert price_list_import.status == "pending_review"
 
 
-def test_upload_rejects_unsupported_content_type(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+def test_upload_rejects_unsupported_content_type(
+    db_session, make_supplier, make_user, make_session
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
-    response = _upload(supplier.id, content_type="text/plain")
+    response = _upload(client, supplier.id, content_type="text/plain")
 
     assert response.status_code == 422
 
 
-def test_upload_returns_404_for_unknown_supplier():
+def test_upload_returns_404_for_unknown_supplier(make_user, make_session):
+    client = _admin_client(make_user, make_session)
     with patch("app.price_ingestion.service.extract_price_list_lines", return_value=[]):
-        response = _upload(uuid.uuid4())
+        response = _upload(client, uuid.uuid4())
 
     assert response.status_code == 404
 
 
-def test_apply_returns_404_for_unknown_entry(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+def test_apply_returns_404_for_unknown_entry(db_session, make_supplier, make_user, make_session):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
     matched = []
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        upload_response = _upload(supplier.id)
+        upload_response = _upload(client, supplier.id)
     import_id = upload_response.json()["import_id"]
 
     response = client.post(
         f"/price-list-imports/{import_id}/entries/{uuid.uuid4()}/apply",
         json={"action": "skip"},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
 
 
-def _upload_single_entry(supplier):
+def _upload_single_entry(client, supplier):
     matched = [
         MatchedLine(
             extracted=ExtractedPriceLine(
@@ -372,61 +403,74 @@ def _upload_single_entry(supplier):
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        upload_response = _upload(supplier.id)
+        upload_response = _upload(client, supplier.id)
     return upload_response.json()
 
 
-def test_apply_match_without_material_id_returns_422(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+def test_apply_match_without_material_id_returns_422(
+    db_session, make_supplier, make_user, make_session
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
-    body = _upload_single_entry(supplier)
+    client = _admin_client(make_user, make_session)
+    body = _upload_single_entry(client, supplier)
     entry_id = body["entries"][0]["id"]
 
     response = client.post(
         f"/price-list-imports/{body['import_id']}/entries/{entry_id}/apply",
         json={"action": "match"},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 422
 
 
-def test_apply_new_without_internal_sku_returns_422(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+def test_apply_new_without_internal_sku_returns_422(
+    db_session, make_supplier, make_user, make_session
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
-    body = _upload_single_entry(supplier)
+    client = _admin_client(make_user, make_session)
+    body = _upload_single_entry(client, supplier)
     entry_id = body["entries"][0]["id"]
 
     response = client.post(
         f"/price-list-imports/{body['import_id']}/entries/{entry_id}/apply",
         json={"action": "new", "canonical_name": "X"},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 422
 
 
-def test_apply_match_with_nonexistent_material_id_returns_404(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+def test_apply_match_with_nonexistent_material_id_returns_404(
+    db_session, make_supplier, make_user, make_session
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
-    body = _upload_single_entry(supplier)
+    client = _admin_client(make_user, make_session)
+    body = _upload_single_entry(client, supplier)
     entry_id = body["entries"][0]["id"]
 
     response = client.post(
         f"/price-list-imports/{body['import_id']}/entries/{entry_id}/apply",
         json={"action": "match", "material_id": str(uuid.uuid4())},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
 
 
 def test_upload_response_includes_processing_status_for_failed_line(
-    db_session, make_supplier
+    db_session, make_supplier, make_user, make_session
 ):
     """A line whose retry was exhausted during matching (ADR-0022 §2)
     still comes back as a normal PriceListEntry with
     processing_status="failed" and empty matching fields — not dropped,
     not a 5xx for the whole import."""
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
     matched = [
         MatchedLine(
@@ -445,7 +489,7 @@ def test_upload_response_includes_processing_status_for_failed_line(
     ]
     mock_match, mock_extract = _mock_pipeline(matched)
     with mock_match, mock_extract:
-        response = _upload(supplier.id)
+        response = _upload(client, supplier.id)
 
     assert response.status_code == 201
     entry = response.json()["entries"][0]
@@ -454,15 +498,44 @@ def test_upload_response_includes_processing_status_for_failed_line(
     assert entry["action"] is None
 
 
-def test_upload_openai_failure_returns_clear_error_not_bare_500(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+def test_upload_openai_failure_returns_clear_error_not_bare_500(
+    db_session, make_supplier, make_user, make_session
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
 
     with patch(
         "app.price_ingestion.service.extract_price_list_lines",
         side_effect=PriceIngestionError("Не удалось связаться с сервисом распознавания."),
     ):
-        response = _upload(supplier.id)
+        response = _upload(client, supplier.id)
 
     assert response.status_code == 502
     assert response.json()["detail"]
+
+
+def test_upload_no_session_returns_401(make_supplier):
+    supplier = make_supplier()
+    client = TestClient(app)
+    response = _upload(client, supplier.id)
+    assert response.status_code == 401
+
+
+def test_upload_as_employee_returns_403(make_supplier, make_user, make_session):
+    supplier = make_supplier()
+    employee = make_user(role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    client = _client_as(employee_session)
+    response = _upload(client, supplier.id)
+    assert response.status_code == 403
+
+
+def test_upload_as_admin_succeeds(make_supplier, make_user, make_session):
+    supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
+    with patch("app.price_ingestion.service.extract_price_list_lines", return_value=[]), patch(
+        "app.price_ingestion.service.match_price_list_lines", return_value=[]
+    ):
+        response = _upload(client, supplier.id)
+    assert response.status_code == 201

@@ -53,7 +53,7 @@ class TestEarlyDedup:
         embedding distance. Two lines on the same overlap page with
         identical (normalized) text must group; the follower skips its own
         _decide_match call and inherits the representative's decision."""
-        session, _material_ids, _supplier_ids = db_session
+        session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
 
         line_a = _line(raw_name="Screen Type A", page_number=3)
@@ -88,7 +88,7 @@ class TestEarlyDedup:
     def test_two_lines_with_different_text_same_page_each_make_their_own_call(
         self, db_session, make_supplier
     ):
-        session, _material_ids, _supplier_ids = db_session
+        session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
 
         line_a = _line(raw_name="Screen Type A", page_number=3)
@@ -117,7 +117,7 @@ class TestEarlyDedup:
         """Two lines with identical text but NOT sharing a page cannot be a
         chunk-overlap duplicate of each other (ADR-0023) — each must still
         make its own _decide_match call."""
-        session, _material_ids, _supplier_ids = db_session
+        session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
 
         line_a = _line(raw_name="Screen Type A", page_number=2)
@@ -144,7 +144,7 @@ class TestConcurrentOrdering:
     def test_results_preserve_input_order_regardless_of_thread_completion_order(
         self, db_session, make_supplier
     ):
-        session, _material_ids, _supplier_ids = db_session
+        session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
 
         lines = [_line(raw_name=f"Distinct Item {i}") for i in range(8)]
@@ -178,7 +178,7 @@ class TestRetryIsolation:
     def test_rate_limit_exhausted_on_one_line_marks_failed_others_unaffected(
         self, db_session, make_supplier
     ):
-        session, _material_ids, _supplier_ids = db_session
+        session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
 
         line_a = _line(raw_name="Line A")
@@ -213,7 +213,7 @@ class TestRetryIsolation:
     def test_rate_limit_succeeds_on_third_attempt_not_marked_failed(
         self, db_session, make_supplier
     ):
-        session, _material_ids, _supplier_ids = db_session
+        session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
 
         line = _line(raw_name="Flaky Line")
@@ -247,7 +247,7 @@ class TestEarlyDedupInteractsWithRetryFailure:
         inherited its decision has nothing valid to inherit — it must be
         marked processing_status="failed" too, not silently presented as
         a normal action="new" decision."""
-        session, _material_ids, _supplier_ids = db_session
+        session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
 
         line_a = _line(raw_name="Screen Type A", page_number=3)
@@ -276,7 +276,7 @@ class TestDbCallsStayOnMainThread:
     def test_alias_and_candidate_lookups_only_happen_from_main_thread(
         self, db_session, make_supplier, make_material
     ):
-        session, _material_ids, _supplier_ids = db_session
+        session, _material_ids, _supplier_ids, _user_ids = db_session
         supplier = make_supplier()
         candidate = make_material(canonical_name="Candidate Material")
         candidate.embedding = [0.5] * 1536

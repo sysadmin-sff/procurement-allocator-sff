@@ -45,7 +45,7 @@ def _make_entry(session, price_list_import, **overrides):
 def test_apply_match_creates_new_price_version_and_upserts_alias(
     db_session, make_supplier, make_material
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     material = make_material()
     price_list_import = _make_import(session, supplier)
@@ -81,7 +81,7 @@ def test_apply_match_creates_new_price_version_and_upserts_alias(
 def test_apply_match_closes_existing_active_price(
     db_session, make_supplier, make_material
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     material = make_material()
     old_price = Price(
@@ -121,7 +121,7 @@ def test_apply_match_closes_existing_active_price(
 def test_apply_match_does_not_duplicate_existing_alias(
     db_session, make_supplier, make_material
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     material = make_material()
     session.add(
@@ -153,7 +153,7 @@ def test_apply_match_does_not_duplicate_existing_alias(
 def test_apply_new_creates_material_alias_and_price_atomically(
     db_session, make_supplier
 ):
-    session, material_ids, _supplier_ids = db_session
+    session, material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     price_list_import = _make_import(session, supplier)
     entry = _make_entry(
@@ -186,7 +186,7 @@ def test_apply_new_creates_material_alias_and_price_atomically(
 def test_apply_new_rolls_back_material_when_price_creation_fails(
     db_session, make_supplier
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     price_list_import = _make_import(session, supplier)
     entry = _make_entry(
@@ -213,7 +213,7 @@ def test_apply_new_rolls_back_material_when_price_creation_fails(
 
 
 def test_apply_raises_entry_not_found_for_unknown_entry(db_session, make_supplier):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     price_list_import = _make_import(session, supplier)
 

@@ -10,7 +10,7 @@ from app.price_ingestion.candidates import find_known_alias, find_top_candidates
 
 
 def test_find_known_alias_returns_exact_match(db_session, make_supplier, make_material):
-    session, _material_ids, supplier_ids = db_session
+    session, _material_ids, supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     material = make_material()
     alias = SupplierMaterialAlias(
@@ -28,7 +28,7 @@ def test_find_known_alias_returns_exact_match(db_session, make_supplier, make_ma
 
 
 def test_find_known_alias_returns_none_when_no_match(db_session, make_supplier):
-    session, _material_ids, supplier_ids = db_session
+    session, _material_ids, supplier_ids, _user_ids = db_session
     supplier = make_supplier()
 
     found = find_known_alias(session, supplier.id, "Never Seen Before")
@@ -37,7 +37,7 @@ def test_find_known_alias_returns_none_when_no_match(db_session, make_supplier):
 
 
 def test_find_known_alias_is_scoped_to_supplier(db_session, make_supplier, make_material):
-    session, _material_ids, supplier_ids = db_session
+    session, _material_ids, supplier_ids, _user_ids = db_session
     supplier_a = make_supplier(name="Supplier A")
     supplier_b = make_supplier(name="Supplier B")
     material = make_material()
@@ -63,7 +63,7 @@ def test_find_top_candidates_orders_by_cosine_distance(db_session, make_material
     # enough to guarantee both synthetic points are present regardless of
     # table size, so the assertion is actually testing ordering, not
     # table contents.
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     close = make_material(canonical_name="Close Match")
     close.embedding = [1.0] + [0.0] * 1535
     far = make_material(canonical_name="Far Match")
@@ -80,7 +80,7 @@ def test_find_top_candidates_orders_by_cosine_distance(db_session, make_material
 
 
 def test_find_top_candidates_excludes_null_embedding(db_session, make_material):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     no_embedding = make_material(canonical_name="No Embedding")
     assert no_embedding.embedding is None
 
@@ -91,7 +91,7 @@ def test_find_top_candidates_excludes_null_embedding(db_session, make_material):
 
 
 def test_find_top_candidates_respects_k_limit(db_session, make_material):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     for i in range(7):
         m = make_material(canonical_name=f"Material {i}")
         m.embedding = [float(i)] + [0.0] * 1535

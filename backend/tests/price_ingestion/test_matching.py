@@ -34,7 +34,7 @@ def test_known_alias_skips_llm_entirely(
     see matching.py, but embedding computation itself was not rolled
     back), so alias-hit lines no longer skip embed_text — but they still
     skip the alias/candidate-search/LLM path entirely (ADR-0019 §2)."""
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     material = make_material()
     session.add(
@@ -64,7 +64,7 @@ def test_known_alias_skips_llm_entirely(
 def test_unknown_line_goes_through_vector_search_and_llm(
     db_session, make_supplier, make_material
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     candidate = make_material(canonical_name="Candidate Material")
     candidate.embedding = [0.5] * 1536
@@ -95,7 +95,7 @@ def test_unknown_line_goes_through_vector_search_and_llm(
 def test_two_new_lines_with_close_embeddings_flag_each_other_as_duplicates(
     db_session, make_supplier
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
 
     line_a = _line(raw_name="Screen Type A")
@@ -127,7 +127,7 @@ def test_two_new_lines_with_close_embeddings_flag_each_other_as_duplicates(
 def test_new_lines_with_far_embeddings_do_not_flag_each_other(
     db_session, make_supplier
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
 
     line_a = _line(raw_name="Screen Type A")
@@ -159,7 +159,7 @@ def test_new_lines_with_far_embeddings_do_not_flag_each_other(
 def test_matched_lines_are_not_considered_for_duplicate_detection(
     db_session, make_supplier, make_material
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     candidate = make_material()
     candidate.embedding = [1.0] + [0.0] * 1535
@@ -205,7 +205,7 @@ def test_two_match_lines_on_same_material_id_flag_each_other_as_duplicates(
     it already catches action="new" duplicates (exact material_id match,
     not cosine distance — no need to measure similarity when the id is
     identical)."""
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     candidate = make_material()
     candidate.embedding = [1.0] + [0.0] * 1535
@@ -238,7 +238,7 @@ def test_two_match_lines_on_same_material_id_flag_each_other_as_duplicates(
 def test_match_lines_on_different_material_ids_do_not_flag_each_other(
     db_session, make_supplier, make_material
 ):
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     candidate_a = make_material()
     candidate_a.embedding = [1.0] + [0.0] * 1535
@@ -283,7 +283,7 @@ def test_known_alias_duplicate_match_lines_are_flagged_too(
     representative/follower inheritance here). Both end up action="match"
     on the same material_id and are flagged as duplicates by the existing
     post-match dedup (ADR-0021 §3)."""
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     material = make_material()
     session.add(
@@ -321,7 +321,7 @@ def test_hallucinated_material_id_is_downgraded_to_new(
     action="new" rather than trusted as-is — see ADR-0019 final review
     Finding 3. Trusting a hallucinated id would write a dangling FK and
     fail the whole batch's db.commit()."""
-    session, _material_ids, _supplier_ids = db_session
+    session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
     candidate = make_material(canonical_name="Candidate Material")
     candidate.embedding = [0.5] * 1536

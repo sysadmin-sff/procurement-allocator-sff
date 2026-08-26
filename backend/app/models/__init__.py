@@ -10,6 +10,7 @@ from app.models.purchase_record import PurchaseRecord
 from app.models.supplier import Supplier
 from app.models.supplier_contact import SupplierContact
 from app.models.supplier_material_alias import SupplierMaterialAlias
+from app.models.user import User, UserSession
 
 __all__ = [
     "Base",
@@ -28,4 +29,6 @@ __all__ = [
     "PurchaseRecord",
     "Office",
     "SupplierContact",
+    "User",
+    "UserSession",
 ]

@@ -20,6 +20,7 @@ dependencies = [
     "pgvector>=0.3.6",
     "python-multipart>=0.0.9",
     "pypdf>=4.3",
+    "google-auth>=2.32",
 ]
 
 [project.optional-dependencies]

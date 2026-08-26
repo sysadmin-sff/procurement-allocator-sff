@@ -18,6 +18,17 @@ class Settings(BaseSettings):
     openai_price_ingestion_model: str = "gpt-5.6-luna"
     """Provisional default = current ADR-0018 vision model, pending accuracy
     verification on real supplier price lists — see ADR-0019 §3."""
+    google_client_id: str | None = None
+    """OAuth 2.0 client ID from Google Cloud Console. See ADR-0024 §8."""
+    google_client_secret: str | None = None
+    """Secret — never returned in any API response, never logged. See ADR-0024 §8."""
+    google_workspace_domain: str | None = None
+    """Value the id_token's 'hd' claim must equal — see ADR-0024 §1 п.8."""
+    session_signing_secret: str | None = None
+    """Used only to sign the short-lived oauth_flow cookie (ADR-0024 §1 п.2) —
+    UserSession/csrf_token are opaque DB-checked values, not signed separately."""
+    bootstrap_admin_email: str | None = None
+    """See ADR-0024 §2 — bootstrap of the first admin at app startup."""
 
 
 settings = Settings()

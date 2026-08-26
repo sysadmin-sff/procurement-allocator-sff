@@ -12,6 +12,9 @@ from app.api.project import router as project_router
 from app.api.purchase_record import router as purchase_record_router
 from app.api.supplier import router as supplier_router
 from app.api.user import router as user_router
+from app.auth.service import bootstrap_admin
+from app.core.config import settings
+from app.core.database import SessionLocal
 
 app = FastAPI(title="procurement-allocator")
 
@@ -37,3 +40,14 @@ app.include_router(supplier_router)
 app.include_router(material_router)
 app.include_router(price_router)
 app.include_router(price_ingestion_router)
+
+
+@app.on_event("startup")
+def _bootstrap_admin_on_startup() -> None:
+    if not settings.bootstrap_admin_email:
+        return
+    db = SessionLocal()
+    try:
+        bootstrap_admin(db, settings.bootstrap_admin_email)
+    finally:
+        db.close()

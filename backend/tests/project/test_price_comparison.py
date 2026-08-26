@@ -14,7 +14,22 @@ from app.allocation.order_service import set_order_item_fields
 from app.main import app
 from app.models import Order, OrderItem
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
+
+
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-price-comparison{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
 
 
 def _row_for(body, project_item_id):
@@ -25,7 +40,7 @@ def _row_for(body, project_item_id):
 
 
 def test_plan_marks_lowest_price_as_cheapest_regardless_of_availability(
-    db_session, make_project, make_material, make_supplier, make_price
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
 ):
     session, *_ = db_session
     material = make_material()
@@ -36,6 +51,7 @@ def test_plan_marks_lowest_price_as_cheapest_regardless_of_availability(
     make_price(material, cheap_but_short, price=4.00, availability=1)  # qty is 5
     expensive_plenty = make_supplier(name="Expensive Plenty")
     make_price(material, expensive_plenty, price=9.00, availability=100)
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/price-comparison")
 
@@ -47,11 +63,12 @@ def test_plan_marks_lowest_price_as_cheapest_regardless_of_availability(
 
 
 def test_plan_is_empty_list_for_material_with_no_active_price(
-    db_session, make_project, make_material
+    db_session, make_project, make_material, make_user, make_session
 ):
     material = make_material()
     project = make_project([(material, 5)])
     item = project.items[0]
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/price-comparison")
 
@@ -65,13 +82,14 @@ def test_plan_is_empty_list_for_material_with_no_active_price(
 
 
 def test_supplier_without_order_does_not_appear_in_supplier_responses(
-    db_session, make_project, make_material, make_supplier, make_price
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
 ):
     material = make_material()
     project = make_project([(material, 5)])
     item = project.items[0]
     make_supplier(name="Never Ordered")
     # No Order at all for this project.
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/price-comparison")
 
@@ -81,13 +99,14 @@ def test_supplier_without_order_does_not_appear_in_supplier_responses(
 
 
 def test_project_without_any_order_leaves_supplier_responses_empty_but_plan_filled(
-    db_session, make_project, make_material, make_supplier, make_price
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
 ):
     material = make_material()
     project = make_project([(material, 5)])
     item = project.items[0]
     supplier = make_supplier(name="Has Price")
     make_price(material, supplier, price=5.00, availability=10)
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/price-comparison")
 
@@ -98,7 +117,7 @@ def test_project_without_any_order_leaves_supplier_responses_empty_but_plan_fill
 
 
 def test_declined_response_is_never_cheapest_even_with_lowest_received_price(
-    db_session, make_project, make_material, make_supplier
+    db_session, make_project, make_material, make_supplier, make_user, make_session
 ):
     session, *_ = db_session
     material = make_material()
@@ -135,6 +154,7 @@ def test_declined_response_is_never_cheapest_even_with_lowest_received_price(
     )
     session.add(healthy_item)
     session.commit()
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/price-comparison")
 
@@ -146,7 +166,7 @@ def test_declined_response_is_never_cheapest_even_with_lowest_received_price(
 
 
 def test_multiple_orders_same_supplier_uses_row_from_order_containing_material_with_max_created_at(
-    db_session, make_project, make_material, make_supplier
+    db_session, make_project, make_material, make_supplier, make_user, make_session
 ):
     """Order A (older, contains material), Order B (newer, does NOT contain
     material), Order C (newest, contains material) -> must use C, not B (no
@@ -199,6 +219,7 @@ def test_multiple_orders_same_supplier_uses_row_from_order_containing_material_w
         .values(created_at=base_time + datetime.timedelta(days=2))
     )
     session.commit()
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/price-comparison")
 
@@ -208,7 +229,7 @@ def test_multiple_orders_same_supplier_uses_row_from_order_containing_material_w
 
 
 def test_is_cheapest_prefers_confirmed_then_received_then_quoted_across_suppliers(
-    db_session, make_project, make_material, make_supplier
+    db_session, make_project, make_material, make_supplier, make_user, make_session
 ):
     session, *_ = db_session
     material = make_material()
@@ -249,6 +270,7 @@ def test_is_cheapest_prefers_confirmed_then_received_then_quoted_across_supplier
     session.commit()
     set_order_item_fields(session, order_b.id, item_b.id, received_price=6.00)
     set_order_item_fields(session, order_c.id, item_c.id, received_price=6.00, confirmed_price=8.00)
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/price-comparison")
 
@@ -261,7 +283,8 @@ def test_is_cheapest_prefers_confirmed_then_received_then_quoted_across_supplier
     assert responses_by_supplier[str(supplier_c.id)]["is_cheapest"] is False
 
 
-def test_returns_404_for_missing_project():
+def test_returns_404_for_missing_project(make_user, make_session):
+    client = _employee_client(make_user, make_session)
     response = client.get(f"/projects/{uuid.uuid4()}/price-comparison")
 
     assert response.status_code == 404

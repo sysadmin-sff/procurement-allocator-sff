@@ -95,7 +95,7 @@ def get_project(project_id: uuid.UUID, db: Session = Depends(get_db)) -> Project
     return ProjectWithItemsOut(
         id=project.id,
         title=project.title,
-        created_by=project.created_by,
+        created_by_user_id=project.created_by_user_id,
         status=project.status,
         created_at=project.created_at,
         items=[ProjectItemOut.model_validate(item) for item in project.items],

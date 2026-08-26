@@ -1,8 +1,11 @@
 import datetime
 import uuid
+import uuid as _uuid
+from datetime import timezone
 
 import pytest
 
+from app.auth.constants import SESSION_IDLE_TTL
 from app.core.database import SessionLocal, get_db
 from app.main import app
 from app.models import (
@@ -14,6 +17,8 @@ from app.models import (
     Project,
     ProjectItem,
     Supplier,
+    User,
+    UserSession,
 )
 
 
@@ -23,6 +28,7 @@ def db_session():
     project_ids: list = []
     material_ids: list = []
     supplier_ids: list = []
+    user_ids: list = []
 
     def _override_get_db():
         yield session
@@ -30,7 +36,7 @@ def db_session():
     app.dependency_overrides[get_db] = _override_get_db
 
     try:
-        yield session, project_ids, material_ids, supplier_ids
+        yield session, project_ids, material_ids, supplier_ids, user_ids
     finally:
         app.dependency_overrides.pop(get_db, None)
         session.rollback()
@@ -74,18 +80,64 @@ def db_session():
             session.query(Supplier).filter(Supplier.id.in_(supplier_ids)).delete(
                 synchronize_session=False
             )
+        if user_ids:
+            session.query(UserSession).filter(UserSession.user_id.in_(user_ids)).delete(
+                synchronize_session=False
+            )
+            session.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
         session.commit()
         session.close()
 
 
 @pytest.fixture
-def make_project(db_session):
-    session, project_ids, _material_ids, _supplier_ids = db_session
+def make_user(db_session):
+    session, *_rest, user_ids = db_session
 
-    def _make(items=None, title="Test Project", created_by=None, status="draft"):
+    def _make(
+        email="employee@screen-factory-florida.com",
+        google_sub=None,
+        role="employee",
+        is_active=True,
+        name="Test User",
+    ):
+        user = User(email=email, google_sub=google_sub, role=role, is_active=is_active, name=name)
+        session.add(user)
+        session.flush()
+        user_ids.append(user.id)
+        return user
+
+    return _make
+
+
+@pytest.fixture
+def make_session(db_session):
+    session, *_ = db_session
+
+    def _make(user, csrf_token="test-csrf-token"):
+        now = datetime.datetime.now(timezone.utc)
+        user_session = UserSession(
+            id=_uuid.uuid4(),
+            user_id=user.id,
+            csrf_token=csrf_token,
+            created_at=now,
+            expires_at=now + SESSION_IDLE_TTL,
+            last_seen_at=now,
+        )
+        session.add(user_session)
+        session.flush()
+        return user_session
+
+    return _make
+
+
+@pytest.fixture
+def make_project(db_session):
+    session, project_ids, _material_ids, _supplier_ids, _user_ids = db_session
+
+    def _make(items=None, title="Test Project", created_by_user_id=None, status="draft"):
         """items: optional list of (material, quantity) tuples, added as
         ProjectItem rows immediately."""
-        project = Project(title=title, created_by=created_by, status=status)
+        project = Project(title=title, created_by_user_id=created_by_user_id, status=status)
         session.add(project)
         session.flush()
         project_ids.append(project.id)
@@ -102,7 +154,7 @@ def make_project(db_session):
 
 @pytest.fixture
 def make_material(db_session):
-    session, _project_ids, material_ids, _supplier_ids = db_session
+    session, _project_ids, material_ids, _supplier_ids, _user_ids = db_session
 
     def _make(sku=None, canonical_name=None, category=None, unit="ft"):
         sku = sku or f"TEST-SKU-{uuid.uuid4().hex[:12]}"
@@ -119,7 +171,7 @@ def make_material(db_session):
 
 @pytest.fixture
 def make_supplier(db_session):
-    session, _project_ids, _material_ids, supplier_ids = db_session
+    session, _project_ids, _material_ids, supplier_ids, _user_ids = db_session
 
     def _make(name="Test Supplier"):
         supplier = Supplier(name=name, currency="USD", delivery_policy={})

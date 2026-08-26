@@ -89,6 +89,7 @@ erDiagram
         string action "match/new/skip, NULL = не решено — заполняется на ревью, ADR-0019"
         string suggested_internal_sku "nullable, черновой SKU от LLM для action=new, ADR-0020"
         json possible_duplicate_of "nullable, id других PriceListEntry этого импорта — вероятные дубли, ADR-0020"
+        string processing_status "nullable, 'failed' = matching не смог обработать строку (retry исчерпан), ADR-0022"
     }
     Price {
         uuid material_id
@@ -174,6 +175,17 @@ erDiagram
 обновление страницы посреди ревью не теряло эти подсказки (тот же принцип
 "не терять на reload то, что нужно для решения", что ADR-0004 уже применил
 к клиентскому черновику проекта).
+
+`PriceListEntry.processing_status` добавлено сверх исходной диаграммы —
+см. `docs/decisions/0022-price-list-matching-dedup-and-concurrency.md`.
+Отдельно от `action`: `action` — решение пользователя на экране ревью
+(ещё не принято/принято), `processing_status` — смогла ли система в
+принципе произвести решение для этой строки. `NULL` = обработано
+нормально, `"failed"` = retry на `openai.RateLimitError` исчерпан для
+этой строки при матчинге — raw-поля (`supplier_raw_name`/`price`/...)
+заполнены как обычно, matching-поля (`matched_material_id`/`confidence`/
+`reasoning`/`suggested_internal_sku`) остаются `NULL`. Не роняет весь
+импорт — только эта строка помечена, остальные обрабатываются нормально.
 
 `Material.embedding` добавлено сверх исходной диаграммы — см.
 `docs/decisions/0019-price-list-ingestion-matching.md`. pgvector-расширение

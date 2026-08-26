@@ -1,0 +1,313 @@
+.page {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-10) var(--space-9) 60px;
+}
+
+.inner {
+  width: 100%;
+  max-width: 1180px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.backLink {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--color-brand);
+}
+
+.centerWrap {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-10) var(--space-9);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--text-3xl);
+  font-weight: 600;
+  color: var(--color-brand);
+  letter-spacing: -0.01em;
+}
+
+.statusBadge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-subtle);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.statusBadgeApproved {
+  background: var(--color-success-tint);
+  color: var(--color-success-alt);
+  border-color: var(--color-success-alt);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card-sm);
+  padding: var(--space-6) var(--space-8);
+}
+
+.toolbarInfo {
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-secondary);
+}
+
+.applyButton {
+  background: var(--color-brand);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-7);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-primary-button);
+}
+
+.applyButton:hover:not(:disabled) {
+  background: var(--color-brand-hover);
+}
+
+.applyButton:disabled {
+  cursor: default;
+  background: var(--color-disabled-bg);
+  color: var(--color-disabled-text);
+  box-shadow: none;
+}
+
+.applySummary {
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-success-alt);
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card-sm);
+  overflow: hidden;
+}
+
+.table th {
+  text-align: left;
+  padding: var(--space-4) var(--space-6);
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--color-text-tertiary-alt);
+  background: var(--color-surface-subtle);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.table td {
+  padding: var(--space-5) var(--space-6);
+  font-size: var(--text-base);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle);
+  vertical-align: top;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.checkboxCell {
+  width: 34px;
+  text-align: center;
+}
+
+.numCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+  white-space: nowrap;
+}
+
+.actionColCell {
+  width: 30%;
+}
+
+.statusColCell {
+  width: 120px;
+}
+
+/* Confidence thresholds — see docs/ui-reference.md §8: >90 green, 70-90
+   yellow, <70 red. Row-level tint, same danger/warning/success-tint
+   vocabulary already used across the app (ADR-0006/0007/0013/0018). */
+.confidenceHigh {
+  font-weight: 600;
+  color: var(--color-success-alt);
+}
+
+.confidenceMedium {
+  font-weight: 600;
+  color: var(--color-warning-text);
+}
+
+.confidenceLow {
+  font-weight: 600;
+  color: var(--color-danger-text);
+}
+
+.rowLowConfidence td {
+  background: var(--color-danger-tint);
+}
+
+.rowResolved td {
+  background: var(--color-surface-subtle);
+  color: var(--color-text-tertiary-alt);
+}
+
+.rawName {
+  font-weight: 600;
+}
+
+.rawSku {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs-alt);
+  color: var(--color-text-tertiary-alt);
+}
+
+.reasoning {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs-alt);
+  font-weight: 400;
+  color: var(--color-text-tertiary-alt);
+}
+
+.duplicateBadge {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-danger-text);
+  background: var(--color-danger-tint);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
+}
+
+.duplicateGroupSeparator td {
+  border-top: 2px solid var(--color-danger-border);
+}
+
+.actionLabel {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary-alt);
+  margin-bottom: var(--space-2);
+}
+
+.input {
+  width: 100%;
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  box-sizing: border-box;
+}
+
+.input:focus {
+  border-color: var(--color-brand);
+  outline: none;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.fieldLabel {
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary-alt);
+}
+
+.skipButton {
+  width: 100%;
+  background: var(--color-control-fill);
+  color: var(--color-text);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.skipButton:hover:not(:disabled) {
+  background: var(--color-control-fill-hover);
+}
+
+.skipButton:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.resolvedLabel {
+  display: block;
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rowError {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-danger-text);
+}

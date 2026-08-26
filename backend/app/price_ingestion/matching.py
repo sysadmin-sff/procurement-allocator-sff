@@ -1,14 +1,44 @@
-"""Step 2 of price-list ingestion: matching, one call per line — see
-ADR-0019 §2-4. Exact-alias short-circuit skips embedding + LLM entirely;
-otherwise pgvector top-K + LLM decision. After all lines are matched,
-new-line embeddings (already computed for candidate search — reused, not
-recomputed) are pairwise-compared to flag possible duplicates within the
-same import (ADR-0019 §4).
+"""Step 2 of price-list ingestion: matching — see ADR-0019 §2-4, extended
+by ADR-0022 for chunk-overlap volume and throughput, and by ADR-0023 for
+correctness of the early-dedup mechanism:
+
+- Early dedup (ADR-0022 §1, rewritten by ADR-0023) — see EARLY_DEDUP_ENABLED
+  below. Lines are grouped by page_number (ADR-0021 §3 overlap page) +
+  exact raw_name match (after whitespace/case normalization) —
+  app.price_ingestion.dedup.group_duplicate_lines. Only the representative
+  of each group takes the expensive alias/vector-search/LLM path; the rest
+  inherit its decision, flagged via possible_duplicate_of. No line is
+  excluded from the batch. The original ADR-0022 §1 version compared every
+  line in the document against every other by embedding distance alone —
+  a real-document run showed ~85% false positives (docs/known-issues.md).
+  ADR-0023 scopes candidates to same-page pairs (chunk-overlap duplicates
+  can only occur on the one page two adjacent chunks share) and drops the
+  distance signal entirely — even scoped to overlap pages, real duplicates
+  and distinct product-line variants (different SKU/size) were
+  interleaved with no separating distance gap on the real reference
+  document (see ADR-0023 for the data). Exact text match is the only
+  automatic signal; anything not an exact match still gets its own
+  independent matching call.
+- Concurrency (ADR-0022 §2) — still enabled, independent of the above:
+  alias short-circuit and top-K vector search (both touch `db`, not
+  thread-safe — see app.core.database) run sequentially in the main
+  thread for every line first. Only the network-only calls (_decide_match,
+  embed_text) run in a ThreadPoolExecutor, with retry/backoff on
+  RateLimitError (app.price_ingestion.retry). A line whose retries are
+  exhausted is marked processing_status="failed" instead of failing the
+  whole batch.
+
+After all lines are matched, new-line embeddings (already computed) are
+pairwise-compared to flag possible duplicates within the same import
+(ADR-0019 §4). match-line duplicates (same material_id decided
+independently for two lines) are also flagged by exact id equality — see
+ADR-0021 §3, a direct consequence of that ADR's page-overlap chunking.
 """
 
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -23,8 +53,33 @@ from app.price_ingestion.candidates import (
     find_known_alias,
     find_top_candidates,
 )
+from app.price_ingestion.dedup import group_duplicate_lines
 from app.price_ingestion.embeddings import embed_text, material_embedding_input
 from app.price_ingestion.extraction import ExtractedPriceLine, PriceIngestionError
+from app.price_ingestion.retry import RetryExhaustedError, call_with_retry
+
+MATCHING_CONCURRENCY = 6
+"""Thread pool size for _decide_match/embed_text — ADR-0022 §2. Internal
+implementation parameter, not an env var (same class of decision as
+DEFAULT_PAGES_PER_CHUNK in extraction.py)."""
+
+EARLY_DEDUP_ENABLED = True
+"""Re-enabled by ADR-0023 after the ADR-0022 §1 grouping mechanism was
+fixed — see the module docstring above and
+docs/decisions/0023-price-list-overlap-scoped-dedup.md. Candidates are now
+scoped to same-page (chunk-overlap) pairs and use exact raw_name match
+only, not a whole-document embedding-distance comparison. Confirmed on the
+real reference document (14 pages, 706 lines): candidate space fell from
+245,350 (whole document, ADR-0022 baseline) to 8,945 (overlap-page pairs),
+of which 158 are exact-match duplicates — every one manually spot-checked
+was a genuine same-position duplicate, none were unrelated products. See
+ADR-0023 for why a secondary distance threshold was investigated and
+rejected (no separating gap between real duplicates and distinct
+product-line variants, even within the overlap-page-scoped set)."""
+
+_INHERITED_REASONING_NOTE = (
+    " (унаследовано от строки-представителя этого импорта, не пересчитано)"
+)
 
 
 class MatchDecision(BaseModel):
@@ -41,6 +96,9 @@ class MatchedLine:
     decision: MatchDecision
     embedding: list[float]
     possible_duplicate_of: list[int] = field(default_factory=list)
+    processing_status: str | None = None
+    """None = processed normally. "failed" = retry exhausted for this
+    line's LLM call — see ADR-0022 §2."""
 
 
 def _candidate_context(candidates: list[Material]) -> str:
@@ -118,30 +176,151 @@ def _cosine_distance(a: list[float], b: list[float]) -> float:
     return 1.0 - dot / (norm_a * norm_b)
 
 
-def _flag_duplicate_new_lines(results: list[MatchedLine]) -> None:
-    """Pairwise cosine distance between all action="new" lines in this
-    batch, reusing embeddings already computed during matching — see
-    ADR-0019 §4. Mutates possible_duplicate_of on the affected results."""
+def _flag_duplicate_lines(results: list[MatchedLine]) -> None:
+    """Flags possible duplicates within this batch — ADR-0019 §4, extended
+    by ADR-0021 §3 to also cover action="match" pairs (page-overlap
+    chunking, ADR-0021, can make two chunks each independently decide
+    action="match" on the same material_id).
+
+    - action="new": pairwise cosine distance between raw_name embeddings,
+      reusing embeddings already computed during matching.
+    - action="match": exact material_id equality — no distance measure
+      needed, the id either matches or it doesn't.
+
+    Mutates possible_duplicate_of on the affected results. Idempotent
+    against pairs already flagged earlier in the pipeline (ADR-0022 §1
+    early dedup already sets possible_duplicate_of on chunk-overlap
+    followers before this runs) — never appends an index already present."""
     new_indices = [i for i, r in enumerate(results) if r.decision.action == "new"]
     for i in new_indices:
         for j in new_indices:
-            if i == j:
+            if i == j or j in results[i].possible_duplicate_of:
                 continue
             distance = _cosine_distance(results[i].embedding, results[j].embedding)
             if distance < DUPLICATE_DISTANCE_THRESHOLD:
                 results[i].possible_duplicate_of.append(j)
 
+    match_indices = [i for i, r in enumerate(results) if r.decision.action == "match"]
+    for i in match_indices:
+        for j in match_indices:
+            if i == j or j in results[i].possible_duplicate_of:
+                continue
+            if results[i].decision.material_id == results[j].decision.material_id:
+                results[i].possible_duplicate_of.append(j)
+
+
+def _downgrade_hallucinated_match(
+    decision: MatchDecision, candidates: list[Material]
+) -> MatchDecision:
+    """The LLM hallucinated a material_id that was never among the
+    candidates shown to it in this call. Trusting it as-is would write a
+    dangling FK and fail the whole batch's db.commit() — downgrade to
+    "new" so only this one line needs re-review instead of losing the
+    entire import (ADR-0019: nothing is trusted blindly, human reviews
+    everything)."""
+    if decision.action != "match" or decision.material_id in {c.id for c in candidates}:
+        return decision
+    return MatchDecision(
+        action="new",
+        material_id=None,
+        confidence=min(decision.confidence, 0.3),
+        reasoning=(
+            f"LLM proposed material_id not among candidates shown ({decision.reasoning})"
+        ),
+        suggested_internal_sku=decision.suggested_internal_sku,
+    )
+
+
+@dataclass
+class _PendingLine:
+    """A line that needs its own expensive matching call — not covered by
+    the alias short-circuit or early dedup (ADR-0022 §1/§2)."""
+
+    index: int
+    line: ExtractedPriceLine
+    embedding: list[float]
+    candidates: list[Material]
+
+
+def _resolve_pending_line(pending: _PendingLine) -> MatchedLine:
+    """Runs entirely in the thread pool — _decide_match is the only
+    network call here, wrapped in retry/backoff (ADR-0022 §2). A line
+    whose retries are exhausted is marked processing_status="failed"
+    instead of raising, so one line's rate-limit exhaustion never fails
+    the whole batch."""
+    try:
+        decision = call_with_retry(
+            lambda: _decide_match(pending.line.raw_name, pending.line.raw_sku, pending.candidates)
+        )
+    except RetryExhaustedError:
+        failed_decision = MatchDecision(
+            action="new",
+            material_id=None,
+            confidence=0.0,
+            reasoning="",
+            suggested_internal_sku=None,
+        )
+        return MatchedLine(
+            extracted=pending.line,
+            decision=failed_decision,
+            embedding=pending.embedding,
+            processing_status="failed",
+        )
+
+    decision = _downgrade_hallucinated_match(decision, pending.candidates)
+    return MatchedLine(extracted=pending.line, decision=decision, embedding=pending.embedding)
+
 
 def match_price_list_lines(
     db: Session, supplier_id: uuid.UUID, lines: list[ExtractedPriceLine]
 ) -> list[MatchedLine]:
-    """Matches each extracted line — alias short-circuit first (ADR-0019
-    §2), otherwise vector search + LLM (ADR-0019 §3) — then flags
-    possible duplicate action="new" lines within this batch (ADR-0019 §4).
-    """
-    results: list[MatchedLine] = []
+    """Matches each extracted line — see ADR-0019 §2-4 and ADR-0022 §1-2:
 
-    for line in lines:
+    1. Compute raw_name embeddings for every line (pool). If
+       EARLY_DEDUP_ENABLED, group lines within DUPLICATE_DISTANCE_THRESHOLD
+       of an earlier line (ADR-0022 §1) — only the first line of each
+       group ("representative") takes the expensive path below; the rest
+       inherit its decision. Currently disabled (see EARLY_DEDUP_ENABLED
+       docstring) — every line is its own representative.
+    2. For each representative: alias short-circuit, else top-K vector
+       search — both sequential in the main thread (db is not
+       thread-safe, ADR-0022 §2).
+    3. Lines still needing an LLM decision run through the pool
+       (concurrency MATCHING_CONCURRENCY), each wrapped in retry/backoff;
+       exhausted retries mark that one line processing_status="failed"
+       without affecting the rest.
+    4. Followers (only possible when EARLY_DEDUP_ENABLED) inherit their
+       representative's decision, get possible_duplicate_of pointing at
+       it, and never make their own network call.
+    5. Post-match duplicate flagging (ADR-0019 §4 / ADR-0021 §3) runs on
+       the assembled results, same as before ADR-0022.
+    """
+    if not lines:
+        return []
+
+    with ThreadPoolExecutor(max_workers=MATCHING_CONCURRENCY) as pool:
+        embeddings = list(
+            pool.map(lambda line: embed_text(material_embedding_input(line.raw_name, {})), lines)
+        )
+
+    representative_of = (
+        group_duplicate_lines(
+            raw_names=[line.raw_name for line in lines],
+            page_numbers=[line.page_number for line in lines],
+        )
+        if EARLY_DEDUP_ENABLED
+        else list(range(len(lines)))
+    )
+
+    # Sequential, main-thread, db-touching pass over every representative
+    # (or non-duplicated) line — alias short-circuit, else candidate
+    # search. Followers (representative_of[i] != i) do nothing here.
+    resolved: dict[int, MatchedLine] = {}
+    pending: list[_PendingLine] = []
+    for i, line in enumerate(lines):
+        if representative_of[i] != i:
+            continue
+
         known_alias = find_known_alias(db, supplier_id, line.raw_name)
         if known_alias is not None:
             decision = MatchDecision(
@@ -151,37 +330,44 @@ def match_price_list_lines(
                 reasoning="known alias",
                 suggested_internal_sku=None,
             )
-            # Эмбеддинг не нужен для known-alias пути (ADR-0019 §2), но
-            # possible_duplicate_of применяется только к action="new" —
-            # пустой вектор здесь никогда не используется в сравнении.
-            results.append(MatchedLine(extracted=line, decision=decision, embedding=[]))
+            resolved[i] = MatchedLine(extracted=line, decision=decision, embedding=embeddings[i])
             continue
 
-        embedding = embed_text(material_embedding_input(line.raw_name, {}))
-        candidates = find_top_candidates(db, embedding)
-        decision = _decide_match(line.raw_name, line.raw_sku, candidates)
+        candidates = find_top_candidates(db, embeddings[i])
+        pending.append(
+            _PendingLine(index=i, line=line, embedding=embeddings[i], candidates=candidates)
+        )
 
-        if decision.action == "match" and decision.material_id not in {
-            candidate.id for candidate in candidates
-        }:
-            # The LLM hallucinated a material_id that was never among the
-            # candidates shown to it in this call. Trusting it as-is would
-            # write a dangling FK and fail the whole batch's db.commit() —
-            # downgrade to "new" so only this one line needs re-review
-            # instead of losing the entire import (ADR-0019: nothing is
-            # trusted blindly, human reviews everything).
-            decision = MatchDecision(
-                action="new",
-                material_id=None,
-                confidence=min(decision.confidence, 0.3),
-                reasoning=(
-                    "LLM proposed material_id not among candidates shown "
-                    f"({decision.reasoning})"
-                ),
-                suggested_internal_sku=decision.suggested_internal_sku,
+    if pending:
+        with ThreadPoolExecutor(max_workers=MATCHING_CONCURRENCY) as pool:
+            resolved_pending = list(pool.map(_resolve_pending_line, pending))
+        for p, matched_line in zip(pending, resolved_pending, strict=True):
+            resolved[p.index] = matched_line
+
+    results: list[MatchedLine] = []
+    for i, line in enumerate(lines):
+        rep = representative_of[i]
+        if rep == i:
+            results.append(resolved[i])
+            continue
+
+        representative = resolved[rep]
+        inherited_decision = MatchDecision(
+            action=representative.decision.action,
+            material_id=representative.decision.material_id,
+            confidence=representative.decision.confidence,
+            reasoning=representative.decision.reasoning + _INHERITED_REASONING_NOTE,
+            suggested_internal_sku=representative.decision.suggested_internal_sku,
+        )
+        results.append(
+            MatchedLine(
+                extracted=line,
+                decision=inherited_decision,
+                embedding=embeddings[i],
+                possible_duplicate_of=[rep],
+                processing_status=representative.processing_status,
             )
+        )
 
-        results.append(MatchedLine(extracted=line, decision=decision, embedding=embedding))
-
-    _flag_duplicate_new_lines(results)
+    _flag_duplicate_lines(results)
     return results

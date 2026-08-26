@@ -50,6 +50,7 @@ def _entry_out(entry) -> PriceListEntryOut:
             if entry.possible_duplicate_of
             else []
         ),
+        processing_status=entry.processing_status,
     )
 
 

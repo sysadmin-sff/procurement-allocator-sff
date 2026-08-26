@@ -66,21 +66,29 @@ def create_price_list_import(
 
     entries: list[PriceListEntry] = []
     for line in matched:
+        # A line whose retry was exhausted (ADR-0022 §2) gets raw fields
+        # as usual but no matching-decision fields — matched_material_id/
+        # confidence/reasoning/suggested_internal_sku stay NULL rather
+        # than reflecting the placeholder MatchDecision built for it.
+        failed = line.processing_status == "failed"
         entry = PriceListEntry(
             import_id=price_list_import.id,
             supplier_raw_name=line.extracted.raw_name,
             supplier_sku=line.extracted.raw_sku,
             matched_material_id=(
-                line.decision.material_id if line.decision.action == "match" else None
+                None
+                if failed
+                else (line.decision.material_id if line.decision.action == "match" else None)
             ),
-            confidence=line.decision.confidence,
-            reasoning=line.decision.reasoning,
+            confidence=None if failed else line.decision.confidence,
+            reasoning=None if failed else line.decision.reasoning,
             price=line.extracted.price,
             currency=line.extracted.currency,
             availability=line.extracted.availability,
             min_order_qty=line.extracted.min_order_qty,
             action=None,
-            suggested_internal_sku=line.decision.suggested_internal_sku,
+            suggested_internal_sku=None if failed else line.decision.suggested_internal_sku,
+            processing_status=line.processing_status,
         )
         db.add(entry)
         entries.append(entry)

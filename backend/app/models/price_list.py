@@ -60,6 +60,15 @@ class PriceListEntry(UUIDPKMixin, Base):
     которые матчинг счёл вероятным дублем — см. ADR-0019 §4, ADR-0020.
     NULL/пустой список = дублей не найдено. Записывается один раз при
     создании импорта, не пересчитывается при последующих apply."""
+    processing_status: Mapped[str | None] = mapped_column(String(20))
+    """NULL = обработано нормально. "failed" = matching не смог обработать
+    строку (retry на RateLimitError исчерпан) — см. ADR-0022 §2. Отдельно
+    от `action`: `action` — решение пользователя на экране ревью (ещё не
+    принято/принято), `processing_status` — смогла ли система в принципе
+    произвести решение для этой строки. Строка с processing_status="failed"
+    имеет заполненные raw-поля (supplier_raw_name/supplier_sku/price/...) и
+    пустые matching-поля (matched_material_id/confidence/reasoning/
+    suggested_internal_sku)."""
 
     import_: Mapped["PriceListImport"] = relationship(back_populates="entries")
     matched_material: Mapped["Material | None"] = relationship(

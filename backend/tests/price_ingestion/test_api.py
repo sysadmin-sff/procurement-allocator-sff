@@ -46,6 +46,7 @@ def test_upload_creates_import_and_entries(db_session, make_supplier):
             extracted=ExtractedPriceLine(
                 raw_name="Screen A", raw_sku=None, price=5.0, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.7,
@@ -90,6 +91,7 @@ def test_upload_response_includes_suggested_sku_and_duplicate_flags(
             extracted=ExtractedPriceLine(
                 raw_name="Screen Type A", raw_sku=None, price=5.0, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.6,
@@ -102,6 +104,7 @@ def test_upload_response_includes_suggested_sku_and_duplicate_flags(
             extracted=ExtractedPriceLine(
                 raw_name="Screen Type A Variant", raw_sku=None, price=5.10, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.6,
@@ -146,6 +149,7 @@ def test_get_after_upload_returns_same_suggested_sku_and_duplicates_as_upload(
             extracted=ExtractedPriceLine(
                 raw_name="Screen Type A", raw_sku=None, price=5.0, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.6,
@@ -158,6 +162,7 @@ def test_get_after_upload_returns_same_suggested_sku_and_duplicates_as_upload(
             extracted=ExtractedPriceLine(
                 raw_name="Screen Type A Variant", raw_sku=None, price=5.10, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.6,
@@ -206,6 +211,7 @@ def test_get_import_returns_current_entries(db_session, make_supplier):
             extracted=ExtractedPriceLine(
                 raw_name="Screen B", raw_sku=None, price=8.0, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.6,
@@ -237,6 +243,7 @@ def test_apply_match_entry_updates_status_when_all_entries_resolved(
             extracted=ExtractedPriceLine(
                 raw_name="Known Screen", raw_sku=None, price=4.0, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="match", material_id=material.id, confidence=0.95,
@@ -275,6 +282,7 @@ def test_apply_skip_leaves_import_pending_until_all_entries_resolved(
             extracted=ExtractedPriceLine(
                 raw_name="Line 1", raw_sku=None, price=1.0, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.5,
@@ -286,6 +294,7 @@ def test_apply_skip_leaves_import_pending_until_all_entries_resolved(
             extracted=ExtractedPriceLine(
                 raw_name="Line 2", raw_sku=None, price=2.0, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.5,
@@ -352,6 +361,7 @@ def _upload_single_entry(supplier):
             extracted=ExtractedPriceLine(
                 raw_name="Some Line", raw_sku=None, price=3.0, currency="USD",
                 availability=None, min_order_qty=None,
+                page_number=1,
             ),
             decision=MatchDecision(
                 action="new", material_id=None, confidence=0.5,
@@ -406,6 +416,42 @@ def test_apply_match_with_nonexistent_material_id_returns_404(db_session, make_s
     )
 
     assert response.status_code == 404
+
+
+def test_upload_response_includes_processing_status_for_failed_line(
+    db_session, make_supplier
+):
+    """A line whose retry was exhausted during matching (ADR-0022 §2)
+    still comes back as a normal PriceListEntry with
+    processing_status="failed" and empty matching fields — not dropped,
+    not a 5xx for the whole import."""
+    session, _material_ids, _supplier_ids = db_session
+    supplier = make_supplier()
+
+    matched = [
+        MatchedLine(
+            extracted=ExtractedPriceLine(
+                raw_name="Unmatchable Line", raw_sku=None, price=9.0, currency="USD",
+                availability=None, min_order_qty=None,
+                page_number=1,
+            ),
+            decision=MatchDecision(
+                action="new", material_id=None, confidence=0.0,
+                reasoning="", suggested_internal_sku=None,
+            ),
+            embedding=[0.1] * 1536,
+            processing_status="failed",
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        response = _upload(supplier.id)
+
+    assert response.status_code == 201
+    entry = response.json()["entries"][0]
+    assert entry["processing_status"] == "failed"
+    assert entry["matched_material_id"] is None
+    assert entry["action"] is None
 
 
 def test_upload_openai_failure_returns_clear_error_not_bare_500(db_session, make_supplier):

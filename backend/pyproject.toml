@@ -19,6 +19,7 @@ dependencies = [
     "openai>=1.50",
     "pgvector>=0.3.6",
     "python-multipart>=0.0.9",
+    "pypdf>=4.3",
 ]
 
 [project.optional-dependencies]

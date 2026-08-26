@@ -6,7 +6,7 @@ export { AllocationResultPage } from './AllocationResultPage';
 export { OrderDetailPage } from './OrderDetailPage';
 export { PurchaseRecordsPage } from './PurchaseRecordsPage';
 export { PriceComparisonPage } from './PriceComparisonPage';
-export { PriceReviewPage } from './PriceReviewPage';
+export { PriceListImportReviewPage } from './price-list-import/PriceListImportReviewPage';
 export { MaterialsPage } from './MaterialsPage';
 export { SuppliersPage } from './SuppliersPage';
 export { SupplierDetailPage } from './suppliers/SupplierDetailPage';

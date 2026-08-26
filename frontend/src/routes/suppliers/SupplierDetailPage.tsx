@@ -1,6 +1,7 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { priceListImportsApi } from '../../api/priceListImports';
 import { suppliersApi } from '../../api/suppliers';
 import type {
   DeliveryPolicy,
@@ -85,6 +86,7 @@ export function SupplierDetailPage() {
               onSaved={refresh}
               onError={setActionError}
             />
+            <PriceListUploadSection supplierId={supplier.id} />
             <ContactsSection
               supplier={supplier}
               onChanged={refresh}
@@ -317,6 +319,56 @@ function BasicInfoSection({
         </div>
       </div>
     </form>
+  );
+}
+
+/* ---------------- Загрузка прайс-листа ---------------- */
+
+/** Upload triggers extraction + matching synchronously (see ADR-0019 §5) and
+ * navigates straight to the review screen — same "upload, then move to a
+ * dedicated review route" shape as ADR-0018's OrderDetailPage upload, except
+ * that one reviews inline while this one is a big enough dataset (whole
+ * price list) to warrant its own page. */
+function PriceListUploadSection({ supplierId }: { supplierId: string }) {
+  const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<unknown>(null);
+
+  async function handleUpload() {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const priceListImport = await priceListImportsApi.upload(supplierId, file);
+      navigate(`/price-list-imports/${priceListImport.import_id}`);
+    } catch (err) {
+      setUploadError(err);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  return (
+    <div className={styles.card}>
+      <div className={styles.sectionHeader}>
+        <div className={styles.sectionTitle}>Прайс-лист</div>
+      </div>
+      <div className={styles.cardPadded}>
+        <div className={styles.formActions} style={{ justifyContent: 'flex-start' }}>
+          <input ref={fileInputRef} type="file" accept=".pdf,image/*" disabled={uploading} />
+          <Button variant="secondary" disabled={uploading} onClick={() => void handleUpload()}>
+            {uploading ? 'Загружаем…' : 'Загрузить прайс-лист'}
+          </Button>
+        </div>
+        {uploading && (
+          <div className={styles.fieldHint}>Обращаемся к ИИ — это может занять несколько секунд…</div>
+        )}
+        {uploadError != null && <ErrorBanner error={uploadError} />}
+      </div>
+    </div>
   );
 }
 

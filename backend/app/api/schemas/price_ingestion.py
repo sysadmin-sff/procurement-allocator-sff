@@ -22,6 +22,7 @@ class PriceListEntryOut(BaseModel):
     action: str | None
     suggested_internal_sku: str | None = None
     possible_duplicate_of: list[uuid.UUID] = []
+    processing_status: str | None = None
 
 
 class PriceListImportOut(BaseModel):

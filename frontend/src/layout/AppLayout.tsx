@@ -5,8 +5,10 @@ const NAV_ITEMS = [
   { to: '/projects', label: 'Проекты' },
   { to: '/suppliers', label: 'Поставщики' },
   { to: '/materials', label: 'Материалы' },
-  { to: '/price-review', label: 'Импорт прайс-листов' },
 ];
+/* Импорт прайс-листа запускается со страницы конкретного поставщика
+   (SupplierDetailPage → "Прайс-лист") — нет отдельного списка импортов,
+   поэтому нет и отдельного пункта верхней навигации. */
 
 export function AppLayout() {
   return (

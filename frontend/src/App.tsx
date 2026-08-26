@@ -5,7 +5,7 @@ import {
   MaterialsPage,
   OrderDetailPage,
   PriceComparisonPage,
-  PriceReviewPage,
+  PriceListImportReviewPage,
   ProjectBuilderPage,
   ProjectRouterPage,
   ProjectsListPage,
@@ -26,7 +26,7 @@ function App() {
         <Route path="/projects/:projectId/purchases" element={<PurchaseRecordsPage />} />
         <Route path="/projects/:projectId/comparison" element={<PriceComparisonPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
-        <Route path="/price-review" element={<PriceReviewPage />} />
+        <Route path="/price-list-imports/:importId" element={<PriceListImportReviewPage />} />
         <Route path="/materials" element={<MaterialsPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/suppliers/:supplierId" element={<SupplierDetailPage />} />

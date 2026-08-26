@@ -404,3 +404,37 @@ export interface PurchaseRecordListOut {
   project_total: TotalComparison;
   supplier_totals: SupplierTotal[];
 }
+
+/** One row of a price-list import — see ADR-0019 §4-5, ADR-0020.
+ * `action` is null until the review screen applies or skips the row; until
+ * then, the AI's *proposed* action is implicit: matched_material_id != null
+ * means "match" was proposed, null means "new" was proposed (with
+ * suggested_internal_sku as the draft SKU). */
+export interface PriceListEntry {
+  id: string;
+  supplier_raw_name: string;
+  supplier_sku: string | null;
+  matched_material_id: string | null;
+  confidence: number | null;
+  reasoning: string | null;
+  price: number;
+  currency: string;
+  availability: number | null;
+  min_order_qty: number | null;
+  action: 'match' | 'new' | 'skip' | null;
+  suggested_internal_sku: string | null;
+  possible_duplicate_of: string[];
+}
+
+export type PriceListImportStatus = 'pending_review' | 'approved' | 'rejected';
+
+export interface PriceListImport {
+  import_id: string;
+  status: PriceListImportStatus;
+  entries: PriceListEntry[];
+}
+
+export type ApplyPriceListEntryIn =
+  | { action: 'match'; material_id: string }
+  | { action: 'new'; internal_sku: string; canonical_name: string }
+  | { action: 'skip' };

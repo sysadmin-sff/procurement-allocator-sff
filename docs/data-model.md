@@ -23,6 +23,7 @@ erDiagram
     Project ||--o{ PurchaseRecord : "фактически закупает"
     Supplier ||--o{ PurchaseRecord : "продаёт по факту"
     Material ||--o{ PurchaseRecord : "опционально аннотирована как"
+    User ||--o{ UserSession : "имеет сессии"
 
     Supplier {
         uuid id
@@ -156,6 +157,24 @@ erDiagram
         uuid material_id "nullable — опциональная ручная аннотация"
         datetime created_at
     }
+    User {
+        uuid id
+        string google_sub "nullable — заполняется при первом логине, ADR-0024"
+        string email "уникальность через ix_users_email"
+        string name "nullable"
+        string role "admin/employee, ADR-0024"
+        bool is_active
+        datetime last_login_at "nullable"
+        datetime created_at
+    }
+    UserSession {
+        uuid id
+        uuid user_id
+        string csrf_token
+        datetime created_at
+        datetime expires_at
+        datetime last_seen_at
+    }
 ```
 
 Правило, которое нельзя нарушать без ADR: `Material.internal_sku` — единственный источник истины
@@ -251,3 +270,17 @@ ordered → completed`. Первые три перехода — автомат�
 откатывает статус в `calculated`. `ordered → completed` — единственный
 ручной переход (кнопка «Завершить проект»), `completed` финален, без
 обратного перехода.
+
+`User`/`UserSession` добавлены сверх исходной диаграммы — см.
+`docs/decisions/0024-authentication-authorization.md` (Google Workspace OIDC).
+`User.google_sub` nullable только для строк, которые администратор
+предсоздал по email до первого логина этого человека (bootstrap-кейс) —
+заполняется при первом успешном логине и дальше используется как основной
+ключ поиска (email в Workspace может смениться, `sub` — нет). Уникальность
+`google_sub` обеспечена частичным индексом (`WHERE google_sub IS NOT NULL`),
+а не обычным unique-constraint, именно из-за множественных `NULL` у
+непровизионированных строк. `User.email` уникален через `ix_users_email`.
+`User.role` — `"admin" | "employee"`, ничего больше не имеет смысла.
+Записи `UserSession` при логауте удаляются физически, а не помечаются
+флагом — история сессий не несёт продуктовой ценности, в отличие от
+`Price`/`User`, где soft-состояние осмысленно.

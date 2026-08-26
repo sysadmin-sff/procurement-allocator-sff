@@ -14,7 +14,30 @@ from app.allocation.service import override_allocation_line_supplier, run_alloca
 from app.main import app
 from app.models import AllocationLine
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
+
+
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-find-replacement{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
+
+
+def _admin_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"admin-find-replacement{_employee_email_counter[0]}@screen-factory-florida.com"
+    admin = make_user(email=email, role="admin")
+    admin_session = make_session(admin, csrf_token=CSRF)
+    return _client_as(admin_session)
 
 
 def _declined_item(session, make_supplier, make_material, make_price, make_project):
@@ -37,7 +60,7 @@ def _declined_item(session, make_supplier, make_material, make_price, make_proje
 
 
 def test_get_material_prices_returns_active_prices_across_suppliers(
-    db_session, make_supplier, make_material, make_price
+    db_session, make_supplier, make_material, make_price, make_user, make_session
 ):
     session, *_ = db_session
     supplier_a = make_supplier(name="A")
@@ -45,6 +68,7 @@ def test_get_material_prices_returns_active_prices_across_suppliers(
     material = make_material()
     make_price(material, supplier_a, price=5.00, availability=10)
     make_price(material, supplier_b, price=7.00, availability=2)
+    client = _admin_client(make_user, make_session)
 
     response = client.get(f"/materials/{material.id}/prices")
 
@@ -56,7 +80,7 @@ def test_get_material_prices_returns_active_prices_across_suppliers(
 
 
 def test_get_material_prices_excludes_closed_prices(
-    db_session, make_supplier, make_material, make_price
+    db_session, make_supplier, make_material, make_price, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier()
@@ -64,6 +88,7 @@ def test_get_material_prices_excludes_closed_prices(
     closed = make_price(material, supplier, price=5.00, availability=10)
     closed.valid_to = closed.valid_from
     session.flush()
+    client = _admin_client(make_user, make_session)
 
     response = client.get(f"/materials/{material.id}/prices")
 
@@ -75,16 +100,22 @@ def test_get_material_prices_excludes_closed_prices(
 
 
 def test_find_replacement_returns_candidates_with_prices_and_line_id(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     declining_supplier, material, project, run, order, item = _declined_item(
         session, make_supplier, make_material, make_price, make_project
     )
-    candidate_supplier = make_supplier(name="Candidate", flat_fee=0.0, free_shipping_threshold=0.0)
+    candidate_supplier = make_supplier(
+        name="Candidate", flat_fee=0.0, free_shipping_threshold=0.0
+    )
     make_price(material, candidate_supplier, price=6.00, availability=10)
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/orders/{order.id}/items/{item.id}/find-replacement")
+    response = client.post(
+        f"/orders/{order.id}/items/{item.id}/find-replacement",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -95,7 +126,7 @@ def test_find_replacement_returns_candidates_with_prices_and_line_id(
 
 
 def test_find_replacement_flags_availability_risk_when_explicitly_short(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -105,8 +136,12 @@ def test_find_replacement_flags_availability_risk_when_explicitly_short(
     make_price(material, short_supplier, price=6.00, availability=2)  # quantity is 10
     unknown_supplier = make_supplier(name="Unknown", flat_fee=0.0, free_shipping_threshold=0.0)
     make_price(material, unknown_supplier, price=8.00, availability=None)
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/orders/{order.id}/items/{item.id}/find-replacement")
+    response = client.post(
+        f"/orders/{order.id}/items/{item.id}/find-replacement",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     candidates = {c["supplier_id"]: c for c in response.json()["candidates"]}
     assert candidates[str(short_supplier.id)]["availability_risk"] is True
@@ -114,7 +149,7 @@ def test_find_replacement_flags_availability_risk_when_explicitly_short(
 
 
 def test_find_replacement_returns_404_when_material_missing_from_latest_run(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -124,14 +159,18 @@ def test_find_replacement_returns_404_when_material_missing_from_latest_run(
 
     session.query(ALine).filter_by(allocation_run_id=run.id).delete()
     session.commit()
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/orders/{order.id}/items/{item.id}/find-replacement")
+    response = client.post(
+        f"/orders/{order.id}/items/{item.id}/find-replacement",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 404
 
 
 def test_find_replacement_uses_latest_run_not_the_run_that_created_the_order(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """The order was created from `run`, but a newer AllocationRun exists by
     the time find-replacement is called — п.2 requires searching the latest
@@ -142,8 +181,12 @@ def test_find_replacement_uses_latest_run_not_the_run_that_created_the_order(
     )
     new_run = run_allocation(session, project.id)
     new_line = session.query(AllocationLine).filter_by(allocation_run_id=new_run.id).one()
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/orders/{order.id}/items/{item.id}/find-replacement")
+    response = client.post(
+        f"/orders/{order.id}/items/{item.id}/find-replacement",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 200
     assert response.json()["line_id"] == str(new_line.id)
@@ -153,7 +196,7 @@ def test_find_replacement_uses_latest_run_not_the_run_that_created_the_order(
 
 
 def test_patch_with_source_order_item_id_sets_attribution(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -162,10 +205,12 @@ def test_patch_with_source_order_item_id_sets_attribution(
     candidate = make_supplier(name="Candidate", flat_fee=0.0, free_shipping_threshold=0.0)
     make_price(material, candidate, price=6.00, availability=10)
     line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
         f"/projects/{project.id}/allocations/{run.id}/lines/{line.id}",
         json={"supplier_id": str(candidate.id), "source_order_item_id": str(item.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -174,7 +219,7 @@ def test_patch_with_source_order_item_id_sets_attribution(
 
 
 def test_get_order_exposes_replaced_by_supplier_after_find_replacement_patch(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -183,10 +228,12 @@ def test_get_order_exposes_replaced_by_supplier_after_find_replacement_patch(
     candidate = make_supplier(name="Candidate", flat_fee=0.0, free_shipping_threshold=0.0)
     make_price(material, candidate, price=6.00, availability=10)
     line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    client = _employee_client(make_user, make_session)
 
     client.patch(
         f"/projects/{project.id}/allocations/{run.id}/lines/{line.id}",
         json={"supplier_id": str(candidate.id), "source_order_item_id": str(item.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     response = client.get(f"/orders/{order.id}")
@@ -197,7 +244,7 @@ def test_get_order_exposes_replaced_by_supplier_after_find_replacement_patch(
 
 
 def test_patch_without_source_order_item_id_leaves_attribution_null(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """Regression: ordinary manual override from AllocationResultPage (no
     source_order_item_id) must not set overridden_via_order_item_id — old
@@ -211,10 +258,12 @@ def test_patch_without_source_order_item_id_leaves_attribution_null(
     project = make_project([(material, 10)])
     run = run_allocation(session, project.id)
     line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
         f"/projects/{project.id}/allocations/{run.id}/lines/{line.id}",
         json={"supplier_id": str(new_supplier.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -223,7 +272,7 @@ def test_patch_without_source_order_item_id_leaves_attribution_null(
 
 
 def test_third_override_without_source_order_item_id_clears_attribution(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """Key ADR-0014 §3 scenario: a line was reassigned via find-replacement
     (attribution set), then reassigned again via an ordinary manual PATCH
@@ -243,10 +292,12 @@ def test_third_override_without_source_order_item_id_clears_attribution(
     )
     make_price(material, plain_override, price=8.00, availability=10)
     line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    client = _employee_client(make_user, make_session)
 
     client.patch(
         f"/projects/{project.id}/allocations/{run.id}/lines/{line.id}",
         json={"supplier_id": str(via_replacement.id), "source_order_item_id": str(item.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
     session.refresh(line)
     assert line.overridden_via_order_item_id == item.id  # sanity
@@ -254,6 +305,7 @@ def test_third_override_without_source_order_item_id_clears_attribution(
     client.patch(
         f"/projects/{project.id}/allocations/{run.id}/lines/{line.id}",
         json={"supplier_id": str(plain_override.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
     session.refresh(line)
     assert line.overridden_via_order_item_id is None
@@ -267,7 +319,7 @@ def test_third_override_without_source_order_item_id_clears_attribution(
 
 
 def test_replacement_draft_order_id_points_to_existing_draft_for_new_supplier(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -277,6 +329,7 @@ def test_replacement_draft_order_id_points_to_existing_draft_for_new_supplier(
     candidate = make_supplier(name="Candidate", flat_fee=0.0, free_shipping_threshold=0.0)
     make_price(material, candidate, price=6.00, availability=10)
     make_price(other_material, candidate, price=3.00, availability=10)
+    client = _employee_client(make_user, make_session)
 
     # Give candidate an existing draft Order in this same project, on a
     # second, unrelated material/line — so it doesn't touch the declining
@@ -315,6 +368,7 @@ def test_replacement_draft_order_id_points_to_existing_draft_for_new_supplier(
     client.patch(
         f"/projects/{project.id}/allocations/{run_for_draft.id}/lines/{line.id}",
         json={"supplier_id": str(candidate.id), "source_order_item_id": str(item.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     response = client.get(f"/orders/{order.id}")
@@ -323,7 +377,7 @@ def test_replacement_draft_order_id_points_to_existing_draft_for_new_supplier(
 
 
 def test_replacement_draft_order_id_null_when_new_supplier_has_no_draft(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -332,10 +386,12 @@ def test_replacement_draft_order_id_null_when_new_supplier_has_no_draft(
     candidate = make_supplier(name="Fresh Candidate", flat_fee=0.0, free_shipping_threshold=0.0)
     make_price(material, candidate, price=6.00, availability=10)
     line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    client = _employee_client(make_user, make_session)
 
     client.patch(
         f"/projects/{project.id}/allocations/{run.id}/lines/{line.id}",
         json={"supplier_id": str(candidate.id), "source_order_item_id": str(item.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     response = client.get(f"/orders/{order.id}")

@@ -5,19 +5,35 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models import Project
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
+
+
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-allocation-api{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
 
 
 def test_allocate_returns_run_with_lines(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
     material = make_material()
     make_price(material, supplier, price=5.00, availability=10)
     project = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/projects/{project.id}/allocate")
+    response = client.post(f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 200
     body = response.json()
@@ -34,17 +50,20 @@ def test_allocate_returns_run_with_lines(
 
 
 def test_get_project_reflects_latest_allocation_run(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
     material = make_material()
     make_price(material, supplier, price=5.00, availability=10)
     project = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
     before_allocate = client.get(f"/projects/{project.id}")
     assert before_allocate.json()["latest_allocation_run"] is None
 
-    allocate_response = client.post(f"/projects/{project.id}/allocate")
+    allocate_response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
     run_id = allocate_response.json()["id"]
 
     after_allocate = client.get(f"/projects/{project.id}")
@@ -54,7 +73,7 @@ def test_get_project_reflects_latest_allocation_run(
 
 
 def test_allocate_returns_infeasible_status_when_sole_supplier_misses_min_order_amount(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """API-level counterpart to the service-level regression in
     test_service.py — status must be visible in AllocationRunOut on both
@@ -69,8 +88,11 @@ def test_allocate_returns_infeasible_status_when_sole_supplier_misses_min_order_
     material = make_material()
     make_price(material, supplier, price=13.25, availability=500)
     project = make_project([(material, 10)])  # 132.50, below the $200 minimum
+    client = _employee_client(make_user, make_session)
 
-    post_response = client.post(f"/projects/{project.id}/allocate")
+    post_response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
 
     assert post_response.status_code == 200
     post_body = post_response.json()
@@ -89,15 +111,18 @@ def test_allocate_returns_infeasible_status_when_sole_supplier_misses_min_order_
 
 
 def test_allocate_includes_orphaned_materials_in_response(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
     orphaned_material = make_material()
     make_price(orphaned_material, supplier, price=3.00, availability=2)
     project = make_project([(orphaned_material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/projects/{project.id}/allocate")
+    response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -111,15 +136,18 @@ def test_allocate_includes_orphaned_materials_in_response(
 
 
 def test_allocate_includes_supplier_summaries_in_response(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=10.0, free_shipping_threshold=1000.0)
     material = make_material()
     make_price(material, supplier, price=5.00, availability=10)
     project = make_project([(material, 1)])
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/projects/{project.id}/allocate")
+    response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
 
     assert response.status_code == 200
     body = response.json()
@@ -131,34 +159,41 @@ def test_allocate_includes_supplier_summaries_in_response(
     assert summary["free_shipping_achieved"] is False
 
 
-def test_allocate_returns_404_for_nonexistent_project():
-    response = client.post(f"/projects/{uuid.uuid4()}/allocate")
+def test_allocate_returns_404_for_nonexistent_project(make_user, make_session):
+    client = _employee_client(make_user, make_session)
+    response = client.post(
+        f"/projects/{uuid.uuid4()}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
 
     assert response.status_code == 404
 
 
-def test_allocate_returns_400_for_project_with_no_items(db_session):
+def test_allocate_returns_400_for_project_with_no_items(db_session, make_user, make_session):
     session, project_ids, *_ = db_session
     project = Project(title="Empty Project", status="draft")
     session.add(project)
     session.commit()
     project_ids.append(project.id)
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/projects/{project.id}/allocate")
+    response = client.post(f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 400
 
 
 def test_get_allocation_run_returns_persisted_result(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
     material = make_material()
     make_price(material, supplier, price=5.00, availability=10)
     project = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    create_response = client.post(f"/projects/{project.id}/allocate")
+    create_response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
     run_id = create_response.json()["id"]
 
     get_response = client.get(f"/projects/{project.id}/allocations/{run_id}")
@@ -168,13 +203,14 @@ def test_get_allocation_run_returns_persisted_result(
 
 
 def test_get_allocation_run_returns_404_for_unknown_run(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     material = make_material()
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
     make_price(material, supplier, price=5.00, availability=10)
     project = make_project([(material, 1)])
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/allocations/{uuid.uuid4()}")
 
@@ -182,7 +218,7 @@ def test_get_allocation_run_returns_404_for_unknown_run(
 
 
 def test_get_allocation_run_returns_404_when_run_belongs_to_different_project(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -190,8 +226,11 @@ def test_get_allocation_run_returns_404_when_run_belongs_to_different_project(
     make_price(material, supplier, price=5.00, availability=10)
     project_a = make_project([(material, 10)])
     project_b = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    run_response = client.post(f"/projects/{project_a.id}/allocate")
+    run_response = client.post(
+        f"/projects/{project_a.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
     run_id = run_response.json()["id"]
 
     response = client.get(f"/projects/{project_b.id}/allocations/{run_id}")
@@ -200,7 +239,7 @@ def test_get_allocation_run_returns_404_when_run_belongs_to_different_project(
 
 
 def test_patch_override_line_supplier_returns_updated_line(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     old_supplier = make_supplier(name="Old Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
@@ -209,14 +248,16 @@ def test_patch_override_line_supplier_returns_updated_line(
     make_price(material, old_supplier, price=5.00, availability=10)
     make_price(material, new_supplier, price=7.00, availability=10)
     project = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    run_response = client.post(f"/projects/{project.id}/allocate")
+    run_response = client.post(f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF})
     run_id = run_response.json()["id"]
     line_id = run_response.json()["lines"][0]["id"]
 
     response = client.patch(
         f"/projects/{project.id}/allocations/{run_id}/lines/{line_id}",
         json={"supplier_id": str(new_supplier.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -230,7 +271,7 @@ def test_patch_override_line_supplier_returns_updated_line(
 
 
 def test_patch_override_line_supplier_persists_across_get(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """The override must survive re-fetching the run — not just be reflected
     in the PATCH response — since it's backend-persisted, not client state.
@@ -242,14 +283,16 @@ def test_patch_override_line_supplier_persists_across_get(
     make_price(material, old_supplier, price=5.00, availability=10)
     make_price(material, new_supplier, price=7.00, availability=10)
     project = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    run_response = client.post(f"/projects/{project.id}/allocate")
+    run_response = client.post(f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF})
     run_id = run_response.json()["id"]
     line_id = run_response.json()["lines"][0]["id"]
 
     client.patch(
         f"/projects/{project.id}/allocations/{run_id}/lines/{line_id}",
         json={"supplier_id": str(new_supplier.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     get_response = client.get(f"/projects/{project.id}/allocations/{run_id}")
@@ -264,7 +307,7 @@ def test_patch_override_line_supplier_persists_across_get(
 
 
 def test_patch_override_returns_422_for_supplier_without_active_price(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     old_supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -274,41 +317,45 @@ def test_patch_override_returns_422_for_supplier_without_active_price(
     material = make_material()
     make_price(material, old_supplier, price=5.00, availability=10)
     project = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    run_response = client.post(f"/projects/{project.id}/allocate")
+    run_response = client.post(f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF})
     run_id = run_response.json()["id"]
     line_id = run_response.json()["lines"][0]["id"]
 
     response = client.patch(
         f"/projects/{project.id}/allocations/{run_id}/lines/{line_id}",
         json={"supplier_id": str(supplier_without_price.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 422
 
 
 def test_patch_override_returns_404_for_unknown_line(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
     material = make_material()
     make_price(material, supplier, price=5.00, availability=10)
     project = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    run_response = client.post(f"/projects/{project.id}/allocate")
+    run_response = client.post(f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF})
     run_id = run_response.json()["id"]
 
     response = client.patch(
         f"/projects/{project.id}/allocations/{run_id}/lines/{uuid.uuid4()}",
         json={"supplier_id": str(supplier.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
 
 
 def test_patch_override_returns_404_when_run_belongs_to_different_project(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -316,14 +363,18 @@ def test_patch_override_returns_404_when_run_belongs_to_different_project(
     make_price(material, supplier, price=5.00, availability=10)
     project_a = make_project([(material, 10)])
     project_b = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    run_response = client.post(f"/projects/{project_a.id}/allocate")
+    run_response = client.post(
+        f"/projects/{project_a.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
     run_id = run_response.json()["id"]
     line_id = run_response.json()["lines"][0]["id"]
 
     response = client.patch(
         f"/projects/{project_b.id}/allocations/{run_id}/lines/{line_id}",
         json={"supplier_id": str(supplier.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404

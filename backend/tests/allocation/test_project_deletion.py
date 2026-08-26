@@ -23,43 +23,63 @@ from app.models import (
 )
 from app.purchase_records.service import create_purchase_record
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
 
 
-def test_delete_project_removes_it(db_session, make_project):
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-project-deletion{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
+
+
+def test_delete_project_removes_it(db_session, make_project, make_user, make_session):
     session, project_ids, *_ = db_session
     project = make_project([])
     project_id = project.id
     project_ids.remove(project_id)  # already gone after delete — nothing left for cleanup
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 204
     session.expire_all()  # the row was deleted by a separate bulk delete() call
     assert session.get(Project, project_id) is None
 
 
-def test_delete_project_returns_404_for_unknown_project():
-    response = client.delete(f"/projects/{uuid.uuid4()}")
+def test_delete_project_returns_404_for_unknown_project(make_user, make_session):
+    client = _employee_client(make_user, make_session)
+    response = client.delete(f"/projects/{uuid.uuid4()}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 404
 
 
-def test_delete_project_cascades_project_items(db_session, make_project, make_material):
+def test_delete_project_cascades_project_items(
+    db_session, make_project, make_material, make_user, make_session
+):
     session, project_ids, *_ = db_session
     material = make_material()
     project = make_project([(material, 5)])
     project_id = project.id
     project_ids.remove(project_id)
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 204
     assert session.query(ProjectItem).filter_by(project_id=project_id).count() == 0
 
 
 def test_delete_project_cascades_allocation_run_and_lines(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, project_ids, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -72,8 +92,9 @@ def test_delete_project_cascades_allocation_run_and_lines(
     run = run_allocation(session, project_id)
     run_id = run.id
     assert session.query(AllocationLine).filter_by(allocation_run_id=run_id).count() == 1
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 204
     assert session.get(AllocationRun, run_id) is None
@@ -81,7 +102,7 @@ def test_delete_project_cascades_allocation_run_and_lines(
 
 
 def test_delete_project_cascades_draft_orders(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, project_ids, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -96,15 +117,18 @@ def test_delete_project_cascades_draft_orders(
     assert orders[0].status == "draft"
     order_id = orders[0].id
     item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 204
     assert session.get(Order, order_id) is None
     assert session.get(OrderItem, item_id) is None
 
 
-def test_delete_project_cascades_purchase_records(db_session, make_supplier, make_project):
+def test_delete_project_cascades_purchase_records(
+    db_session, make_supplier, make_project, make_user, make_session
+):
     session, project_ids, *_ = db_session
     supplier = make_supplier()
     project = make_project([])
@@ -121,15 +145,16 @@ def test_delete_project_cascades_purchase_records(db_session, make_supplier, mak
         material_id=None,
     )
     record_id = record.id
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 204
     assert session.get(PurchaseRecord, record_id) is None
 
 
 def test_delete_project_refuses_when_order_is_sent(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, project_ids, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -142,15 +167,16 @@ def test_delete_project_refuses_when_order_is_sent(
     orders = create_orders_for_run(session, project_id, run.id)
     orders[0].status = "sent"
     session.commit()
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 409
     assert session.get(Project, project_id) is not None
 
 
 def test_delete_project_refuses_when_order_is_approved(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, project_ids, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -163,14 +189,15 @@ def test_delete_project_refuses_when_order_is_approved(
     orders = create_orders_for_run(session, project_id, run.id)
     orders[0].status = "approved"
     session.commit()
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 409
 
 
 def test_delete_project_refusal_does_not_touch_other_data(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """A refused delete must not partially remove anything — not the Order,
     not the AllocationRun, not the project itself. See ADR-0009 п.1."""
@@ -187,8 +214,9 @@ def test_delete_project_refusal_does_not_touch_other_data(
     session.commit()
     order_id = orders[0].id
     run_id = run.id
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 409
     assert session.get(Project, project_id) is not None
@@ -198,7 +226,7 @@ def test_delete_project_refusal_does_not_touch_other_data(
 
 
 def test_delete_project_with_only_draft_orders_across_multiple_suppliers(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, project_ids, *_ = db_session
     supplier_a = make_supplier(name="A", flat_fee=0.0, free_shipping_threshold=0.0)
@@ -215,8 +243,9 @@ def test_delete_project_with_only_draft_orders_across_multiple_suppliers(
     orders = create_orders_for_run(session, project_id, run.id)
     assert len(orders) == 2
     assert all(o.status == "draft" for o in orders)
+    client = _employee_client(make_user, make_session)
 
-    response = client.delete(f"/projects/{project_id}")
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
 
     assert response.status_code == 204
     assert session.query(Order).filter_by(project_id=project_id).count() == 0

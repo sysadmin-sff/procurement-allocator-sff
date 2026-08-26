@@ -15,12 +15,15 @@ if TYPE_CHECKING:
 class User(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True)
+    google_sub: Mapped[str | None] = mapped_column(String(255))
     """NULL only for rows an admin pre-created by email before that person's
     first login — filled on first successful login and used as the primary
     lookup key thereafter (email can change in Workspace, sub cannot).
-    See ADR-0024 §2."""
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    Uniqueness enforced by the partial index `ix_users_google_sub`
+    (`WHERE google_sub IS NOT NULL`) in the migration, not a column-level
+    constraint — see ADR-0024 §2 and the users/user_sessions migration."""
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    """Uniqueness enforced by the `ix_users_email` index in the migration."""
     name: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     """'admin' | 'employee'. See ADR-0024 §2."""

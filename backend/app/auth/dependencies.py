@@ -23,7 +23,9 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
     if request.method in _MUTATING_METHODS:
         header_token = read_csrf_header(request)
-        if header_token is None or not secrets.compare_digest(header_token, session.csrf_token):
+        if header_token is None or not secrets.compare_digest(
+            header_token.encode("utf-8", "ignore"), session.csrf_token.encode("utf-8")
+        ):
             raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
     touch_session(db, session)

@@ -54,6 +54,49 @@ def test_create_user_as_admin(make_user, make_session, db_session):
     ids.append(created.id)
 
 
+def test_create_user_duplicate_email_returns_409(make_user, make_session, db_session):
+    admin = make_user(email="admin-dup@screen-factory-florida.com", role="admin")
+    admin_session = make_session(admin, csrf_token="csrf-dup")
+    client = _client_as(admin_session)
+
+    first = client.post(
+        "/users",
+        json={"email": "dup-target@screen-factory-florida.com", "role": "employee"},
+        headers={"X-CSRF-Token": "csrf-dup"},
+    )
+    assert first.status_code == 201
+
+    db, ids = db_session
+    from app.models import User
+
+    created = db.query(User).filter(User.email == "dup-target@screen-factory-florida.com").one()
+    ids.append(created.id)
+
+    second = client.post(
+        "/users",
+        json={"email": "dup-target@screen-factory-florida.com", "role": "admin"},
+        headers={"X-CSRF-Token": "csrf-dup"},
+    )
+    assert second.status_code == 409
+
+    matching = (
+        db.query(User).filter(User.email == "dup-target@screen-factory-florida.com").all()
+    )
+    assert len(matching) == 1
+
+
+def test_create_user_invalid_role_returns_422(make_user, make_session):
+    admin = make_user(email="admin-badrole@screen-factory-florida.com", role="admin")
+    admin_session = make_session(admin, csrf_token="csrf-badrole")
+    client = _client_as(admin_session)
+    response = client.post(
+        "/users",
+        json={"email": "badrole-target@screen-factory-florida.com", "role": "not-a-real-role"},
+        headers={"X-CSRF-Token": "csrf-badrole"},
+    )
+    assert response.status_code == 422
+
+
 def test_create_user_without_csrf_header_returns_403(make_user, make_session):
     admin = make_user(email="admin3@screen-factory-florida.com", role="admin")
     admin_session = make_session(admin, csrf_token="csrf-create2")

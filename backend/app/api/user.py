@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.schemas.user import UserCreate, UserOut, UserUpdate
@@ -22,7 +23,13 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)) -> User:
         email=payload.email, role=payload.role, is_active=payload.is_active, google_sub=None
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=409, detail="A user with this email already exists"
+        ) from exc
     db.refresh(user)
     return user
 

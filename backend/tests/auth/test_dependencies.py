@@ -42,6 +42,12 @@ def test_get_current_user_invalid_session_id_returns_401(probe_app):
     assert response.status_code == 401
 
 
+def test_get_current_user_malformed_session_id_returns_401(probe_app):
+    probe_app.cookies.set("session_id", "not-a-valid-uuid")
+    response = probe_app.get("/probe/me")
+    assert response.status_code == 401
+
+
 def test_get_current_user_valid_session_returns_user(probe_app, make_user, make_session):
     user = make_user()
     user_session = make_session(user)
@@ -64,6 +70,21 @@ def test_post_with_wrong_csrf_header_returns_403(probe_app, make_user, make_sess
     user_session = make_session(user, csrf_token="secret-csrf")
     probe_app.cookies.set("session_id", str(user_session.id))
     response = probe_app.post("/probe/mutate", headers={"X-CSRF-Token": "wrong-value"})
+    assert response.status_code == 403
+
+
+def test_post_with_non_ascii_csrf_header_returns_403(probe_app, make_user, make_session):
+    # Starlette decodes raw header bytes as latin-1, so a header byte >= 0x80
+    # (here the encoded "é" in "café-wrong-token") produces a non-ASCII `str`.
+    # Pass raw bytes so httpx doesn't ascii-encode the header value itself,
+    # matching what Starlette would actually hand to the app.
+    user = make_user()
+    user_session = make_session(user, csrf_token="secret-csrf")
+    probe_app.cookies.set("session_id", str(user_session.id))
+    response = probe_app.post(
+        "/probe/mutate",
+        headers={"X-CSRF-Token": "café-wrong-token".encode()},
+    )
     assert response.status_code == 403
 
 

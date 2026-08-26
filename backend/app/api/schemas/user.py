@@ -1,17 +1,18 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
 
 class UserCreate(BaseModel):
     email: str
-    role: str
+    role: Literal["admin", "employee"]
     is_active: bool = True
 
 
 class UserUpdate(BaseModel):
-    role: str | None = None
+    role: Literal["admin", "employee"] | None = None
     is_active: bool | None = None
 
 

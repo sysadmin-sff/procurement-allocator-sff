@@ -35,7 +35,7 @@ def read_oauth_flow_cookie(request: Request) -> tuple[str, str] | None:
 
 
 def clear_oauth_flow_cookie(response: Response) -> None:
-    response.delete_cookie(OAUTH_FLOW_COOKIE)
+    response.delete_cookie(OAUTH_FLOW_COOKIE, httponly=True, secure=True, samesite="lax")
 
 
 def set_session_cookies(response: Response, session_id: str, csrf_token: str) -> None:
@@ -44,8 +44,8 @@ def set_session_cookies(response: Response, session_id: str, csrf_token: str) ->
 
 
 def clear_session_cookies(response: Response) -> None:
-    response.delete_cookie(SESSION_COOKIE)
-    response.delete_cookie(CSRF_COOKIE)
+    response.delete_cookie(SESSION_COOKIE, httponly=True, secure=True, samesite="lax")
+    response.delete_cookie(CSRF_COOKIE, httponly=False, secure=True, samesite="lax")
 
 
 def read_session_id(request: Request) -> str | None:

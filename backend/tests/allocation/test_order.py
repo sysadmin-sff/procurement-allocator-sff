@@ -20,7 +20,22 @@ from app.allocation.service import override_allocation_line_supplier, run_alloca
 from app.main import app
 from app.models import AllocationLine, Order
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
+
+
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-order{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
 
 
 def test_create_orders_snapshots_overridden_price_not_original_ilp_price(
@@ -75,7 +90,7 @@ def test_create_orders_marks_lines_ordered_at(
 
 
 def test_get_allocation_run_exposes_ordered_at_on_line(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     """AllocationLineOut must surface ordered_at — the frontend needs it
     (alongside overridden_at) to detect "overridden after the Order was
@@ -88,6 +103,7 @@ def test_get_allocation_run_exposes_ordered_at_on_line(
 
     run = run_allocation(session, project.id)
     create_orders_for_run(session, project.id, run.id)
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/allocations/{run.id}")
 
@@ -155,7 +171,7 @@ def test_create_orders_raises_for_unknown_run(db_session, make_project, make_mat
 
 
 def test_set_confirmed_price_sets_and_clears_confirmed_at(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -166,9 +182,12 @@ def test_set_confirmed_price_sets_and_clears_confirmed_at(
     run = run_allocation(session, project.id)
     orders = create_orders_for_run(session, project.id, run.id)
     item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
-        f"/orders/{orders[0].id}/items/{item_id}", json={"confirmed_price": 5.50}
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"confirmed_price": 5.50},
+        headers={"X-CSRF-Token": CSRF},
     )
     assert response.status_code == 200
     body = response.json()
@@ -176,7 +195,9 @@ def test_set_confirmed_price_sets_and_clears_confirmed_at(
     assert body["confirmed_at"] is not None
 
     cleared = client.patch(
-        f"/orders/{orders[0].id}/items/{item_id}", json={"confirmed_price": None}
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"confirmed_price": None},
+        headers={"X-CSRF-Token": CSRF},
     )
     assert cleared.status_code == 200
     cleared_body = cleared.json()
@@ -295,7 +316,7 @@ def test_set_order_item_fields_omitted_field_leaves_existing_value_untouched(
 
 
 def test_patch_order_item_sets_received_price_via_api(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -305,9 +326,12 @@ def test_patch_order_item_sets_received_price_via_api(
     run = run_allocation(session, project.id)
     orders = create_orders_for_run(session, project.id, run.id)
     item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
-        f"/orders/{orders[0].id}/items/{item_id}", json={"received_price": 4.90}
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"received_price": 4.90},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -317,7 +341,7 @@ def test_patch_order_item_sets_received_price_via_api(
 
 
 def test_patch_order_item_declines_via_api(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -327,10 +351,12 @@ def test_patch_order_item_declines_via_api(
     run = run_allocation(session, project.id)
     orders = create_orders_for_run(session, project.id, run.id)
     item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
         f"/orders/{orders[0].id}/items/{item_id}",
         json={"declined": True, "decline_reason": "нет в наличии"},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -339,7 +365,9 @@ def test_patch_order_item_declines_via_api(
     assert body["decline_reason"] == "нет в наличии"
 
     undeclined = client.patch(
-        f"/orders/{orders[0].id}/items/{item_id}", json={"declined": False}
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"declined": False},
+        headers={"X-CSRF-Token": CSRF},
     )
     assert undeclined.status_code == 200
     undeclined_body = undeclined.json()
@@ -348,7 +376,7 @@ def test_patch_order_item_declines_via_api(
 
 
 def test_patch_order_item_partial_payload_leaves_other_fields_untouched_via_api(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -358,10 +386,17 @@ def test_patch_order_item_partial_payload_leaves_other_fields_untouched_via_api(
     run = run_allocation(session, project.id)
     orders = create_orders_for_run(session, project.id, run.id)
     item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
 
-    client.patch(f"/orders/{orders[0].id}/items/{item_id}", json={"received_price": 4.90})
+    client.patch(
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"received_price": 4.90},
+        headers={"X-CSRF-Token": CSRF},
+    )
     response = client.patch(
-        f"/orders/{orders[0].id}/items/{item_id}", json={"confirmed_price": 5.00}
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"confirmed_price": 5.00},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     body = response.json()
@@ -382,7 +417,7 @@ def test_price_delta_correct_and_null_when_unconfirmed():
 
 
 def test_order_item_out_includes_price_delta_via_api(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -394,13 +429,18 @@ def test_order_item_out_includes_price_delta_via_api(
     orders = create_orders_for_run(session, project.id, run.id)
     order_id = orders[0].id
     item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
 
     unconfirmed = client.get(f"/orders/{order_id}")
     unconfirmed_item = unconfirmed.json()["items"][0]
     assert unconfirmed_item["price_delta"] is None
     assert unconfirmed_item["price_delta_pct"] is None
 
-    client.patch(f"/orders/{order_id}/items/{item_id}", json={"confirmed_price": 12.00})
+    client.patch(
+        f"/orders/{order_id}/items/{item_id}",
+        json={"confirmed_price": 12.00},
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     confirmed = client.get(f"/orders/{order_id}")
     confirmed_item = confirmed.json()["items"][0]
@@ -408,17 +448,23 @@ def test_order_item_out_includes_price_delta_via_api(
     assert round(confirmed_item["price_delta_pct"], 4) == 20.0
 
 
-def test_post_orders_returns_404_for_unknown_run(db_session, make_project):
+def test_post_orders_returns_404_for_unknown_run(
+    db_session, make_project, make_user, make_session
+):
     session, *_ = db_session
     project = make_project([])
+    client = _employee_client(make_user, make_session)
 
-    response = client.post(f"/projects/{project.id}/allocations/{uuid.uuid4()}/orders")
+    response = client.post(
+        f"/projects/{project.id}/allocations/{uuid.uuid4()}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 404
 
 
 def test_post_orders_returns_404_when_run_belongs_to_different_project(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -426,23 +472,30 @@ def test_post_orders_returns_404_when_run_belongs_to_different_project(
     make_price(material, supplier, price=5.00, availability=10)
     project_a = make_project([(material, 10)])
     project_b = make_project([(material, 10)])
+    client = _employee_client(make_user, make_session)
 
-    run_response = client.post(f"/projects/{project_a.id}/allocate")
+    run_response = client.post(
+        f"/projects/{project_a.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
     run_id = run_response.json()["id"]
 
-    response = client.post(f"/projects/{project_b.id}/allocations/{run_id}/orders")
+    response = client.post(
+        f"/projects/{project_b.id}/allocations/{run_id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 404
 
 
-def test_get_order_returns_404_for_unknown_order():
+def test_get_order_returns_404_for_unknown_order(make_user, make_session):
+    client = _employee_client(make_user, make_session)
     response = client.get(f"/orders/{uuid.uuid4()}")
 
     assert response.status_code == 404
 
 
 def test_patch_order_item_returns_404_for_unknown_order(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -452,16 +505,19 @@ def test_patch_order_item_returns_404_for_unknown_order(
     run = run_allocation(session, project.id)
     orders = create_orders_for_run(session, project.id, run.id)
     item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
-        f"/orders/{uuid.uuid4()}/items/{item_id}", json={"confirmed_price": 5.0}
+        f"/orders/{uuid.uuid4()}/items/{item_id}",
+        json={"confirmed_price": 5.0},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
 
 
 def test_patch_order_item_returns_404_for_item_from_different_order(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
@@ -477,16 +533,19 @@ def test_patch_order_item_returns_404_for_item_from_different_order(
     orders_a = create_orders_for_run(session, project_a.id, run_a.id)
     orders_b = create_orders_for_run(session, project_b.id, run_b.id)
     item_from_b = orders_b[0].items[0].id
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
-        f"/orders/{orders_a[0].id}/items/{item_from_b}", json={"confirmed_price": 5.0}
+        f"/orders/{orders_a[0].id}/items/{item_from_b}",
+        json={"confirmed_price": 5.0},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
 
 
 def test_list_project_orders_returns_all_orders_for_project(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier_a = make_supplier(name="A", flat_fee=0.0, free_shipping_threshold=0.0)
@@ -499,6 +558,7 @@ def test_list_project_orders_returns_all_orders_for_project(
 
     run = run_allocation(session, project.id)
     create_orders_for_run(session, project.id, run.id)
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/projects/{project.id}/orders")
 
@@ -506,7 +566,8 @@ def test_list_project_orders_returns_all_orders_for_project(
     assert len(response.json()) == 2
 
 
-def test_list_project_orders_returns_404_for_unknown_project():
+def test_list_project_orders_returns_404_for_unknown_project(make_user, make_session):
+    client = _employee_client(make_user, make_session)
     response = client.get(f"/projects/{uuid.uuid4()}/orders")
 
     assert response.status_code == 404

@@ -18,7 +18,22 @@ from app.allocation.service import run_allocation
 from app.main import app
 from app.models import AllocationLine, Order, OrderItem
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
+
+
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-order-draft-conflict{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
 
 
 def _setup_single_supplier_project(make_supplier, make_material, make_price, make_project):
@@ -69,17 +84,24 @@ def test_conflict_without_replace_drafts_raises_and_creates_nothing(
 
 
 def test_conflict_via_api_returns_409_with_body(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier, material, project = _setup_single_supplier_project(
         make_supplier, make_material, make_price, make_project
     )
     run = run_allocation(session, project.id)
-    client.post(f"/projects/{project.id}/allocations/{run.id}/orders")
+    client = _employee_client(make_user, make_session)
+    client.post(
+        f"/projects/{project.id}/allocations/{run.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     run2 = run_allocation(session, project.id)
-    response = client.post(f"/projects/{project.id}/allocations/{run2.id}/orders")
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 409
     body = response.json()
@@ -97,7 +119,7 @@ def test_conflict_via_api_returns_409_with_body(
 
 
 def test_conflict_flags_has_confirmed_prices_when_old_draft_item_confirmed(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     supplier, material, project = _setup_single_supplier_project(
@@ -106,12 +128,18 @@ def test_conflict_flags_has_confirmed_prices_when_old_draft_item_confirmed(
     run = run_allocation(session, project.id)
     first_orders = create_orders_for_run(session, project.id, run.id)
     item_id = first_orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
     client.patch(
-        f"/orders/{first_orders[0].id}/items/{item_id}", json={"confirmed_price": 5.50}
+        f"/orders/{first_orders[0].id}/items/{item_id}",
+        json={"confirmed_price": 5.50},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     run2 = run_allocation(session, project.id)
-    response = client.post(f"/projects/{project.id}/allocations/{run2.id}/orders")
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
 
     assert response.status_code == 409
     suppliers = response.json()["suppliers_with_existing_drafts"]

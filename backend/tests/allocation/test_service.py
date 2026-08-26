@@ -123,7 +123,7 @@ def test_run_allocation_never_grants_free_shipping_when_threshold_unset(
     """delivery_policy без ключа free_shipping_threshold (а не 0) не должен
     трактоваться солвером как 'бесплатная доставка всегда' — см. фикс
     различения 'порог не задан' vs 'порог явно 0' в service.py/solver.py."""
-    session, project_ids, material_ids, supplier_ids = db_session
+    session, project_ids, material_ids, supplier_ids, *_ = db_session
     supplier = Supplier(
         name="No Threshold Supplier",
         currency="USD",

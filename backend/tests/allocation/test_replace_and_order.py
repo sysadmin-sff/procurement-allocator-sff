@@ -14,7 +14,22 @@ from app.allocation.service import run_allocation
 from app.main import app
 from app.models import AllocationLine, Order
 
-client = TestClient(app)
+CSRF = "test-csrf-token"
+_employee_email_counter = [0]
+
+
+def _client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def _employee_client(make_user, make_session):
+    _employee_email_counter[0] += 1
+    email = f"employee-replace-and-order{_employee_email_counter[0]}@screen-factory-florida.com"
+    employee = make_user(email=email, role="employee")
+    employee_session = make_session(employee, csrf_token=CSRF)
+    return _client_as(employee_session)
 
 
 def _declined_item(session, make_supplier, make_material, make_price, make_project):
@@ -44,7 +59,7 @@ def _line_for(session, run_id, material_id):
 
 
 def test_creates_new_order_when_no_existing_draft(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -52,10 +67,12 @@ def test_creates_new_order_when_no_existing_draft(
     )
     candidate = make_supplier(name="Fresh Candidate", flat_fee=2.50, free_shipping_threshold=0.0)
     make_price(material, candidate, price=6.00, availability=10)
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/orders/{order.id}/items/{item.id}/replace-and-order",
         json={"supplier_id": str(candidate.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -86,7 +103,7 @@ def test_creates_new_order_when_no_existing_draft(
 
 
 def test_adds_to_single_existing_draft_without_touching_other_items(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -116,10 +133,12 @@ def test_adds_to_single_existing_draft_without_touching_other_items(
     item = declining_order.items[0]
     set_order_item_fields(session, declining_order.id, item.id, declined=True)
     order = declining_order
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/orders/{order.id}/items/{item.id}/replace-and-order",
         json={"supplier_id": str(candidate.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200
@@ -147,7 +166,7 @@ def test_adds_to_single_existing_draft_without_touching_other_items(
 
 
 def test_duplicate_material_in_target_draft_returns_409_and_does_not_override(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -182,10 +201,12 @@ def test_duplicate_material_in_target_draft_returns_409_and_does_not_override(
         )
     )
     session.commit()
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/orders/{order.id}/items/{item.id}/replace-and-order",
         json={"supplier_id": str(candidate.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 409
@@ -201,7 +222,7 @@ def test_duplicate_material_in_target_draft_returns_409_and_does_not_override(
 
 
 def test_multiple_existing_drafts_returns_409_and_does_not_override(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -223,10 +244,12 @@ def test_multiple_existing_drafts_returns_409_and_does_not_override(
     )
     session.add_all([dup_a, dup_b])
     session.commit()
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/orders/{order.id}/items/{item.id}/replace-and-order",
         json={"supplier_id": str(candidate.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 409
@@ -245,7 +268,7 @@ def test_multiple_existing_drafts_returns_409_and_does_not_override(
 
 
 def test_material_missing_from_latest_run_returns_404(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     _declining, material, project, run, order, item = _declined_item(
@@ -256,10 +279,12 @@ def test_material_missing_from_latest_run_returns_404(
 
     session.query(AllocationLine).filter_by(allocation_run_id=run.id).delete()
     session.commit()
+    client = _employee_client(make_user, make_session)
 
     response = client.post(
         f"/orders/{order.id}/items/{item.id}/replace-and-order",
         json={"supplier_id": str(candidate.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 404
@@ -269,7 +294,7 @@ def test_material_missing_from_latest_run_returns_404(
 
 
 def test_plain_patch_line_override_without_source_order_item_id_still_works(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
     session, *_ = db_session
     old_supplier = make_supplier(name="Old", flat_fee=0.0, free_shipping_threshold=0.0)
@@ -280,10 +305,12 @@ def test_plain_patch_line_override_without_source_order_item_id_still_works(
     project = make_project([(material, 10)])
     run = run_allocation(session, project.id)
     line = _line_for(session, run.id, material.id)
+    client = _employee_client(make_user, make_session)
 
     response = client.patch(
         f"/projects/{project.id}/allocations/{run.id}/lines/{line.id}",
         json={"supplier_id": str(new_supplier.id)},
+        headers={"X-CSRF-Token": CSRF},
     )
 
     assert response.status_code == 200

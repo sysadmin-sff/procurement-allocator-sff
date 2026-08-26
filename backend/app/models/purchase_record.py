@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from app.models.material import Material
     from app.models.project import Project
     from app.models.supplier import Supplier
+    from app.models.user import User
 
 
 class PurchaseRecord(UUIDPKMixin, TimestampMixin, Base):
@@ -33,7 +34,14 @@ class PurchaseRecord(UUIDPKMixin, TimestampMixin, Base):
     )
     """Опциональная, не блокирующая аннотация — сотрудник ставит вручную, если
     узнаёт материал. Не участвует ни в каком расчёте этого ADR. См. ADR-0008 п.1."""
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id")
+    )
+    """Кто внёс эту запись о фактической закупке — заполняется в
+    create_purchase_record. Nullable ради строк, созданных до ADR-0024.
+    См. ADR-0024 §6."""
 
     project: Mapped["Project"] = relationship()
     supplier: Mapped["Supplier"] = relationship()
     material: Mapped["Material | None"] = relationship()
+    created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_user_id])

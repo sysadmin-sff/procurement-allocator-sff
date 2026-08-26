@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.material import Material
     from app.models.project import Project
     from app.models.supplier import Supplier
+    from app.models.user import User
 
 
 class Order(UUIDPKMixin, TimestampMixin, Base):
@@ -28,10 +29,16 @@ class Order(UUIDPKMixin, TimestampMixin, Base):
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     delivery_fee: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     file_ref: Mapped[str | None] = mapped_column(String(500))
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id")
+    )
+    """Кто создал этот Order — заполняется в create_orders_for_run. Nullable
+    ради строк, созданных до ADR-0024. См. ADR-0024 §6."""
 
     project: Mapped["Project"] = relationship(back_populates="orders")
     supplier: Mapped["Supplier"] = relationship(back_populates="orders")
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order")
+    created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_user_id])
 
 
 class OrderItem(UUIDPKMixin, Base):

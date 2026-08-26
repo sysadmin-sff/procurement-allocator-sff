@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.models.material import Material
     from app.models.project import Project
     from app.models.supplier import Supplier
+    from app.models.user import User
 
 
 class AllocationRun(UUIDPKMixin, Base):
@@ -62,6 +63,13 @@ class AllocationLine(UUIDPKMixin, Base):
     """Не NULL, если поставщик строки был вручную переопределён пользователем
     после run_allocation() — см. ADR-0006. NULL = строка в исходном
     ILP-состоянии."""
+    overridden_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id")
+    )
+    """Кто выполнил ручной override поставщика этой строки — заполняется в
+    override_allocation_line_supplier (оба пути: обычный ручной override и
+    replace_and_sync_order). NULL, если overridden_at NULL (строка ни разу
+    не переопределялась) или строка создана до ADR-0024. См. ADR-0024 §6."""
     original_supplier_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("suppliers.id")
     )
@@ -93,3 +101,4 @@ class AllocationLine(UUIDPKMixin, Base):
         back_populates="allocation_lines", foreign_keys=[supplier_id]
     )
     original_supplier: Mapped["Supplier | None"] = relationship(foreign_keys=[original_supplier_id])
+    overridden_by: Mapped["User | None"] = relationship(foreign_keys=[overridden_by_user_id])

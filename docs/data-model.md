@@ -24,6 +24,10 @@ erDiagram
     Supplier ||--o{ PurchaseRecord : "продаёт по факту"
     Material ||--o{ PurchaseRecord : "опционально аннотирована как"
     User ||--o{ UserSession : "имеет сессии"
+    User ||--o{ Project : "создал"
+    User ||--o{ Order : "создал"
+    User ||--o{ PurchaseRecord : "внёс"
+    User ||--o{ AllocationLine : "переопределил"
 
     Supplier {
         uuid id
@@ -107,6 +111,7 @@ erDiagram
         uuid id
         string title
         string status "draft/calculated/ordered/completed, см. ADR-0011"
+        uuid created_by_user_id "nullable, FK -> User, см. ADR-0024 §6"
     }
     ProjectItem {
         uuid project_id
@@ -128,6 +133,7 @@ erDiagram
         int quantity
         decimal unit_price
         uuid overridden_via_order_item_id "nullable, FK -> OrderItem — добавлено сверх исходной диаграммы, см. ADR-0014"
+        uuid overridden_by_user_id "nullable, FK -> User, см. ADR-0024 §6"
     }
     Order {
         uuid id
@@ -135,6 +141,7 @@ erDiagram
         uuid supplier_id
         string status
         decimal delivery_fee
+        uuid created_by_user_id "nullable, FK -> User, см. ADR-0024 §6"
     }
     OrderItem {
         uuid order_id
@@ -155,6 +162,7 @@ erDiagram
         int quantity
         decimal unit_price
         uuid material_id "nullable — опциональная ручная аннотация"
+        uuid created_by_user_id "nullable, FK -> User, см. ADR-0024 §6"
         datetime created_at
     }
     User {
@@ -284,3 +292,18 @@ ordered → completed`. Первые три перехода — автомат�
 Записи `UserSession` при логауте удаляются физически, а не помечаются
 флагом — история сессий не несёт продуктовой ценности, в отличие от
 `Price`/`User`, где soft-состояние осмысленно.
+
+`Project.created_by_user_id`, `Order.created_by_user_id`,
+`PurchaseRecord.created_by_user_id`, `AllocationLine.overridden_by_user_id`
+добавлены сверх исходной диаграммы — см. `docs/decisions/0024-authentication-authorization.md`
+§6. Все четыре — nullable FK на `User`: nullable ради строк, созданных до
+внедрения ADR-0024, для новых записей всегда заполняются из
+`Depends(get_current_user)` на момент записи. `Project.created_by_user_id`
+заменяет прежнюю строковую колонку `Project.created_by` (`String(255)`),
+которую ни один вызывающий код фактически не заполнял, — не сосуществует
+с ней, одна миграция дропает старую колонку и добавляет новую.
+`AllocationLine.overridden_by_user_id` заполняется в
+`override_allocation_line_supplier()` независимо от того, вызван ли он
+напрямую (обычный ручной override) или из `replace_and_sync_order()`
+(find-replacement-флоу, ADR-0014) — оба пути делегируют в одну и ту же
+функцию, поэтому одно место присвоения покрывает оба сценария.

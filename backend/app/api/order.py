@@ -34,9 +34,10 @@ from app.api.schemas.order_response_parser import (
     MissingItemOut,
     ParseOrderResponseOut,
 )
+from app.api.schemas.price import PriceOut
 from app.auth.dependencies import get_current_user
 from app.core.database import get_db
-from app.models import Order, Project, User
+from app.models import Order, Price, Project, User
 from app.order_response_parser.service import (
     OrderNotFoundError,
     OrderResponseParsingError,
@@ -162,6 +163,21 @@ def patch_order_item(
     except OrderItemNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Order item not found") from exc
     return _to_order_item_out(db, item)
+
+
+@router.get("/materials/{material_id}/prices", response_model=list[PriceOut])
+def get_material_prices(material_id: uuid.UUID, db: Session = Depends(get_db)) -> list[Price]:
+    """Active prices (valid_to IS NULL) for one material across all
+    suppliers — candidate source for the ADR-0014 find-replacement flow.
+    Thin endpoint, no new business logic (ADR-0014 п.1). Lives here, not in
+    material.py, because material.py is admin-only reference-data CRUD
+    (ADR-0024 §4) while this read backs an operational, any-role flow —
+    see ADR-0024 §4 permission-matrix follow-up."""
+    return list(
+        db.query(Price)
+        .filter(Price.material_id == material_id, Price.valid_to.is_(None))
+        .all()
+    )
 
 
 @router.post(

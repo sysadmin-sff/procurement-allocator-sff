@@ -32,14 +32,6 @@ def _employee_client(make_user, make_session):
     return _client_as(employee_session)
 
 
-def _admin_client(make_user, make_session):
-    _employee_email_counter[0] += 1
-    email = f"admin-find-replacement{_employee_email_counter[0]}@screen-factory-florida.com"
-    admin = make_user(email=email, role="admin")
-    admin_session = make_session(admin, csrf_token=CSRF)
-    return _client_as(admin_session)
-
-
 def _declined_item(session, make_supplier, make_material, make_price, make_project):
     """Sets up a project with one material, one supplier, creates a draft
     Order and declines its single item — the common starting point for
@@ -68,7 +60,7 @@ def test_get_material_prices_returns_active_prices_across_suppliers(
     material = make_material()
     make_price(material, supplier_a, price=5.00, availability=10)
     make_price(material, supplier_b, price=7.00, availability=2)
-    client = _admin_client(make_user, make_session)
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/materials/{material.id}/prices")
 
@@ -88,7 +80,7 @@ def test_get_material_prices_excludes_closed_prices(
     closed = make_price(material, supplier, price=5.00, availability=10)
     closed.valid_to = closed.valid_from
     session.flush()
-    client = _admin_client(make_user, make_session)
+    client = _employee_client(make_user, make_session)
 
     response = client.get(f"/materials/{material.id}/prices")
 

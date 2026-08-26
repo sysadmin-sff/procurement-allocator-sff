@@ -5,10 +5,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.schemas.material import MaterialCreate, MaterialOut, MaterialUpdate
-from app.api.schemas.price import PriceOut
 from app.auth.dependencies import require_role
 from app.core.database import get_db
-from app.models import Material, Price
+from app.models import Material
 from app.price_ingestion.embeddings import EmbeddingError, embed_text, material_embedding_input
 
 router = APIRouter(prefix="/materials", dependencies=[Depends(require_role("admin"))])
@@ -69,18 +68,6 @@ def get_material(material_id: uuid.UUID, db: Session = Depends(get_db)) -> Mater
     if material is None:
         raise HTTPException(status_code=404, detail="Material not found")
     return material
-
-
-@router.get("/{material_id}/prices", response_model=list[PriceOut])
-def get_material_prices(material_id: uuid.UUID, db: Session = Depends(get_db)) -> list[Price]:
-    """Active prices (valid_to IS NULL) for one material across all
-    suppliers — candidate source for the ADR-0014 find-replacement flow.
-    Thin endpoint, no new business logic (ADR-0014 п.1)."""
-    return list(
-        db.query(Price)
-        .filter(Price.material_id == material_id, Price.valid_to.is_(None))
-        .all()
-    )
 
 
 @router.put("/{material_id}", response_model=MaterialOut)

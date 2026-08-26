@@ -12,6 +12,24 @@ from app.models import User
 _MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
+def _csrf_token_matches(header_token: str | None, session_token: str) -> bool:
+    """Fail-closed by construction: any exception while preparing or comparing
+    the two values (encoding failure, unexpected type, etc.) is treated as a
+    mismatch, never re-raised. The only way this returns True is a genuine
+    constant-time byte-for-byte match."""
+    if header_token is None:
+        return False
+    try:
+        header_bytes = header_token.encode("utf-8", errors="strict")
+        session_bytes = session_token.encode("utf-8", errors="strict")
+    except Exception:
+        return False
+    try:
+        return secrets.compare_digest(header_bytes, session_bytes)
+    except Exception:
+        return False
+
+
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     session_id = read_session_id(request)
     if session_id is None:
@@ -22,10 +40,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     if request.method in _MUTATING_METHODS:
-        header_token = read_csrf_header(request)
-        if header_token is None or not secrets.compare_digest(
-            header_token.encode("utf-8", "ignore"), session.csrf_token.encode("utf-8")
-        ):
+        if not _csrf_token_matches(read_csrf_header(request), session.csrf_token):
             raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
     touch_session(db, session)

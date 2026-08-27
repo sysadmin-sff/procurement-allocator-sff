@@ -28,7 +28,7 @@ describe('App', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('SCREEN FACTORY')).toBeInTheDocument();
+    expect(await screen.findByAltText('Screen Factory Florida')).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Проекты' })).toBeInTheDocument();
   });
 });

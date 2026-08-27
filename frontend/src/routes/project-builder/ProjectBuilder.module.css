@@ -1,13 +1,14 @@
 .page {
   flex: 1;
   display: flex;
-  justify-content: center;
-  padding: var(--space-10) var(--space-9) 108px;
+  flex-direction: column;
 }
 
 .inner {
   width: 100%;
   max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-9);
 }
 
 .header {
@@ -23,6 +24,11 @@
   font-weight: 600;
   color: var(--color-brand);
   letter-spacing: -0.01em;
+}
+
+.headerMeta {
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-tertiary-alt);
 }
 
 .stack {
@@ -72,7 +78,7 @@
 }
 
 .input:focus {
-  border-color: var(--color-brand);
+  border-color: var(--color-accent);
   background: var(--color-surface);
 }
 
@@ -183,7 +189,7 @@
 }
 
 .rowQtyInput:focus {
-  border-color: var(--color-brand);
+  border-color: var(--color-accent);
   background: var(--color-surface);
 }
 
@@ -274,7 +280,7 @@
 }
 
 .comboboxOptionActive {
-  background: var(--color-brand-tint-alt);
+  background: var(--color-accent-tint);
 }
 
 .comboboxOptionName {
@@ -316,22 +322,6 @@
   border-top: 1px solid var(--color-border);
   border-bottom-left-radius: var(--radius-2xl);
   border-bottom-right-radius: var(--radius-2xl);
-}
-
-.addButton {
-  background: var(--color-brand-tint-alt);
-  color: var(--color-brand);
-  border: none;
-  font-family: var(--font-heading);
-  font-size: var(--text-sm-alt2);
-  font-weight: 600;
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-
-.addButton:hover {
-  background: var(--color-control-fill-hover);
 }
 
 .incompleteFlag {
@@ -403,6 +393,7 @@
 .stickyFooter {
   position: sticky;
   bottom: 0;
+  margin-top: auto;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   box-shadow: var(--shadow-sticky-footer);

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; background:#EEF3FB; }
+  * { box-sizing: border-box; }
+  a { color:#2F56B1; text-decoration:none; }
+  a:hover { color:#24459A; }
+  input, select, button, textarea { font-family:'Manrope','Helvetica Neue',Helvetica,Arial,sans-serif; }
+</style>
+</helmet>
+<div style="font-family:'Manrope','Helvetica Neue',Helvetica,Arial,sans-serif; color:#10224A; background:#EEF3FB; padding:0 0 72px;">
+
+  <div style="background:#002F79; color:#fff; padding:34px 44px 30px; display:flex; align-items:flex-end; gap:36px;">
+    <div>
+      <div style="display:flex; align-items:center; gap:11px; margin-bottom:18px;">
+        <div style="width:32px; height:32px; border-radius:8px; background:#fff; display:flex; align-items:center; justify-content:center; color:#002F79; font-family:Poppins,sans-serif; font-weight:700; font-size:13.5px;">SF</div>
+        <div style="line-height:1.05;">
+          <div style="font-family:Poppins,sans-serif; font-weight:700; font-size:14px; letter-spacing:.02em;">SCREEN FACTORY</div>
+          <div style="font-size:8.5px; letter-spacing:.16em; font-weight:600; color:#FF8D97;">MODERN SOLUTION <span style="background:#fff; color:#002F79; padding:1px 4px; border-radius:2px; letter-spacing:.1em;">FLORIDA</span></div>
+        </div>
+      </div>
+      <div style="font-size:11px; text-transform:uppercase; letter-spacing:.14em; font-weight:700; color:#8FAAE0;">Design system · v1.0 · август 2026</div>
+      <div style="font-family:Poppins,sans-serif; font-size:34px; font-weight:600; letter-spacing:-.02em; margin-top:8px; line-height:1.15;">Единая система для сайта и внутренних инструментов</div>
+      <div style="font-size:14px; line-height:1.6; color:#C7D5EE; margin-top:10px; max-width:720px;">Палитра снята пиксельно с screen-factory-florida.com: навигационный navy <span style="font-weight:700; color:#fff;">#002F79</span>, кнопочный синий <span style="font-weight:700; color:#fff;">#2F56B1</span>, красный логотипа <span style="font-weight:700; color:#fff;">#CE202F</span>, а нейтральная шкала уведена в холодный синеватый тон вместо серого. Внутренний инструмент приводится к ней целиком — старые <span style="font-family:Menlo,monospace; font-size:12.5px;">#1B3A6B</span> и <span style="font-family:Menlo,monospace; font-size:12.5px;">#1D4ED8</span> выводятся из употребления.</div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="flex:none; display:flex; gap:10px;">
+      <div style="background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.22); border-radius:12px; padding:14px 18px; min-width:132px;">
+        <div style="font-size:10px; text-transform:uppercase; letter-spacing:.12em; font-weight:700; color:#8FAAE0;">Токенов цвета</div>
+        <div style="font-family:Poppins,sans-serif; font-size:22px; font-weight:600; margin-top:4px;">26</div>
+      </div>
+      <div style="background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.22); border-radius:12px; padding:14px 18px; min-width:132px;">
+        <div style="font-size:10px; text-transform:uppercase; letter-spacing:.12em; font-weight:700; color:#8FAAE0;">Компонентов</div>
+        <div style="font-family:Poppins,sans-serif; font-size:22px; font-weight:600; margin-top:4px;">7 групп</div>
+      </div>
+      <div style="background:#fff; border-radius:12px; padding:14px 18px; min-width:150px; color:#10224A;">
+        <div style="font-size:10px; text-transform:uppercase; letter-spacing:.12em; font-weight:700; color:#8D97AC;">Применено на экране</div>
+        <div style="font-family:Poppins,sans-serif; font-size:15px; font-weight:600; margin-top:5px; line-height:1.3;">Результат расчёта закупки</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="max-width:1360px; margin:0 auto; padding:36px 44px 0; display:flex; flex-direction:column; gap:34px;">
+
+    <div>
+      <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#2F56B1;">01</div>
+        <div style="font-family:Poppins,sans-serif; font-size:21px; font-weight:600; color:#002F79;">Палитра</div>
+        <div style="font-size:13px; color:#5B6784;">Три брендовых цвета, нейтральная шкала на тёплом сером, статусы</div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:12px;">
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; overflow:hidden; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="height:104px; background:#002F79;"></div>
+          <div style="padding:13px 15px 15px;">
+            <div style="font-family:Poppins,sans-serif; font-size:14px; font-weight:600; color:#002F79;">Navy — brand</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:12.5px; color:#10224A; margin-top:4px;">#002F79</div>
+            <div style="font-size:12px; color:#5B6784; line-height:1.5; margin-top:7px;">Заголовки H1–H3, тёмные поверхности, топбар-акценты, итоговые суммы. Никогда не для мелкого текста на цветном фоне.</div>
+          </div>
+        </div>
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; overflow:hidden; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="height:104px; background:#2F56B1;"></div>
+          <div style="padding:13px 15px 15px;">
+            <div style="font-family:Poppins,sans-serif; font-size:14px; font-weight:600; color:#002F79;">Blue — action</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:12.5px; color:#10224A; margin-top:4px;">#2F56B1 · hover #24459A</div>
+            <div style="font-size:12px; color:#5B6784; line-height:1.5; margin-top:7px;">Primary-кнопки, ссылки, фокус, активные табы и чипы. Один primary на экран.</div>
+          </div>
+        </div>
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; overflow:hidden; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="height:104px; background:#CE202F;"></div>
+          <div style="padding:13px 15px 15px;">
+            <div style="font-family:Poppins,sans-serif; font-size:14px; font-weight:600; color:#002F79;">Red — accent / danger</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:12.5px; color:#10224A; margin-top:4px;">#CE202F · hover #AE1926</div>
+            <div style="font-size:12px; color:#5B6784; line-height:1.5; margin-top:7px;">Красный логотипа. В инструменте — только блокирующие ошибки и деструктив, не декор.</div>
+          </div>
+        </div>
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; overflow:hidden; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="height:104px; background:#EEF3FB; border-bottom:1px solid #DEE7F5; display:flex;">
+            <div style="flex:1; background:#EEF3FB;"></div>
+            <div style="flex:1; background:#F4F8FE;"></div>
+            <div style="flex:1; background:#FFFFFF;"></div>
+          </div>
+          <div style="padding:13px 15px 15px;">
+            <div style="font-family:Poppins,sans-serif; font-size:14px; font-weight:600; color:#002F79;">Поверхности</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:12.5px; color:#10224A; margin-top:4px;">#EEF3FB / #F4F8FE / #FFFFFF</div>
+            <div style="font-size:12px; color:#5B6784; line-height:1.5; margin-top:7px;">Фон приложения · шапки таблиц и футеры карточек · карточки и модалки.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:12px;">
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:16px 18px 18px; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; margin-bottom:12px;">Нейтральные и текст</div>
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#10224A; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700;">Текст основной</div><div style="font-size:11.5px; color:#8D97AC;">заголовки строк, значения, суммы</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#10224A</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#5B6784; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700;">Текст вторичный</div><div style="font-size:11.5px; color:#8D97AC;">мета, описания, подписи под строкой</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#5B6784</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#8D97AC; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700;">Текст третичный</div><div style="font-size:11.5px; color:#8D97AC;">микро-лейблы, артикулы, плейсхолдеры</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#8D97AC</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#E9F0FA; border:1px solid #DEE7F5; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700;">Заливка контрола</div><div style="font-size:11.5px; color:#8D97AC;">secondary-кнопки, инпуты, селекты · hover #DCE6F7</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#E9F0FA</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#DEE7F5; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700;">Бордер / разделитель</div><div style="font-size:11.5px; color:#8D97AC;">карточки #DEE7F5 · строки таблиц #E9EFF8</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#DEE7F5</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#E4EAF4; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700;">Disabled</div><div style="font-size:11.5px; color:#8D97AC;">фон #E4EAF4, текст #9BA6BB</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#9BA6BB</div></div>
+          </div>
+        </div>
+
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:16px 18px 18px; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; margin-bottom:12px;">Статусы и тинты</div>
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#12855A; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700; color:#0E6B49;">Success</div><div style="font-size:11.5px; color:#8D97AC;">одобрено, доставка бесплатна, ордера созданы</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#12855A / #0E6B49</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#E9F5EF; border:1px solid #C6E4D6; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700;">Success tint</div><div style="font-size:11.5px; color:#8D97AC;">фон пилюль и подтверждающих плашек</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#E9F5EF</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#B7791F; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700; color:#8F5D18;">Warning</div><div style="font-size:11.5px; color:#8D97AC;">уверенность 70–90%, «мало на складе», рост цены ≤20%</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#B7791F / #8F5D18</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#FCF3E2; border:1px solid #EBD9AE; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700;">Warning tint</div><div style="font-size:11.5px; color:#8D97AC;">фон предупреждений</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#FCF3E2</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#FDF1F2; border:1px solid #F1C6C9; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700; color:#96131F;">Danger tint / border / text</div><div style="font-size:11.5px; color:#8D97AC;">блокирующие алерты, ошибки полей</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#FDF1F2 / #F1C6C9 / #96131F</div></div>
+            <div style="display:flex; align-items:center; gap:12px;"><div style="width:34px; height:34px; border-radius:8px; background:#E1EAFB; border:1px solid #CBD9F3; flex:none;"></div><div style="flex:1;"><div style="font-size:13px; font-weight:700; color:#2F56B1;">Blue tint / border</div><div style="font-size:11.5px; color:#8D97AC;">бейджи «вручную», выделенная строка, плашки обоснования</div></div><div style="font-family:Menlo,monospace; font-size:12px; color:#5B6784;">#E1EAFB / #CBD9F3</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#2F56B1;">02</div>
+        <div style="font-family:Poppins,sans-serif; font-size:21px; font-weight:600; color:#002F79;">Типографика</div>
+        <div style="font-size:13px; color:#5B6784;">Poppins — заголовки, цифры, кнопки · Manrope — текст и данные · Menlo — артикулы и сырые строки</div>
+      </div>
+      <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; box-shadow:0 4px 14px rgba(16,34,74,.05); overflow:hidden;">
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 300px; gap:24px; align-items:center; padding:15px 20px; border-bottom:1px solid #E9EFF8;">
+          <div style="font-family:Poppins,sans-serif; font-size:34px; font-weight:600; letter-spacing:-.02em; color:#002F79; line-height:1.15;">Результат расчёта закупки</div>
+          <div>
+            <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:600; color:#002F79;">Display / H1 обложки</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784; margin-top:3px;">Poppins 600 · 34px · ls −.02em · #002F79</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 300px; gap:24px; align-items:center; padding:15px 20px; border-bottom:1px solid #E9EFF8;">
+          <div style="font-family:Poppins,sans-serif; font-size:27px; font-weight:600; letter-spacing:-.015em; color:#002F79;">Riverside Pool Cage · 2842 Bayshore Dr</div>
+          <div>
+            <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:600; color:#002F79;">H1 рабочего экрана</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784; margin-top:3px;">Poppins 600 · 27px · ls −.015em</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 300px; gap:24px; align-items:center; padding:15px 20px; border-bottom:1px solid #E9EFF8;">
+          <div style="font-family:Poppins,sans-serif; font-size:16.5px; font-weight:600; color:#002F79;">Alutex Supply Co.</div>
+          <div>
+            <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:600; color:#002F79;">H2 — карточка, группа</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784; margin-top:3px;">Poppins 600 · 16.5px</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 300px; gap:24px; align-items:center; padding:15px 20px; border-bottom:1px solid #E9EFF8;">
+          <div style="font-size:13.5px; font-weight:600; color:#10224A;">Профиль рамный 2×2 SMB, белый</div>
+          <div>
+            <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:600; color:#002F79;">Строка таблицы</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784; margin-top:3px;">Manrope 600 · 13.5px · #10224A</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 300px; gap:24px; align-items:center; padding:15px 20px; border-bottom:1px solid #E9EFF8;">
+          <div style="font-size:13px; color:#5B6784; line-height:1.6;">Алгоритм разложил спецификацию по поставщикам с учётом цен, наличия и порогов бесплатной доставки.</div>
+          <div>
+            <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:600; color:#002F79;">Body / мета</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784; margin-top:3px;">Manrope 400 · 13px · lh 1.6 · #5B6784</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 300px; gap:24px; align-items:center; padding:15px 20px; border-bottom:1px solid #E9EFF8;">
+          <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; color:#8D97AC;">Результат расчёта закупки</div>
+          <div>
+            <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:600; color:#002F79;">Микро-лейбл / надзаголовок</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784; margin-top:3px;">Manrope 700 · 11px · uppercase · ls .12em</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 300px; gap:24px; align-items:center; padding:15px 20px; border-bottom:1px solid #E9EFF8;">
+          <div style="font-family:Poppins,sans-serif; font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; color:#10224A; letter-spacing:-.01em;">$12,617.70</div>
+          <div>
+            <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:600; color:#002F79;">Числовой акцент / итог</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784; margin-top:3px;">Poppins 700 · 24px · tabular-nums</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 300px; gap:24px; align-items:center; padding:15px 20px; border-bottom:1px solid #E9EFF8;">
+          <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784;">96" × 100 ft · MSH-SS-1714-96</div>
+          <div>
+            <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:600; color:#002F79;">Моно — артикулы, строки PDF</div>
+            <div style="font-family:Menlo,Consolas,monospace; font-size:11.5px; color:#5B6784; margin-top:3px;">Menlo / Consolas · 11–11.5px</div>
+          </div>
+        </div>
+        <div style="padding:14px 20px; background:#F4F8FE; font-size:12.5px; color:#5B6784; line-height:1.6;">
+          Все числовые значения — <span style="font-family:Menlo,monospace; font-size:11.5px;">font-variant-numeric: tabular-nums</span>. Минус — U+2212 (−). Деньги — формат <span style="font-family:Menlo,monospace; font-size:11.5px;">en-US</span> с двумя знаками: <span style="font-weight:700; font-variant-numeric:tabular-nums;">$12,480.10</span>. Шкала кегля: 10.5 / 11 / 11.5 / 12 / 12.5 / 13 / 13.5 / 14 / 15 / 16.5 / 19 / 21 / 24 / 27 / 34.
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#2F56B1;">03</div>
+        <div style="font-family:Poppins,sans-serif; font-size:21px; font-weight:600; color:#002F79;">Кнопки</div>
+        <div style="font-size:13px; color:#5B6784;">Наведите — состояния hover настоящие</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:18px; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; margin-bottom:14px;">Варианты</div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+            <button style="background:#2F56B1; color:#fff; border:none; font-size:14px; font-weight:700; padding:13px 24px; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:9px; box-shadow:0 6px 16px rgba(47,86,177,.24);" style-hover="background:#24459A;">Подтвердить <span style="opacity:.7;">»</span></button>
+            <button style="background:#E9F0FA; color:#002F79; border:none; font-size:13.5px; font-weight:700; padding:12px 18px; border-radius:10px; cursor:pointer;" style-hover="background:#DCE6F7;">Secondary</button>
+            <button style="background:#fff; color:#002F79; border:1.5px solid #CBD9F3; font-size:13.5px; font-weight:700; padding:11px 18px; border-radius:10px; cursor:pointer;" style-hover="background:#E1EAFB;">Outline</button>
+            <button style="background:#CE202F; color:#fff; border:none; font-size:13.5px; font-weight:700; padding:12px 18px; border-radius:10px; cursor:pointer;" style-hover="background:#AE1926;">Деструктив</button>
+            <button style="background:transparent; color:#2F56B1; border:none; font-size:13.5px; font-weight:700; padding:12px 10px; border-radius:8px; cursor:pointer;" style-hover="background:#E1EAFB;">Ghost / ссылка »</button>
+            <button disabled="{{ true }}" style="background:#E4EAF4; color:#9BA6BB; border:none; font-size:13.5px; font-weight:700; padding:12px 18px; border-radius:10px; cursor:not-allowed;">Disabled</button>
+          </div>
+          <div style="font-size:12px; color:#5B6784; line-height:1.6; margin-top:14px; border-top:1px solid #E9EFF8; padding-top:12px;">
+            Primary — синий <span style="font-family:Menlo,monospace; font-size:11px;">#2F56B1</span> с тенью <span style="font-family:Menlo,monospace; font-size:11px;">0 6px 16px rgba(47,86,177,.24)</span>, ровно один на экран, всегда справа в футере действий. Navy <span style="font-family:Menlo,monospace; font-size:11px;">#002F79</span> в кнопках не используется — он остаётся цветом заголовков.
+          </div>
+        </div>
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:18px; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; margin-bottom:14px;">Размеры и служебные</div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px;">
+            <button style="background:#2F56B1; color:#fff; border:none; font-size:15px; font-weight:700; padding:14px 26px; border-radius:10px; cursor:pointer;" style-hover="background:#24459A;">L · 15/14×26</button>
+            <button style="background:#2F56B1; color:#fff; border:none; font-size:13.5px; font-weight:700; padding:12px 18px; border-radius:9px; cursor:pointer;" style-hover="background:#24459A;">M · 13.5/12×18</button>
+            <button style="background:#2F56B1; color:#fff; border:none; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:8px; cursor:pointer;" style-hover="background:#24459A;">S · 12.5/9×14</button>
+            <button style="background:#E9F0FA; color:#002F79; border:none; font-size:11.5px; font-weight:700; padding:8px 0; width:74px; border-radius:7px; cursor:pointer;" style-hover="background:#DCE6F7;">XS в строке</button>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <div style="display:flex; gap:4px;">
+              <button style="background:#12855A; color:#fff; border:none; font-size:11.5px; font-weight:700; padding:8px 0; width:70px; border-radius:7px; cursor:pointer;" style-hover="background:#0E6B49;">Одобр.</button>
+              <button style="background:#E9F0FA; color:#5B6784; border:none; font-size:11.5px; font-weight:700; padding:8px 0; width:70px; border-radius:7px; cursor:pointer;" style-hover="background:#DCE6F7;">Откл.</button>
+              <button style="background:#E9F0FA; color:#5B6784; border:none; font-size:11.5px; font-weight:700; padding:8px 0; width:70px; border-radius:7px; cursor:pointer;" style-hover="background:#DCE6F7;">Новый</button>
+            </div>
+            <button style="width:28px; height:28px; background:#E9F0FA; color:#5B6784; border:none; border-radius:8px; cursor:pointer; font-size:13px;" style-hover="background:#E1EAFB; color:#2F56B1;">⤢</button>
+            <button style="width:28px; height:28px; background:#E9F0FA; color:#8D97AC; border:none; border-radius:8px; cursor:pointer; font-size:14px;" style-hover="background:#FDF1F2; color:#CE202F;">×</button>
+          </div>
+          <div style="font-size:12px; color:#5B6784; line-height:1.6; margin-top:14px; border-top:1px solid #E9EFF8; padding-top:12px;">
+            Группа из трёх действий в строке таблицы — сегменты равной ширины, <span style="font-family:Menlo,monospace; font-size:11px;">gap 4px</span>, активный сегмент заливается цветом статуса, повторный клик снимает выбор.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#2F56B1;">04</div>
+        <div style="font-family:Poppins,sans-serif; font-size:21px; font-weight:600; color:#002F79;">Поля форм</div>
+        <div style="font-size:13px; color:#5B6784;">Заливка #E9F0FA + бордер 1.5px; фокус — белый фон и бордер #2F56B1</div>
+      </div>
+      <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:20px; box-shadow:0 4px 14px rgba(16,34,74,.05); display:grid; grid-template-columns:repeat(3,1fr); gap:18px 20px;">
+        <div>
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#5B6784; margin-bottom:6px;">Название проекта</div>
+          <input defaultValue="Riverside Pool Cage — 2842 Bayshore Dr" style="width:100%; background:#E9F0FA; border:1.5px solid #D3DFF2; border-radius:9px; padding:11px 13px; font-size:14px; font-weight:600; color:#10224A; outline:none;" style-focus="background:#fff; border-color:#2F56B1;" />
+          <div style="font-size:11.5px; color:#8D97AC; margin-top:5px;">Обычное состояние · focus меняет фон на белый</div>
+        </div>
+        <div>
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#5B6784; margin-bottom:6px;">Поставщик</div>
+          <select defaultValue="alutex" style="width:100%; background:#E9F0FA; border:1.5px solid #D3DFF2; border-radius:9px; padding:11px 12px; font-size:13px; font-weight:600; color:#10224A; outline:none; cursor:pointer;" style-focus="background:#fff; border-color:#2F56B1;">
+            <option value="alutex">Alutex Supply Co. · $51.75/шт</option>
+            <option value="gulf">Gulf Coast Screen · $53.40/шт</option>
+          </select>
+          <div style="font-size:11.5px; color:#8D97AC; margin-top:5px;">Select: та же геометрия, что и input</div>
+        </div>
+        <div>
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#5B6784; margin-bottom:6px;">Количество</div>
+          <input type="number" defaultValue="46" style="width:100%; background:#E9F0FA; border:1.5px solid #D3DFF2; border-radius:9px; padding:11px 13px; font-size:13px; font-weight:700; color:#10224A; text-align:right; font-variant-numeric:tabular-nums; outline:none;" style-focus="background:#fff; border-color:#2F56B1;" />
+          <div style="font-size:11.5px; color:#8D97AC; margin-top:5px;">Числовое поле — выравнивание по правому краю</div>
+        </div>
+        <div>
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#5B6784; margin-bottom:6px;">Материал</div>
+          <input defaultValue="Сетка Super Screen 96&quot;" style="width:100%; background:#fff; border:1.5px solid #CE202F; border-radius:9px; padding:11px 13px; font-size:13px; font-weight:600; color:#10224A; outline:none;" />
+          <div style="font-size:11.5px; color:#96131F; font-weight:600; margin-top:5px;">Нет совпадения в базе материалов</div>
+        </div>
+        <div>
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#5B6784; margin-bottom:6px;">Поиск по базе</div>
+          <input placeholder="Поиск по базе материалов…" style="width:100%; background:#E9F0FA; border:1.5px solid #D3DFF2; border-radius:9px; padding:11px 13px; font-size:13px; color:#10224A; outline:none;" style-focus="background:#fff; border-color:#2F56B1;" />
+          <div style="font-size:11.5px; color:#8D97AC; margin-top:5px;">Плейсхолдер — #8D97AC, без иконки</div>
+        </div>
+        <div>
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#5B6784; margin-bottom:6px;">Заблокировано</div>
+          <input defaultValue="AL-SMB-22W" disabled="{{ true }}" style="width:100%; background:#E4EAF4; border:1.5px solid #E4EAF4; border-radius:9px; padding:11px 13px; font-size:13px; font-weight:600; color:#9BA6BB; outline:none;" />
+          <div style="font-size:11.5px; color:#8D97AC; margin-top:5px;">Артикул назначается системой</div>
+        </div>
+        <div style="grid-column:span 3; border-top:1px solid #E9EFF8; padding-top:16px; display:flex; align-items:center; gap:26px; flex-wrap:wrap;">
+          <label style="display:flex; align-items:center; gap:9px; font-size:13px; font-weight:600; cursor:pointer;">
+            <input type="checkbox" defaultChecked="{{ true }}" style="width:15px; height:15px; accent-color:#2F56B1; cursor:pointer;" />
+            Одобрять строки с уверенностью выше 95%
+          </label>
+          <div style="display:flex; align-items:center; gap:9px; font-size:13px; font-weight:600;">
+            <button onClick="{{ toggle }}" style="width:40px; height:22px; border-radius:99px; border:none; padding:2px; cursor:pointer; display:flex; justify-content:{{ togglePos }}; background:{{ toggleBg }};"><span style="width:18px; height:18px; border-radius:50%; background:#fff; display:block;"></span></button>
+            Консолидировать доставку
+          </div>
+          <div style="display:flex; gap:6px;">
+            <div style="background:#2F56B1; color:#fff; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:8px; cursor:pointer;">Компактно</div>
+            <div style="background:#E9F0FA; color:#5B6784; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:8px; cursor:pointer;" style-hover="background:#DCE6F7;">Свободно</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:7px; font-size:12.5px; color:#5B6784; font-weight:600;">
+            <span style="background:#E9F0FA; border-radius:5px; padding:3px 6px; font-family:Menlo,monospace; font-size:10.5px; color:#5B6784;">Tab</span>
+            <span style="background:#E9F0FA; border-radius:5px; padding:3px 6px; font-family:Menlo,monospace; font-size:10.5px; color:#5B6784;">↵</span>
+            подсказки клавиш
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#2F56B1;">05</div>
+        <div style="font-family:Poppins,sans-serif; font-size:21px; font-weight:600; color:#002F79;">Предупреждения</div>
+        <div style="font-size:13px; color:#5B6784;">Всегда с действием: алерт без кнопки — это лог, а не алерт</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="background:#FDF1F2; border:1px solid #F1C6C9; border-radius:14px; padding:16px 18px; display:flex; align-items:flex-start; gap:14px;">
+          <div style="width:24px; height:24px; flex:none; border-radius:6px; background:#CE202F; color:#fff; font-family:Poppins,sans-serif; font-weight:700; font-size:15px; line-height:24px; text-align:center;">!</div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-family:Poppins,sans-serif; font-size:14.5px; font-weight:600; color:#96131F;">Блокирующая ошибка — действие невозможно</div>
+            <div style="font-size:13px; color:#7A2E35; margin-top:5px; line-height:1.5;">Позиция не закрыта: не хватает 1 рул. Требуется 6 рул., суммарно доступно 5. Пока дефицит открыт, кнопка создания ордеров disabled, рядом с ней — короткое объяснение почему.</div>
+          </div>
+          <div style="display:flex; gap:8px; flex:none;">
+            <button style="background:#fff; border:1px solid #E6A8AD; color:#96131F; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:9px; cursor:pointer;" style-hover="background:#FBE7E9;">Разбить</button>
+            <button style="background:#CE202F; border:none; color:#fff; font-size:12.5px; font-weight:700; padding:9px 14px; border-radius:9px; cursor:pointer;" style-hover="background:#AE1926;">Исключить</button>
+          </div>
+        </div>
+        <div style="background:#FCF3E2; border:1px solid #EBD9AE; border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:14px;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#B7791F; flex:none;"></div>
+          <div style="flex:1; font-size:13px; color:#6F4A13; line-height:1.5;"><span style="font-weight:700;">Предупреждение.</span> Цена выросла на 12.4% относительно прайса от 14 мая — проверьте перед применением.</div>
+          <button style="background:#fff; border:1px solid #E0CBA0; color:#8F5D18; font-size:12.5px; font-weight:700; padding:8px 13px; border-radius:8px; cursor:pointer;" style-hover="background:#F7EDD8;">Открыть строку</button>
+        </div>
+        <div style="background:#E9F5EF; border:1px solid #C6E4D6; border-radius:14px; padding:14px 18px; display:flex; align-items:center; gap:14px;">
+          <div style="width:22px; height:22px; flex:none; border-radius:50%; background:#12855A; color:#fff; font-size:12px; line-height:22px; text-align:center; font-weight:700;">✓</div>
+          <div style="flex:1; font-size:13px; color:#0E5A3E; line-height:1.5;"><span style="font-weight:700;">Готово.</span> 3 ордера созданы и отправлены на согласование.</div>
+          <button style="background:#fff; border:1px solid #B6DCC9; color:#0E6B49; font-size:12.5px; font-weight:700; padding:8px 13px; border-radius:8px; cursor:pointer;" style-hover="background:#DCEFE5;">К ордерам »</button>
+        </div>
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:12px 18px; display:flex; align-items:center; gap:12px;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#2F56B1; flex:none;"></div>
+          <div style="flex:1; font-size:13px; color:#10224A;">Нейтральная информация о ручных правках: итог отличается от расчёта алгоритма на <span style="font-weight:700; font-variant-numeric:tabular-nums;">+$137.40</span> <span style="color:#5B6784;">(расчёт алгоритма — $12,480.10)</span></div>
+          <button style="background:#E9F0FA; border:none; color:#002F79; font-size:12.5px; font-weight:700; padding:8px 13px; border-radius:8px; cursor:pointer;" style-hover="background:#DCE6F7;">Вернуть расчёт</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#2F56B1;">06</div>
+        <div style="font-family:Poppins,sans-serif; font-size:21px; font-weight:600; color:#002F79;">Таблицы</div>
+        <div style="font-size:13px; color:#5B6784;">Шапка #F4F8FE · строки 44–48px · зебра выключена, разделитель #E9EFF8 · числа справа</div>
+      </div>
+      <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; box-shadow:0 4px 14px rgba(16,34,74,.05); overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:14px; padding:15px 20px 14px; border-bottom:1px solid #E9EFF8;">
+          <div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="font-family:Poppins,sans-serif; font-size:16.5px; font-weight:600; color:#002F79;">Alutex Supply Co.</div>
+              <span style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#2F56B1; background:#E1EAFB; padding:4px 8px; border-radius:99px;">изменено вручную</span>
+            </div>
+            <div style="font-size:12px; color:#5B6784; margin-top:4px; font-weight:500;">Fort Myers · склад 12 миль · срок 2–3 дня · Net 30</div>
+          </div>
+          <div style="flex:1;"></div>
+          <div style="text-align:right;">
+            <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; font-weight:700;">Ордер по поставщику</div>
+            <div style="font-family:Poppins,sans-serif; font-size:18px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:3px;">$3,842.60</div>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:minmax(300px,1fr) 96px 124px 132px 150px; padding:0 20px; background:#F4F8FE; border-bottom:1px solid #E9EFF8; height:36px; align-items:center; font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; font-weight:700;">
+          <div>Материал</div>
+          <div style="text-align:right;">Кол-во</div>
+          <div style="text-align:right;">Цена за ед.</div>
+          <div style="text-align:right;">Сумма</div>
+          <div style="padding-left:20px;">Статус</div>
+        </div>
+        <sc-for list="{{ demoRows }}" as="r" hint-placeholder-count="3">
+          <div style="display:grid; grid-template-columns:minmax(300px,1fr) 96px 124px 132px 150px; padding:11px 20px; border-bottom:1px solid #E9EFF8; align-items:center; font-size:13px; background:{{ r.bg }};">
+            <div style="padding-right:20px;">
+              <div style="font-weight:600; font-size:13.5px;">{{ r.name }}</div>
+              <div style="font-size:11px; color:#8D97AC; margin-top:3px; font-family:Menlo,Consolas,monospace;">{{ r.spec }}</div>
+            </div>
+            <div style="text-align:right; font-variant-numeric:tabular-nums; color:#5B6784;">{{ r.qty }}</div>
+            <div style="text-align:right; font-variant-numeric:tabular-nums;">{{ r.price }}</div>
+            <div style="text-align:right; font-variant-numeric:tabular-nums; font-weight:700;">{{ r.sum }}</div>
+            <div style="padding-left:20px;">
+              <span style="font-size:11px; font-weight:700; padding:4px 9px; border-radius:99px; background:{{ r.pillBg }}; color:{{ r.pillFg }};">{{ r.pill }}</span>
+            </div>
+          </div>
+        </sc-for>
+        <div style="display:flex; align-items:center; gap:12px; padding:13px 20px; background:#F4F8FE;">
+          <div style="width:8px; height:8px; border-radius:50%; background:#12855A;"></div>
+          <div style="font-size:13px;"><span style="font-weight:700;">Доставка: бесплатно</span> <span style="color:#5B6784;">— сумма заказа $3,842.60 выше порога $2,500.00</span></div>
+          <div style="flex:1;"></div>
+          <div style="display:flex; gap:26px; font-size:12.5px; color:#5B6784;">
+            <div>Позиций: <span style="font-weight:700; color:#10224A; font-variant-numeric:tabular-nums;">8</span></div>
+            <div style="color:#10224A;">Итого: <span style="font-family:Poppins,sans-serif; font-weight:700; font-variant-numeric:tabular-nums;">$3,842.60</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#2F56B1;">07</div>
+        <div style="font-family:Poppins,sans-serif; font-size:21px; font-weight:600; color:#002F79;">Бейджи, KPI, геометрия</div>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:18px; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; margin-bottom:14px;">Бейджи и пилюли</div>
+          <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            <span style="font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#2F56B1; background:#E1EAFB; padding:4px 9px; border-radius:99px;">вручную</span>
+            <span style="font-size:11px; font-weight:700; color:#0E6B49; background:#E9F5EF; padding:4px 9px; border-radius:99px; font-variant-numeric:tabular-nums;">98%</span>
+            <span style="font-size:11px; font-weight:700; color:#8F5D18; background:#FCF3E2; padding:4px 9px; border-radius:99px; font-variant-numeric:tabular-nums;">81%</span>
+            <span style="font-size:11px; font-weight:700; color:#96131F; background:#FDF1F2; padding:4px 9px; border-radius:99px; font-variant-numeric:tabular-nums;">54%</span>
+            <span style="font-size:11px; font-weight:700; color:#5B6784; background:#E9F0FA; padding:4px 9px; border-radius:99px;">draft</span>
+            <span style="font-size:11px; font-weight:700; color:#fff; background:#002F79; padding:4px 9px; border-radius:99px;">ордер создан</span>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:18px; margin-top:16px; padding-top:14px; border-top:1px solid #E9EFF8; font-size:12.5px; color:#5B6784;">
+            <div style="display:flex; align-items:center; gap:8px;"><span style="width:7px; height:7px; border-radius:50%; background:#12855A; display:block;"></span> на складе</div>
+            <div style="display:flex; align-items:center; gap:8px;"><span style="width:7px; height:7px; border-radius:50%; background:#B7791F; display:block;"></span> мало</div>
+            <div style="display:flex; align-items:center; gap:8px;"><span style="width:7px; height:7px; border-radius:50%; background:#CE202F; display:block;"></span> под заказ</div>
+            <div style="display:flex; align-items:center; gap:8px;"><span style="width:7px; height:7px; border-radius:50%; background:#8D97AC; display:block;"></span> нейтрально</div>
+          </div>
+          <div style="margin-top:16px; padding-top:14px; border-top:1px solid #E9EFF8;">
+            <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; margin-bottom:10px;">Плашка обоснования</div>
+            <div style="display:inline-flex; align-items:flex-start; gap:8px; background:#E1EAFB; border:1px solid #CBD9F3; border-radius:9px; padding:6px 10px;">
+              <span style="font-family:Poppins,sans-serif; font-weight:700; font-size:11px; color:#2F56B1; line-height:1.35; flex:none;">Дороже на $24.75</span>
+              <span style="font-size:11.5px; color:#4A5876; line-height:1.35;">но экономия $85.00 на консолидации доставки</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:18px; box-shadow:0 4px 14px rgba(16,34,74,.05);">
+            <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; margin-bottom:14px;">Сегментированная KPI-панель</div>
+            <div style="display:flex; align-items:stretch; border:1px solid #DEE7F5; border-radius:14px; overflow:hidden;">
+              <div style="padding:14px 20px;">
+                <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; font-weight:700;">Товары</div>
+                <div style="font-family:Poppins,sans-serif; font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:4px;">$12,342.70</div>
+              </div>
+              <div style="width:1px; background:#DEE7F5;"></div>
+              <div style="padding:14px 20px;">
+                <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; font-weight:700;">Доставка</div>
+                <div style="font-family:Poppins,sans-serif; font-size:19px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:4px;">$275.00</div>
+              </div>
+              <div style="width:1px; background:#DEE7F5;"></div>
+              <div style="flex:1; padding:14px 22px; background:#002F79; color:#fff;">
+                <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; opacity:.72; font-weight:700;">Итого закупки</div>
+                <div style="font-family:Poppins,sans-serif; font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px; letter-spacing:-.01em;">$12,617.70</div>
+              </div>
+            </div>
+          </div>
+          <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; padding:18px; box-shadow:0 4px 14px rgba(16,34,74,.05); font-size:12.5px; color:#5B6784; line-height:1.7;">
+            <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; margin-bottom:10px;">Радиусы, тени, отступы</div>
+            <div>Радиусы: <span style="font-family:Menlo,monospace; font-size:11.5px; color:#10224A;">2 / 5–7 / 8 / 9 / 10 / 12 / 14 / 99 / 50%</span> — микро-плашка, чипы, инпуты, селекты, primary, поповер, карточка, пилюля, точка.</div>
+            <div>Тени: карточка <span style="font-family:Menlo,monospace; font-size:11.5px; color:#10224A;">0 4px 14px rgba(16,34,74,.05)</span> · поповер <span style="font-family:Menlo,monospace; font-size:11.5px; color:#10224A;">0 16px 36px rgba(16,34,74,.16)</span> · primary <span style="font-family:Menlo,monospace; font-size:11.5px; color:#10224A;">0 6px 16px rgba(47,86,177,.24)</span> · sticky-футер <span style="font-family:Menlo,monospace; font-size:11.5px; color:#10224A;">0 −6px 20px rgba(16,34,74,.06)</span>.</div>
+            <div>Отступы: страница 28–44px, карточка 16–20px, ячейка 20px; шаг ритма 4/6/8/10/12/14/16/18/20; между сиблингами — <span style="font-family:Menlo,monospace; font-size:11.5px; color:#10224A;">gap</span>, не margin.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="display:flex; align-items:baseline; gap:14px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:#2F56B1;">08</div>
+        <div style="font-family:Poppins,sans-serif; font-size:21px; font-weight:600; color:#002F79;">Миграция инструмента</div>
+        <div style="font-size:13px; color:#5B6784;">Механическая замена — по каждому цвету один адрес</div>
+      </div>
+      <div style="background:#fff; border:1px solid #DEE7F5; border-radius:14px; box-shadow:0 4px 14px rgba(16,34,74,.05); overflow:hidden;">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1.5fr; padding:0 20px; height:36px; align-items:center; background:#F4F8FE; border-bottom:1px solid #E9EFF8; font-size:10.5px; text-transform:uppercase; letter-spacing:.1em; color:#8D97AC; font-weight:700;">
+          <div>Было в инструменте</div>
+          <div>Стало (бренд)</div>
+          <div>Где</div>
+        </div>
+        <sc-for list="{{ migration }}" as="m" hint-placeholder-count="7">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1.5fr; padding:10px 20px; align-items:center; border-bottom:1px solid #E9EFF8; font-size:12.5px;">
+            <div style="display:flex; align-items:center; gap:9px;"><span style="width:18px; height:18px; border-radius:5px; border:1px solid #DEE7F5; display:block; background:{{ m.from }};"></span><span style="font-family:Menlo,monospace; color:#5B6784;">{{ m.from }}</span></div>
+            <div style="display:flex; align-items:center; gap:9px;"><span style="width:18px; height:18px; border-radius:5px; border:1px solid #DEE7F5; display:block; background:{{ m.to }};"></span><span style="font-family:Menlo,monospace; color:#10224A; font-weight:600;">{{ m.to }}</span></div>
+            <div style="color:#5B6784;">{{ m.where }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background:#002F79; border-radius:16px; padding:24px 28px; display:flex; align-items:center; gap:24px;">
+      <div style="flex:1;">
+        <div style="font-family:Poppins,sans-serif; font-size:17px; font-weight:600; color:#fff;">Система применена целиком на экране «Результат расчёта закупки»</div>
+        <div style="font-size:13px; color:#C7D5EE; margin-top:6px; line-height:1.6;">Тот же экран, что и раньше, но с брендовой палитрой: navy в заголовках и итоговом сегменте, синий #2F56B1 во всех действиях и селектах, красный только в блокирующем дефиците.</div>
+      </div>
+      <a href="./Результат расчёта закупки v2.dc.html" style="flex:none; background:#fff; color:#002F79; font-size:14px; font-weight:700; padding:14px 24px; border-radius:10px;" style-hover="background:#E1EAFB;">Открыть экран »</a>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:2400}}">
+class Component extends DCLogic {
+  state = { toggle: true };
+  renderVals() {
+    return {
+      toggleBg: this.state.toggle ? "#2F56B1" : "#D6DAE3",
+      togglePos: this.state.toggle ? "flex-end" : "flex-start",
+      toggle: () => this.setState(s => ({ toggle: !s.toggle })),
+      demoRows: [
+        { name:"Профиль рамный 2×2 SMB, белый", spec:"24 ft · AL-SMB-22W", qty:"46 шт", price:"$51.75", sum:"$2,380.50", pill:"назначено", pillBg:"#E9F0FA", pillFg:"#5B6784", bg:"#FFFFFF" },
+        { name:"Уголок алюминиевый 6063-T5 50×50×3", spec:"24 ft · AL-ANG-5050", qty:"18 шт", price:"$42.80", sum:"$770.40", pill:"вручную", pillBg:"#E1EAFB", pillFg:"#2F56B1", bg:"#EDF3FD" },
+        { name:"Шпонка (spline) 0.160\", чёрная", spec:"500 ft · SPL-160-BLK", qty:"14 кат.", price:"$24.90", sum:"$348.60", pill:"мало", pillBg:"#FCF3E2", pillFg:"#8F5D18", bg:"#FFFFFF" }
+      ],
+      migration: [
+        { from:"#1B3A6B", to:"#002F79", where:"заголовки, топбар-лок, тёмный сегмент KPI, футер-подложки" },
+        { from:"#1D4ED8", to:"#2F56B1", where:"primary-кнопки, ссылки, фокус, активные состояния (экран импорта)" },
+        { from:"#122A50", to:"#24459A", where:"hover primary-кнопки" },
+        { from:"#D2232A", to:"#CE202F", where:"блокирующие ошибки, деструктив" },
+        { from:"#16233D", to:"#10224A", where:"основной текст" },
+        { from:"#6B7688", to:"#5B6784", where:"вторичный текст" },
+        { from:"#8A94A6", to:"#8D97AC", where:"третичный текст, микро-лейблы" },
+        { from:"#F5F6F8", to:"#EEF3FB", where:"фон приложения — холодный, в семействе бренда" },
+        { from:"#E3E6EC", to:"#DEE7F5", where:"бордеры карточек" },
+        { from:"#F1F3F6", to:"#E9F0FA", where:"заливка полей, селектов, secondary-кнопок" },
+        { from:"#FAFBFC", to:"#F4F8FE", where:"шапки таблиц и футеры карточек" },
+        { from:"#E8EDF6", to:"#E1EAFB", where:"тинт бейджей и плашек обоснования" }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

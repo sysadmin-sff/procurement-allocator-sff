@@ -15,6 +15,7 @@ import type {
 import { Button } from '../../components/Button';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { ErrorBanner } from '../../components/ErrorBanner';
+import { FileInput } from '../../components/FileInput';
 import {
   DeliveryPolicyFields,
   deliveryPolicyToFormValues,
@@ -358,8 +359,8 @@ function PriceListUploadSection({ supplierId }: { supplierId: string }) {
       </div>
       <div className={styles.cardPadded}>
         <div className={styles.formActions} style={{ justifyContent: 'flex-start' }}>
-          <input ref={fileInputRef} type="file" accept=".pdf,image/*" disabled={uploading} />
-          <Button variant="secondary" disabled={uploading} onClick={() => void handleUpload()}>
+          <FileInput ref={fileInputRef} accept=".pdf,image/*" disabled={uploading} />
+          <Button variant="primary" disabled={uploading} onClick={() => void handleUpload()}>
             {uploading ? 'Загружаем…' : 'Загрузить прайс-лист'}
           </Button>
         </div>

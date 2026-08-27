@@ -17,6 +17,7 @@ import type {
   Supplier,
 } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { FileInput } from '../components/FileInput';
 import styles from './order-detail/OrderDetail.module.css';
 
 const LOW_CONFIDENCE_LEVELS = new Set(['low', 'medium']);
@@ -654,7 +655,7 @@ function ParseResponseSection({
       <div className={styles.parseSectionTitle}>Распознавание ответа поставщика</div>
 
       <div className={styles.parseUploadRow}>
-        <input ref={fileInputRef} className={styles.parseFileInput} type="file" accept=".pdf,image/*" disabled={parsing} />
+        <FileInput ref={fileInputRef} accept=".pdf,image/*" disabled={parsing} />
         <button type="button" className={styles.parseButton} disabled={parsing} onClick={() => void handleParse()}>
           {parsing ? 'Распознаём…' : 'Распознать цены из документа'}
         </button>

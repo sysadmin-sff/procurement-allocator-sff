@@ -5,9 +5,16 @@ import { materialsApi } from '../../api/materials';
 import { priceListImportsApi } from '../../api/priceListImports';
 import type { Material, PriceListEntry, PriceListImport } from '../../api/types';
 import { useCurrentUser } from '../../auth/AuthContext';
+import { Badge } from '../../components/Badge';
+import { Button } from '../../components/Button';
 import { ErrorBanner } from '../../components/ErrorBanner';
 import { MaterialCombobox } from '../project-builder/MaterialCombobox';
 import styles from './PriceListImportReview.module.css';
+
+/** Threshold shown on the disabled "Одобрить все с уверенностью >95%"
+ * button — display-only count, not wired to any action. ADR-0019 §4 defers
+ * mass-approve-by-confidence out of MVP explicitly; do not implement it here. */
+const CONFIDENCE_BULK_APPROVE = 0.95;
 
 /** Thresholds mirror docs/ui-reference.md §1 (carried over from the
  * originally-planned Claude Design screen — this one reuses ADR-0018's
@@ -178,6 +185,12 @@ export function PriceListImportReviewPage() {
   const pendingCount = priceListImport.entries.filter(
     (e) => e.action == null && included[e.id],
   ).length;
+  const resolvedCount = priceListImport.entries.filter((e) => e.action != null).length;
+  const totalCount = priceListImport.entries.length;
+  const progressPct = totalCount > 0 ? Math.round((resolvedCount / totalCount) * 100) : 0;
+  const highConfidenceUnresolvedCount = priceListImport.entries.filter(
+    (e) => e.action == null && (e.confidence ?? 0) > CONFIDENCE_BULK_APPROVE,
+  ).length;
 
   return (
     <div className={styles.page}>
@@ -200,20 +213,54 @@ export function PriceListImportReviewPage() {
         </div>
 
         <div className={styles.toolbar}>
-          <span className={styles.toolbarInfo}>
-            {priceListImport.entries.length} строк · выбрано к применению: {pendingCount}
-          </span>
-          <button
-            type="button"
-            className={styles.applyButton}
+          <div>
+            <div className={styles.progressCount}>
+              {resolvedCount} <span className={styles.progressCountTotal}>из {totalCount}</span>
+            </div>
+            <div className={styles.progressCountLabel}>строк обработано</div>
+          </div>
+          <div className={styles.progressBar}>
+            <div className={styles.progressBarFill} style={{ width: `${progressPct}%` }} />
+          </div>
+          <span className={styles.toolbarInfo}>выбрано к применению: {pendingCount}</span>
+          <div className={styles.toolbarSpacer} />
+          <Button
+            variant="primary"
             disabled={!isAdmin || applying || pendingCount === 0}
             onClick={() => void handleApplySelected()}
           >
-            {applying ? 'Применяем…' : 'Применить выбранные'}
-          </button>
+            {applying ? 'Применяем…' : `Применить выбранные (${pendingCount}) »`}
+          </Button>
         </div>
 
         {applySummary != null && <div className={styles.applySummary}>{applySummary}</div>}
+
+        <div className={styles.bulkRow}>
+          {/* ADR-0019 §4: mass-approve by confidence threshold is explicitly
+              deferred out of MVP (spec.md §7 — deliberately, "заложить в
+              архитектуру, не переписывать потом"), not merely unimplemented.
+              Visible per the design mockup, but must stay non-functional
+              here — enabling it would silently reopen that decision. */}
+          <Button variant="secondary" disabled title="Скоро">
+            Одобрить все с уверенностью &gt;{Math.round(CONFIDENCE_BULK_APPROVE * 100)}% (
+            {highConfidenceUnresolvedCount})
+          </Button>
+          <div className={styles.toolbarSpacer} />
+          <div className={styles.legend}>
+            <span className={styles.legendItem}>
+              <span className={`${styles.legendDot} ${styles.legendDotHigh}`} />
+              &gt;90%
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.legendDot} ${styles.legendDotMedium}`} />
+              70–90%
+            </span>
+            <span className={styles.legendItem}>
+              <span className={`${styles.legendDot} ${styles.legendDotLow}`} />
+              &lt;70%
+            </span>
+          </div>
+        </div>
 
         <table className={styles.table}>
           <thead>
@@ -311,11 +358,10 @@ function sortByConfidenceThenDuplicateGroup(entries: PriceListEntry[]): PriceLis
   return result;
 }
 
-function confidenceClass(confidence: number | null): string {
-  if (confidence == null) return '';
-  if (confidence >= CONFIDENCE_HIGH) return styles.confidenceHigh;
-  if (confidence >= CONFIDENCE_MEDIUM) return styles.confidenceMedium;
-  return styles.confidenceLow;
+function confidenceVariant(confidence: number): 'success' | 'warning' | 'danger' {
+  if (confidence >= CONFIDENCE_HIGH) return 'success';
+  if (confidence >= CONFIDENCE_MEDIUM) return 'warning';
+  return 'danger';
 }
 
 function EntryRow({
@@ -396,9 +442,13 @@ function EntryRow({
       </td>
       <td className={styles.numCell}>{formatMoney(entry.price)}</td>
       <td>
-        <span className={confidenceClass(entry.confidence)}>
-          {entry.confidence != null ? `${Math.round(entry.confidence * 100)}%` : '—'}
-        </span>
+        {entry.confidence != null ? (
+          <Badge variant={confidenceVariant(entry.confidence)}>
+            {Math.round(entry.confidence * 100)}%
+          </Badge>
+        ) : (
+          <span className={styles.confidenceEmpty}>—</span>
+        )}
       </td>
       <td className={styles.actionColCell}>
         {resolved ? (
@@ -440,14 +490,9 @@ function EntryRow({
       </td>
       <td className={styles.statusColCell}>
         {!resolved && (
-          <button
-            type="button"
-            className={styles.skipButton}
-            disabled={disabled || skipping}
-            onClick={onSkip}
-          >
+          <Button variant="secondary" disabled={disabled || skipping} onClick={onSkip}>
             {skipping ? 'Пропускаем…' : 'Пропустить'}
-          </button>
+          </Button>
         )}
       </td>
     </tr>

@@ -443,11 +443,6 @@
   flex-wrap: wrap;
 }
 
-.parseFileInput {
-  font-size: var(--text-sm-alt2);
-  color: var(--color-text);
-}
-
 .parseButton {
   background: var(--color-brand);
   color: #fff;

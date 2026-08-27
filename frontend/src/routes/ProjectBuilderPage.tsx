@@ -303,6 +303,7 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
           <h1 className={styles.title}>
             {initialProject ? title.trim() || 'Проект без названия' : 'Создание проекта'}
           </h1>
+          <span className={styles.headerMeta}>черновик · сохраняется автоматически</span>
         </div>
 
         <div className={styles.stack}>
@@ -423,9 +424,9 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
             )}
 
             <div className={styles.footer}>
-              <button type="button" className={styles.addButton} onClick={addRow}>
+              <Button variant="secondary" onClick={addRow}>
                 + Добавить материал
-              </button>
+              </Button>
               <div className={styles.spacer} />
               {incompleteCount > 0 && (
                 <div className={styles.incompleteFlag}>

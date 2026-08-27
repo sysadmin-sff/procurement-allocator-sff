@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin:0; padding:0; background:#F5F6F8; }
+  * { box-sizing:border-box; }
+  a { color:#1B3A6B; text-decoration:none; }
+  a:hover { color:#D2232A; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#D7DBE2; border-radius:6px; }
+  input::placeholder { color:#98A2B3; }
+  input { font-family:inherit; }
+  input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+</style>
+</helmet>
+<div style="font-family:'Manrope','Helvetica Neue',Helvetica,Arial,sans-serif; color:#16233D; background:#F5F6F8; min-height:100vh; display:flex; flex-direction:column;">
+
+  <div style="display:flex; align-items:center; gap:18px; padding:12px 24px; background:#FFFFFF; border-bottom:1px solid #E3E6EC;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="width:28px; height:28px; border-radius:7px; background:#1B3A6B; display:flex; align-items:center; justify-content:center; color:#fff; font-family:Poppins,sans-serif; font-weight:700; font-size:12px;">SF</div>
+      <div style="font-family:Poppins,sans-serif; font-weight:700; font-size:13px; letter-spacing:.02em; color:#1B3A6B;">SCREEN FACTORY <span style="color:#8B95A6; font-weight:500;">· Закупки</span></div>
+    </div>
+    <div style="width:1px; height:22px; background:#E3E6EC;"></div>
+    <div style="display:flex; gap:20px; font-size:13px; font-weight:600; color:#7A8699;">
+      <span style="color:#16233D;">Проекты</span>
+      <span>Материалы</span>
+      <span>Поставщики</span>
+      <span>Импорт прайсов</span>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="font-size:12px; color:#8B95A6; font-weight:600;">А. Мартин · Монтаж</div>
+  </div>
+
+  <div style="flex:1; display:flex; justify-content:center; padding:22px 24px 108px;">
+    <div style="width:100%; max-width:1180px;">
+
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;">
+        <div style="font-family:Poppins,sans-serif; font-size:22px; font-weight:600; color:#1B3A6B; letter-spacing:-.01em;">Создание проекта</div>
+        <div style="font-size:12.5px; color:#8B95A6;">черновик · сохраняется автоматически</div>
+      </div>
+
+      <div style="background:#fff; border:1px solid #E3E6EC; border-radius:14px; box-shadow:0 4px 14px rgba(22,35,61,.05); padding:16px 18px; margin-bottom:14px; display:flex; gap:18px; align-items:flex-end;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#7A8699; margin-bottom:6px;">Название проекта</div>
+          <input value="{{ projectName }}" onChange="{{ setName }}" placeholder="Например: Pool cage — 4821 Bayshore Rd, Bradenton" style="width:100%; background:#F5F6F8; border:1.5px solid #E3E6EC; border-radius:9px; padding:11px 13px; font-size:14.5px; font-weight:600; color:#16233D; outline:none;" style-focus="border-color:#1B3A6B;background:#fff;" />
+        </div>
+        <div style="width:190px;">
+          <div style="font-family:Poppins,sans-serif; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:#7A8699; margin-bottom:6px;">Дата монтажа</div>
+          <input value="2026-08-24" type="date" style="width:100%; background:#F5F6F8; border:1.5px solid #E3E6EC; border-radius:9px; padding:11px 13px; font-size:13.5px; font-weight:600; color:#16233D; outline:none;" style-focus="border-color:#1B3A6B;background:#fff;" />
+        </div>
+      </div>
+
+      <div style="background:#fff; border:1px solid #E3E6EC; border-radius:14px; box-shadow:0 4px 14px rgba(22,35,61,.05); overflow:hidden;">
+
+        <div style="display:flex; align-items:center; gap:12px; padding:13px 18px; border-bottom:1px solid #E3E6EC;">
+          <div style="font-family:Poppins,sans-serif; font-size:13.5px; font-weight:600; color:#1B3A6B;">Спецификация материалов</div>
+          <div style="flex:1;"></div>
+          <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:#8B95A6; font-weight:600;">
+            <span style="background:#F0F2F6; border-radius:5px; padding:3px 6px; font-family:Menlo,monospace; font-size:10.5px; color:#5A6780;">Tab</span> между полями
+            <span style="background:#F0F2F6; border-radius:5px; padding:3px 6px; font-family:Menlo,monospace; font-size:10.5px; color:#5A6780;">Enter</span> новая строка
+            <span style="background:#F0F2F6; border-radius:5px; padding:3px 6px; font-family:Menlo,monospace; font-size:10.5px; color:#5A6780;">↑↓</span> выбор в списке
+          </div>
+        </div>
+
+        <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid; grid-template-columns:44px minmax(320px,1fr) 116px 96px minmax(150px,.6fr) 40px; align-items:center; padding:0 18px; background:#FAFBFC; border-bottom:1px solid #E3E6EC; height:34px; font-family:Poppins,sans-serif; font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.09em; color:#8B95A6;">
+            <div>#</div>
+            <div>Материал</div>
+            <div style="text-align:right; padding-right:12px;">Количество</div>
+            <div>Ед.</div>
+            <div>Категория</div>
+            <div></div>
+          </div>
+
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+            <div style="display:grid; grid-template-columns:44px minmax(320px,1fr) 116px 96px minmax(150px,.6fr) 40px; align-items:center; padding:0 18px; border-bottom:1px solid #EFF1F5; min-height:{{ rowHeight }}; background:{{ r.bg }};">
+              <div style="font-size:12px; color:#98A2B3; font-variant-numeric:tabular-nums; font-weight:600;">{{ r.num }}</div>
+
+              <div style="padding-right:16px; position:relative;">
+                <input value="{{ r.inputValue }}" onChange="{{ r.onQuery }}" onKeyDown="{{ r.onKeyDown }}" onFocus="{{ r.onFocus }}" onBlur="{{ r.onBlur }}" data-mat-row="{{ r.id }}" placeholder="Название или артикул…" style="width:100%; background:#F5F6F8; border:1.5px solid #E3E6EC; border-radius:8px; padding:8px 11px; font-size:13px; font-weight:600; color:#16233D; outline:none; border-color:{{ r.matBorder }}; background-color:{{ r.matBg }};" style-focus="border-color:#1B3A6B;" />
+                <sc-if value="{{ r.open }}">
+                  <div style="position:absolute; z-index:50; top:40px; left:0; width:430px; background:#fff; border:1px solid #DDE1E9; border-radius:11px; box-shadow:0 16px 36px rgba(22,35,61,.17); padding:6px; max-height:274px; overflow:auto;">
+                    <sc-for list="{{ options }}" as="o" hint-placeholder-count="6">
+                      <div onMouseDown="{{ o.pick }}" onMouseEnter="{{ o.hover }}" style="display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px; padding:7px 9px; border-radius:8px; cursor:pointer; background:{{ o.bg }};">
+                        <div style="min-width:0;">
+                          <div style="font-size:13px; font-weight:600; color:#16233D; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ o.name }}</div>
+                          <div style="font-size:11px; color:#8B95A6; margin-top:2px; font-weight:500;">{{ o.meta }}</div>
+                        </div>
+                        <div style="font-family:Menlo,monospace; font-size:10.5px; color:#98A2B3; text-align:right;">{{ o.code }}</div>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ noOptions }}">
+                      <div style="padding:12px 10px; font-size:12.5px; color:#8B95A6;">Ничего не найдено. Проверьте артикул или добавьте материал в базу.</div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+
+              <div style="padding-right:12px;">
+                <input value="{{ r.qty }}" onChange="{{ r.onQty }}" onKeyDown="{{ r.onQtyKey }}" type="number" min="0" data-qty-row="{{ r.id }}" placeholder="0" style="width:100%; text-align:right; background:#F5F6F8; border:1.5px solid #E3E6EC; border-radius:8px; padding:8px 11px; font-size:13px; font-weight:700; color:#16233D; outline:none; font-variant-numeric:tabular-nums;" style-focus="border-color:#1B3A6B;background:#fff;" />
+              </div>
+
+              <div style="font-size:12.5px; color:#5A6780; font-weight:600;">{{ r.unit }}</div>
+
+              <div style="font-size:12px; color:#8B95A6; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:8px;">{{ r.category }}</div>
+
+              <div style="display:flex; justify-content:flex-end;">
+                <button onClick="{{ r.remove }}" title="Удалить строку" style="width:28px; height:28px; border:none; background:#F0F2F6; border-radius:8px; cursor:pointer; color:#7A8699; font-size:14px; line-height:1; padding:0;" style-hover="background:#FBE8E9;color:#D2232A;">×</button>
+              </div>
+            </div>
+          </sc-for>
+        </sc-if>
+
+        <sc-if value="{{ isEmpty }}">
+          <div style="padding:56px 24px 60px; text-align:center;">
+            <div style="width:44px; height:44px; margin:0 auto 16px; border-radius:11px; background:#EEF1F6; color:#1B3A6B; font-family:Poppins,sans-serif; font-size:22px; font-weight:600; line-height:44px;">+</div>
+            <div style="font-family:Poppins,sans-serif; font-size:16px; font-weight:600; color:#1B3A6B; margin-bottom:7px;">В проекте пока нет материалов</div>
+            <div style="font-size:13.5px; color:#7A8699; line-height:1.6; max-width:420px; margin:0 auto 18px;">Добавьте первую позицию и продолжайте с клавиатуры: название или артикул → Tab → количество → Enter добавит следующую строку.</div>
+            <button onClick="{{ addRow }}" style="background:#1B3A6B; color:#fff; border:none; font:inherit; font-family:Poppins,sans-serif; font-size:13.5px; font-weight:600; padding:11px 20px; border-radius:9px; cursor:pointer;" style-hover="background:#152F57;">Добавить материал »</button>
+          </div>
+        </sc-if>
+
+        <div style="display:flex; align-items:center; gap:14px; padding:12px 18px; background:#FAFBFC; border-top:1px solid #E3E6EC;">
+          <button onClick="{{ addRow }}" style="background:#EEF1F6; color:#1B3A6B; border:none; font:inherit; font-family:Poppins,sans-serif; font-size:12.5px; font-weight:600; padding:9px 14px; border-radius:8px; cursor:pointer;" style-hover="background:#E2E7EF;">+ Добавить материал</button>
+          <div style="flex:1;"></div>
+          <sc-if value="{{ hasIncomplete }}">
+            <div style="display:flex; align-items:center; gap:7px; font-size:12.5px; color:#D2232A; font-weight:600;">
+              <span style="width:6px; height:6px; border-radius:50%; background:#D2232A; display:inline-block;"></span>
+              Незаполненных строк: {{ incompleteCount }}
+            </div>
+          </sc-if>
+          <div style="font-size:12.5px; color:#5A6780; font-weight:600; font-variant-numeric:tabular-nums;">{{ countLabel }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="position:sticky; bottom:0; background:#fff; border-top:1px solid #E3E6EC; box-shadow:0 -6px 20px rgba(22,35,61,.06); padding:14px 24px;">
+    <div style="max-width:1180px; margin:0 auto; display:flex; align-items:center; gap:18px;">
+      <div>
+        <div style="font-family:Poppins,sans-serif; font-size:13.5px; font-weight:600; color:#16233D;">{{ projectTitleLabel }}</div>
+        <div style="font-size:12px; color:#8B95A6; font-weight:500;">{{ countLabel }} · {{ totalQtyLabel }}</div>
+      </div>
+      <div style="flex:1;"></div>
+      <button style="background:#F0F2F6; color:#1B3A6B; border:none; font:inherit; font-family:Poppins,sans-serif; font-size:13.5px; font-weight:600; padding:12px 18px; border-radius:9px; cursor:pointer;" style-hover="background:#E2E7EF;">Сохранить черновик</button>
+      <sc-if value="{{ canCalc }}" hint-placeholder-val="{{ true }}">
+        <button style="background:#1B3A6B; color:#fff; border:none; font:inherit; font-family:Poppins,sans-serif; font-size:15px; font-weight:600; padding:14px 26px; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:10px; box-shadow:0 6px 16px rgba(27,58,107,.22);" style-hover="background:#152F57;">Рассчитать закупку <span style="opacity:.7;">»</span></button>
+      </sc-if>
+      <sc-if value="{{ cannotCalc }}">
+        <button disabled="{{ true }}" title="Добавьте хотя бы одну позицию с количеством" style="background:#E7E9EE; color:#A3ABB8; border:none; font:inherit; font-family:Poppins,sans-serif; font-size:15px; font-weight:600; padding:14px 26px; border-radius:10px; cursor:not-allowed; display:flex; align-items:center; gap:10px;">Рассчитать закупку <span style="opacity:.7;">»</span></button>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;compact&quot;,&quot;comfortable&quot;],&quot;default&quot;:&quot;compact&quot;,&quot;tsType&quot;:&quot;'compact' | 'comfortable'&quot;}}">
+const CATALOG = [
+  { id:1,  name:"Уголок алюминиевый 6063-T5 50×50×3", code:"AL-ANG-5050", unit:"хлыст", category:"Алюминиевый профиль", meta:"Алюминиевый профиль · хлыст 7.3 м · mill finish" },
+  { id:2,  name:"Профиль рамный 2×2 SMB, белый", code:"AL-SMB-22W", unit:"хлыст", category:"Алюминиевый профиль", meta:"Алюминиевый профиль · хлыст 7.3 м · белый" },
+  { id:3,  name:"Профиль рамный 2×2 SMB, бронза", code:"AL-SMB-22B", unit:"хлыст", category:"Алюминиевый профиль", meta:"Алюминиевый профиль · хлыст 7.3 м · бронза" },
+  { id:4,  name:"Профиль Chair Rail 2×2, бронза", code:"AL-CHR-22B", unit:"хлыст", category:"Алюминиевый профиль", meta:"Алюминиевый профиль · хлыст 6.4 м" },
+  { id:5,  name:"Сетка Fiberglass 18×14, charcoal", code:"MSH-FG-1814", unit:"рулон", category:"Сетка", meta:"Сетка · 96\" × 100 ft · стандарт" },
+  { id:6,  name:"Сетка Super Screen 17×14, black", code:"MSH-SS-1714", unit:"рулон", category:"Сетка", meta:"Сетка · 72\" × 100 ft · усиленная, PET" },
+  { id:7,  name:"Сетка No-See-Um 20×20, charcoal", code:"MSH-NSU-2020", unit:"рулон", category:"Сетка", meta:"Сетка · 60\" × 100 ft · мелкая ячейка" },
+  { id:8,  name:"Сетка Phifer 20×20, серебро", code:"MSH-PH-2020", unit:"рулон", category:"Сетка", meta:"Сетка · 48\" × 100 ft" },
+  { id:9,  name:"Шпонка (spline) 0.160\", чёрная", code:"SPL-160-BLK", unit:"катушка", category:"Крепёж и уплотнение", meta:"Крепёж · катушка 500 ft" },
+  { id:10, name:"Уплотнитель EPDM 6 мм", code:"SEA-EPDM-6", unit:"катушка", category:"Крепёж и уплотнение", meta:"Уплотнение · катушка 250 ft" },
+  { id:11, name:"Саморез Tek #10×3/4 нерж.", code:"FAS-TEK-1034", unit:"кор.", category:"Крепёж и уплотнение", meta:"Крепёж · коробка 500 шт" },
+  { id:12, name:"Клипса рамная универсальная", code:"HRD-CLIP-UNI", unit:"кор.", category:"Фурнитура", meta:"Фурнитура · коробка 100 шт" },
+  { id:13, name:"Дверная фурнитура, комплект", code:"HRD-DOOR-KIT", unit:"компл.", category:"Фурнитура", meta:"Фурнитура · защёлка + петли, белый" },
+  { id:14, name:"Анкер клиновой 1/4×2 1/4", code:"FAS-WDG-1425", unit:"кор.", category:"Крепёж и уплотнение", meta:"Крепёж · коробка 100 шт · для бетона" },
+  { id:15, name:"Герметик Vulkem 116, серый", code:"SEA-VLK-116", unit:"туба", category:"Крепёж и уплотнение", meta:"Уплотнение · туба 300 мл" },
+  { id:16, name:"Панель Fixed Glass 2×2 рама", code:"AL-FGL-22", unit:"шт", category:"Алюминиевый профиль", meta:"Профиль · под остекление" }
+];
+
+let uid = 100;
+
+class Component extends DCLogic {
+  state = {
+    projectName: "",
+    rows: [
+      { id:1, materialId:null, query:"", qty:"", open:false },
+      { id:2, materialId:null, query:"", qty:"", open:false }
+    ],
+    openId: null,
+    hl: 0,
+    focusRow: null,
+    focusQty: null
+  };
+
+  componentDidUpdate() {
+    const { focusRow, focusQty } = this.state;
+    if (focusRow != null) {
+      const el = document.querySelector('[data-mat-row="' + focusRow + '"]');
+      if (el) el.focus();
+      this.setState({ focusRow: null });
+    } else if (focusQty != null) {
+      const el = document.querySelector('[data-qty-row="' + focusQty + '"]');
+      if (el) { el.focus(); el.select && el.select(); }
+      this.setState({ focusQty: null });
+    }
+  }
+
+  filtered(q) {
+    const s = (q || "").trim().toLowerCase();
+    if (!s) return CATALOG.slice(0, 8);
+    return CATALOG.filter(o => o.name.toLowerCase().includes(s) || o.code.toLowerCase().includes(s) || o.category.toLowerCase().includes(s)).slice(0, 12);
+  }
+
+  addRow() {
+    const id = ++uid;
+    this.setState(s => ({ rows: s.rows.concat([{ id, materialId:null, query:"", qty:"", open:false }]), openId:null, focusRow:id }));
+  }
+
+  pick(rowId, mat) {
+    this.setState(s => ({
+      rows: s.rows.map(r => r.id === rowId ? { ...r, materialId: mat.id, query: mat.name } : r),
+      openId: null, hl: 0, focusQty: rowId
+    }));
+  }
+
+  renderVals() {
+    const { rows, openId, hl, projectName } = this.state;
+    const openRow = rows.find(r => r.id === openId);
+    const list = this.filtered(openRow ? openRow.query : "");
+    const filled = rows.filter(r => r.materialId && Number(r.qty) > 0);
+    const incompleteCount = rows.length - filled.length;
+    const totalQty = filled.reduce((a, r) => a + Number(r.qty), 0);
+
+    const options = list.map((o, i) => ({
+      ...o,
+      bg: i === hl ? "#EEF1F6" : "transparent",
+      hover: () => this.setState({ hl: i }),
+      pick: e => { e.preventDefault(); this.pick(openId, o); }
+    }));
+
+    const mapped = rows.map((r, i) => {
+      const mat = CATALOG.find(c => c.id === r.materialId);
+      const bad = !mat && r.query.trim().length > 0;
+      return {
+        id: r.id,
+        num: i + 1,
+        inputValue: r.query,
+        open: openId === r.id,
+        qty: r.qty,
+        unit: mat ? mat.unit : "—",
+        category: mat ? mat.category : "",
+        bg: i % 2 ? "#FAFBFC" : "#FFFFFF",
+        matBorder: bad ? "#D2232A" : "#E3E6EC",
+        matBg: mat ? "#FFFFFF" : "#F5F6F8",
+        onFocus: () => this.setState({ openId: r.id, hl: 0 }),
+        onBlur: () => this.setState(s => (s.openId === r.id ? { openId: null } : null)),
+        onQuery: e => { const v = e.target.value; this.setState(s => ({ rows: s.rows.map(x => x.id === r.id ? { ...x, query: v, materialId: null } : x), openId: r.id, hl: 0 })); },
+        onKeyDown: e => {
+          const opts = this.filtered(r.query);
+          if (e.key === "ArrowDown") { e.preventDefault(); this.setState(s => ({ hl: Math.min(s.hl + 1, opts.length - 1), openId: r.id })); }
+          else if (e.key === "ArrowUp") { e.preventDefault(); this.setState(s => ({ hl: Math.max(s.hl - 1, 0) })); }
+          else if (e.key === "Enter") { e.preventDefault(); const o = opts[this.state.hl] || opts[0]; if (o) this.pick(r.id, o); }
+          else if (e.key === "Escape") { this.setState({ openId: null }); }
+        },
+        onQty: e => { const v = e.target.value; this.setState(s => ({ rows: s.rows.map(x => x.id === r.id ? { ...x, qty: v } : x) })); },
+        onQtyKey: e => { if (e.key === "Enter") { e.preventDefault(); this.addRow(); } },
+        remove: () => this.setState(s => ({ rows: s.rows.filter(x => x.id !== r.id), openId: null }))
+      };
+    });
+
+    return {
+      rows: mapped, options,
+      noOptions: options.length === 0,
+      projectName,
+      setName: e => this.setState({ projectName: e.target.value }),
+      rowHeight: (this.props.density === "comfortable" ? 52 : 44) + "px",
+      hasRows: rows.length > 0,
+      isEmpty: rows.length === 0,
+      countLabel: filled.length + " " + (filled.length % 10 === 1 && filled.length % 100 !== 11 ? "позиция" : (filled.length % 10 >= 2 && filled.length % 10 <= 4 && (filled.length % 100 < 10 || filled.length % 100 >= 20) ? "позиции" : "позиций")) + " добавлено",
+      totalQtyLabel: "суммарно " + totalQty + " ед.",
+      hasIncomplete: incompleteCount > 0,
+      incompleteCount,
+      canCalc: filled.length > 0,
+      cannotCalc: filled.length === 0,
+      projectTitleLabel: projectName.trim() ? projectName.trim() : "Проект без названия",
+      addRow: () => this.addRow()
+    };
+  }
+}
+</script>
+</body>
+</html>

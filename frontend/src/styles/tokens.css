@@ -1,55 +1,68 @@
 /*
-  Design tokens — source of truth: docs/design/README.md → "Design Tokens"
-  (canon palette from screens 2–3, #1B3A6B / #D2232A). Do not hand-edit
-  docs/design/*.html to match this file — regenerate the design instead
-  (see CLAUDE.md → "Как использовать docs/design/").
+  Design tokens — source of truth: new-design-system/Дизайн-система SFF.dc.html
+  (brand palette snapshotted from screen-factory-florida.com: navy #002F79,
+  action blue #2F56B1, logo red #CE202F). Values here are the exact HEX/px
+  pulled from that file's CSS, including its "было → стало" migration table.
+  Do not hand-edit docs/design/*.html or new-design-system/*.html to match
+  this file — regenerate the design instead (see CLAUDE.md → "Как
+  использовать docs/design/").
 */
 :root {
   /* Color */
-  --color-app-bg: #f5f6f8;
+  --color-app-bg: #eef3fb;
   --color-surface: #ffffff;
-  --color-surface-subtle: #fafbfc;
-  --color-control-fill: #f0f2f6;
-  --color-control-fill-alt: #f1f3f6;
-  --color-control-fill-hover: #e2e7ef;
-  --color-control-fill-alt-hover: #e6e9ef;
-  --color-border: #e3e6ec;
-  --color-border-subtle: #eff1f5;
-  --color-border-subtle-alt: #f0f2f5;
+  --color-surface-subtle: #f4f8fe;
+  --color-control-fill: #e9f0fa;
+  --color-control-fill-alt: #e9f0fa;
+  --color-control-fill-hover: #dce6f7;
+  --color-control-fill-alt-hover: #dce6f7;
+  --color-border: #dee7f5;
+  --color-border-subtle: #e9eff8;
+  --color-border-subtle-alt: #e9eff8;
 
-  --color-text: #16233d;
-  --color-text-secondary: #5a6780;
-  --color-text-secondary-alt: #6b7688;
-  --color-text-tertiary: #8a94a6;
-  --color-text-tertiary-alt: #8b95a6;
+  --color-text: #10224a;
+  --color-text-secondary: #5b6784;
+  --color-text-secondary-alt: #5b6784;
+  --color-text-tertiary: #8d97ac;
+  --color-text-tertiary-alt: #8d97ac;
   --color-text-tertiary-alt2: #98a2b3;
 
-  --color-brand: #1b3a6b;
-  --color-brand-hover: #152f57;
-  --color-brand-hover-alt: #122a50;
-  --color-brand-tint: #e8edf6;
-  --color-brand-tint-alt: #eef1f6;
+  /* Navy — headings, dark surfaces, topbar accents, the dark KPI segment.
+     Never for small text on a colored background. */
+  --color-brand: #002f79;
+  --color-brand-hover: #001f52;
+  --color-brand-hover-alt: #001f52;
+  --color-brand-tint: #e1eafb;
+  --color-brand-tint-alt: #e1eafb;
 
-  --color-danger: #d2232a;
-  --color-danger-hover: #b31c22;
-  --color-danger-text: #a8171e;
-  --color-danger-tint: #fdf2f3;
-  --color-danger-border: #efc2c5;
+  /* Blue — action. Primary buttons, links, focus, active tabs/chips. One
+     primary per screen. Distinct role from --color-brand (see above) — this
+     split didn't exist in the old single-brand-color scheme. */
+  --color-accent: #2f56b1;
+  --color-accent-hover: #24459a;
+  --color-accent-tint: #e1eafb;
+  --color-accent-border: #cbd9f3;
+
+  --color-danger: #ce202f;
+  --color-danger-hover: #ae1926;
+  --color-danger-text: #96131f;
+  --color-danger-tint: #fdf1f2;
+  --color-danger-border: #f1c6c9;
 
   --color-success: #12855a;
-  --color-success-alt: #0f6b4a;
+  --color-success-alt: #0e6b49;
   --color-success-alt2: #0e6b49;
-  --color-success-tint: #e8f5ef;
-  --color-success-tint-alt: #f3faf6;
+  --color-success-tint: #e9f5ef;
+  --color-success-tint-alt: #e9f5ef;
 
   --color-warning: #b7791f;
-  --color-warning-text: #95601a;
+  --color-warning-text: #8f5d18;
   --color-warning-tint: #fcf3e2;
 
-  --color-disabled-bg: #e7e9ee;
-  --color-disabled-bg-alt: #e9ecf1;
-  --color-disabled-text: #a3abb8;
-  --color-disabled-text-alt: #a6aebc;
+  --color-disabled-bg: #e4eaf4;
+  --color-disabled-bg-alt: #e4eaf4;
+  --color-disabled-text: #9ba6bb;
+  --color-disabled-text-alt: #9ba6bb;
 
   /* Typography */
   --font-heading: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -86,13 +99,13 @@
   --radius-full: 50%;
 
   /* Shadows */
-  --shadow-card-sm: 0 4px 14px rgba(22, 35, 61, 0.05);
-  --shadow-card-md: 0 6px 20px rgba(22, 35, 61, 0.05);
+  --shadow-card-sm: 0 4px 14px rgba(16, 34, 74, 0.05);
+  --shadow-card-md: 0 6px 20px rgba(16, 34, 74, 0.05);
   --shadow-card-lg: 0 10px 30px rgba(16, 34, 74, 0.05);
-  --shadow-popover-sm: 0 16px 36px rgba(22, 35, 61, 0.17);
+  --shadow-popover-sm: 0 16px 36px rgba(16, 34, 74, 0.17);
   --shadow-popover-lg: 0 18px 40px rgba(16, 34, 74, 0.16);
-  --shadow-primary-button: 0 6px 16px rgba(27, 58, 107, 0.22);
-  --shadow-sticky-footer: 0 -6px 20px rgba(22, 35, 61, 0.06);
+  --shadow-primary-button: 0 6px 16px rgba(47, 86, 177, 0.24);
+  --shadow-sticky-footer: 0 -6px 20px rgba(16, 34, 74, 0.06);
 
   /* Spacing rhythm */
   --space-1: 4px;

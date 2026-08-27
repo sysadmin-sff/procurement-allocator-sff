@@ -34,10 +34,8 @@ export function AppLayout() {
     <div className={styles.shell}>
       <header className={styles.topbar}>
         <div className={styles.brand}>
-          <span className={styles.logo}>SF</span>
-          <span className={styles.brandName}>
-            SCREEN FACTORY <span className={styles.brandSuffix}>· Закупки</span>
-          </span>
+          <img src="/logo-horizontal.svg" alt="Screen Factory Florida" className={styles.logo} />
+          <span className={styles.brandSuffix}>· Закупки</span>
         </div>
         <div className={styles.divider} />
         <nav className={styles.nav}>

@@ -16,18 +16,18 @@
 }
 
 .primary {
-  background: var(--color-brand);
+  background: var(--color-accent);
   color: var(--color-surface);
   box-shadow: var(--shadow-primary-button);
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--color-brand-hover);
+  background: var(--color-accent-hover);
 }
 
 .secondary {
   background: var(--color-control-fill);
-  color: var(--color-brand);
+  color: var(--color-accent);
 }
 
 .secondary:hover:not(:disabled) {

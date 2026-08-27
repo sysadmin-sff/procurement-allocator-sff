@@ -26,7 +26,7 @@
 }
 
 .backLink:hover {
-  color: var(--color-brand);
+  color: var(--color-accent);
 }
 
 .centerWrap {
@@ -73,14 +73,45 @@
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
+  gap: var(--space-8);
   flex-wrap: wrap;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-card-sm);
-  padding: var(--space-6) var(--space-8);
+  padding: var(--space-6) 0;
+}
+
+.progressCount {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  color: var(--color-brand);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressCountTotal {
+  color: var(--color-text-tertiary-alt);
+  font-weight: 500;
+}
+
+.progressCountLabel {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-tertiary-alt);
+  font-weight: 700;
+}
+
+.progressBar {
+  width: 150px;
+  height: 8px;
+  background: var(--color-border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  flex: none;
+}
+
+.progressBarFill {
+  height: 100%;
+  background: var(--color-success);
+  border-radius: var(--radius-pill);
 }
 
 .toolbarInfo {
@@ -88,27 +119,49 @@
   color: var(--color-text-secondary);
 }
 
-.applyButton {
-  background: var(--color-brand);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: var(--space-3) var(--space-7);
-  font-size: var(--text-sm-alt2);
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: var(--shadow-primary-button);
+.toolbarSpacer {
+  flex: 1;
 }
 
-.applyButton:hover:not(:disabled) {
-  background: var(--color-brand-hover);
+.bulkRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex-wrap: wrap;
 }
 
-.applyButton:disabled {
-  cursor: default;
-  background: var(--color-disabled-bg);
-  color: var(--color-disabled-text);
-  box-shadow: none;
+.legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.legendDot {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-2xs);
+  display: inline-block;
+}
+
+.legendDotHigh {
+  background: var(--color-success);
+}
+
+.legendDotMedium {
+  background: var(--color-warning);
+}
+
+.legendDotLow {
+  background: var(--color-danger);
 }
 
 .applySummary {
@@ -175,23 +228,9 @@
 }
 
 /* Confidence thresholds — see docs/ui-reference.md §8: >90 green, 70-90
-   yellow, <70 red. Row-level tint, same danger/warning/success-tint
-   vocabulary already used across the app (ADR-0006/0007/0013/0018). */
-.confidenceHigh {
-  font-weight: 600;
-  color: var(--color-success-alt);
-}
-
-.confidenceMedium {
-  font-weight: 600;
-  color: var(--color-warning-text);
-}
-
-.confidenceLow {
-  font-weight: 600;
-  color: var(--color-danger-text);
-}
-
+   yellow, <70 red. Row-level tint below (danger/warning/success-tint
+   vocabulary, ADR-0006/0007/0013/0018); the per-entry % itself renders via
+   the shared Badge component (variant picked by confidenceVariant()). */
 .rowLowConfidence td {
   background: var(--color-danger-tint);
 }
@@ -209,6 +248,10 @@
   display: block;
   margin-top: var(--space-1);
   font-size: var(--text-xs-alt);
+  color: var(--color-text-tertiary-alt);
+}
+
+.confidenceEmpty {
   color: var(--color-text-tertiary-alt);
 }
 
@@ -258,7 +301,7 @@
 }
 
 .input:focus {
-  border-color: var(--color-brand);
+  border-color: var(--color-accent);
   outline: none;
 }
 
@@ -272,27 +315,6 @@
 .fieldLabel {
   font-size: var(--text-2xs);
   color: var(--color-text-tertiary-alt);
-}
-
-.skipButton {
-  width: 100%;
-  background: var(--color-control-fill);
-  color: var(--color-text);
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--text-sm-alt2);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.skipButton:hover:not(:disabled) {
-  background: var(--color-control-fill-hover);
-}
-
-.skipButton:disabled {
-  cursor: default;
-  opacity: 0.6;
 }
 
 .resolvedLabel {

@@ -279,7 +279,10 @@ describe('AllocationResultPage', () => {
 
     expect(overrideLineMock).toHaveBeenCalledWith('proj-1', 'run-2', 'line-1', 'sup-b');
     expect(await screen.findByText(supplierB.name)).toBeInTheDocument();
-    expect(screen.getByText(/изменено вручную/)).toBeInTheDocument();
+    // Two indicators are expected: the supplier card header shows "изменено
+    // вручную" whenever any of its lines were overridden, and the line
+    // itself carries the same badge plus the "было: …" detail.
+    expect(screen.getAllByText(/изменено вручную/)).toHaveLength(2);
     expect(screen.getByText(/было: ABC Supply, \$12\.00\/ед\./)).toBeInTheDocument();
   });
 

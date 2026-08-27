@@ -16,6 +16,8 @@ import type {
   ProjectWithItems,
   Supplier,
 } from '../api/types';
+import { Alert } from '../components/Alert';
+import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { OrderDraftConflictModal } from '../components/OrderDraftConflictModal';
@@ -147,10 +149,9 @@ function AllocationResultOk({
   const supplierById = new Map(suppliers.map((s) => [s.id, s]));
   const materialById = new Map(materials.map((m) => [m.id, m]));
 
-  const grandTotal = run.supplier_summaries.reduce(
-    (sum, s) => sum + s.goods_total + s.delivery_fee,
-    0,
-  );
+  const goodsTotal = run.supplier_summaries.reduce((sum, s) => sum + s.goods_total, 0);
+  const deliveryTotal = run.supplier_summaries.reduce((sum, s) => sum + s.delivery_fee, 0);
+  const grandTotal = goodsTotal + deliveryTotal;
 
   const cheapestByMaterial = buildCheapestPriceIndex(prices);
   const pricesByMaterial = buildPricesByMaterialIndex(prices);
@@ -205,23 +206,50 @@ function AllocationResultOk({
         </button>
 
         <div className={styles.header}>
-          <h1 className={styles.title}>{project.title}</h1>
-          <div className={styles.headerMeta}>
-            <span className={styles.headerTotal}>{formatMoney(grandTotal)}</span>
-            <span>
-              {run.supplier_summaries.length}{' '}
-              {pluralizeSuppliers(run.supplier_summaries.length)}
-            </span>
+          <div className={styles.headerMain}>
+            <div className={styles.eyebrow}>Результат расчёта закупки</div>
+            <h1 className={styles.title}>{project.title}</h1>
+          </div>
+          <div className={styles.kpiPanel}>
+            <div className={styles.kpiCell}>
+              <div className={styles.kpiLabel}>Товары</div>
+              <div className={styles.kpiValue}>{formatMoney(goodsTotal)}</div>
+            </div>
+            <div className={styles.kpiDivider} />
+            <div className={styles.kpiCell}>
+              <div className={styles.kpiLabel}>Доставка</div>
+              <div className={styles.kpiValue}>{formatMoney(deliveryTotal)}</div>
+            </div>
+            <div className={styles.kpiDivider} />
+            <div className={styles.kpiCell}>
+              <div className={styles.kpiLabel}>Поставщиков</div>
+              <div className={styles.kpiValue}>{run.supplier_summaries.length}</div>
+            </div>
+            <div className={styles.kpiDivider} />
+            <div className={styles.kpiTotal}>
+              <div className={styles.kpiTotalLabel}>Итого закупки</div>
+              <div className={styles.kpiTotalValue}>{formatMoney(grandTotal)}</div>
+            </div>
           </div>
         </div>
 
         {overrideError != null && <ErrorBanner error={overrideError} />}
 
         {run.orphaned_materials.length > 0 && (
-          <div className={styles.warningBlock} role="alert">
-            <div className={styles.warningTitle}>
-              Не удалось разместить часть материалов
-            </div>
+          <Alert
+            variant="danger"
+            title="Не удалось разместить часть материалов"
+            action={
+              <>
+                <Button variant="secondary" disabled title="Скоро">
+                  Разбить
+                </Button>
+                <Button variant="danger" disabled title="Скоро">
+                  Исключить из закупки
+                </Button>
+              </>
+            }
+          >
             <div className={styles.warningList}>
               {run.orphaned_materials.map((o) => {
                 const material = materialById.get(o.material_id);
@@ -245,13 +273,14 @@ function AllocationResultOk({
                 );
               })}
             </div>
-          </div>
+          </Alert>
         )}
 
         {run.supplier_summaries.map((summary) => {
           const supplier = supplierById.get(summary.supplier_id);
           const lines = run.lines.filter((l) => l.supplier_id === summary.supplier_id);
           const cardTotal = summary.goods_total + summary.delivery_fee;
+          const touched = lines.some((l) => l.overridden_at != null);
 
           return (
             <div key={summary.supplier_id} className={styles.supplierCard}>
@@ -259,6 +288,7 @@ function AllocationResultOk({
                 <span className={styles.supplierName}>
                   {supplier?.name ?? summary.supplier_id}
                 </span>
+                {touched && <Badge variant="accent">изменено вручную</Badge>}
                 <span className={styles.supplierSpacer} />
                 <span
                   className={
@@ -274,10 +304,12 @@ function AllocationResultOk({
               </div>
 
               {summary.below_min_order && (
-                <div className={styles.belowMinOrderNotice} role="alert">
-                  ⚠ Сумма заказа {formatMoney(summary.goods_total)} меньше минимальной{' '}
-                  {formatMoney(supplier?.delivery_policy.per_order_min_amount ?? 0)} — поставщик
-                  может отклонить заказ.
+                <div className={styles.belowMinOrderNotice}>
+                  <Alert variant="warning" compact>
+                    Сумма заказа {formatMoney(summary.goods_total)} меньше минимальной{' '}
+                    {formatMoney(supplier?.delivery_policy.per_order_min_amount ?? 0)} — поставщик
+                    может отклонить заказ.
+                  </Alert>
                 </div>
               )}
 
@@ -313,6 +345,13 @@ function AllocationResultOk({
         {createOrdersError != null && <ErrorBanner error={createOrdersError} />}
 
         <div className={styles.footer}>
+          <span className={styles.footerHint}>
+            Создаст по одному ордеру на каждого поставщика — необратимо.
+          </span>
+          <div className={styles.spacer} />
+          <Button variant="secondary" disabled title="Скоро">
+            Выгрузить расчёт в CSV
+          </Button>
           <Button
             variant="primary"
             disabled={creatingOrders}
@@ -320,9 +359,6 @@ function AllocationResultOk({
           >
             {creatingOrders ? 'Создаём ордера…' : 'Подтвердить и создать ордера'}
           </Button>
-          <span className={styles.footerHint}>
-            Создаст по одному ордеру на каждого поставщика — необратимо.
-          </span>
         </div>
       </div>
 
@@ -385,29 +421,21 @@ function LineRow({
       <td className={styles.materialColCell}>
         <span className={styles.materialCell}>
           {material?.canonical_name ?? line.material_id}
-          {!isCheapest && (
-            <span className={styles.badge}>
-              не самая дешёвая цена
-              {delta != null && delta > 0 && cheapestSupplierName && (
-                <span className={styles.badgeText}>
-                  {' '}
-                  — дороже на {formatMoney(delta)} за единицу, чем у {cheapestSupplierName}
-                </span>
-              )}
-            </span>
-          )}
-          {isOverridden && (
-            <span className={styles.overrideBadge}>
-              изменено вручную
-              {originalSupplierName && line.original_unit_price != null && (
-                <span className={styles.overrideNote}>
-                  {' '}
-                  было: {originalSupplierName}, {formatMoney(line.original_unit_price)}/ед.
-                </span>
-              )}
-            </span>
-          )}
+          {!isCheapest && <Badge variant="warning">не самая дешёвая цена</Badge>}
+          {isOverridden && <Badge variant="accent">изменено вручную</Badge>}
         </span>
+        {material?.internal_sku && <div className={styles.materialSku}>{material.internal_sku}</div>}
+        {!isCheapest && delta != null && delta > 0 && cheapestSupplierName && (
+          <div className={styles.reasonPlaque}>
+            <span className={styles.reasonHead}>Дороже на {formatMoney(delta)}</span>
+            <span className={styles.reasonBody}>за единицу, чем у {cheapestSupplierName}</span>
+          </div>
+        )}
+        {isOverridden && originalSupplierName && line.original_unit_price != null && (
+          <div className={styles.overrideNote}>
+            было: {originalSupplierName}, {formatMoney(line.original_unit_price)}/ед.
+          </div>
+        )}
         {availabilityShort && currentPrice && (
           <span className={styles.availabilityRisk}>
             ⚠ у поставщика доступно {currentPrice.availability} {material?.unit ?? ''}, требуется{' '}
@@ -426,7 +454,11 @@ function LineRow({
       <td className={styles.numCell}>{formatMoney(line.unit_price)}</td>
       <td className={styles.numCell}>
         <select
-          className={styles.supplierSelect}
+          className={
+            isOverridden
+              ? `${styles.supplierSelect} ${styles.supplierSelectTouched}`
+              : styles.supplierSelect
+          }
           value={line.supplier_id}
           disabled={saving}
           onChange={(e) => onOverride(e.target.value)}
@@ -477,12 +509,4 @@ function buildPricesByMaterialIndex(prices: Price[]): Map<string, Price[]> {
 
 function formatMoney(value: number): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function pluralizeSuppliers(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'поставщик';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'поставщика';
-  return 'поставщиков';
 }

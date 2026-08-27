@@ -21,28 +21,13 @@
 }
 
 .logo {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-sm);
-  background: var(--color-brand);
-  color: var(--color-surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: var(--text-base);
-}
-
-.brandName {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  font-size: var(--text-base-alt);
-  letter-spacing: 0.02em;
-  color: var(--color-brand);
+  height: 26px;
+  width: auto;
 }
 
 .brandSuffix {
+  font-family: var(--font-heading);
+  font-size: var(--text-base-alt);
   color: var(--color-text-tertiary-alt);
   font-weight: 500;
 }

@@ -3,9 +3,12 @@ extraction, no matching. OpenAI call always mocked."""
 
 import base64
 import io
+import time
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
+from openai import RateLimitError
 from pydantic import SecretStr
 from pypdf import PdfReader, PdfWriter
 
@@ -26,6 +29,12 @@ def _make_pdf_bytes(num_pages: int) -> bytes:
     buf = io.BytesIO()
     writer.write(buf)
     return buf.getvalue()
+
+
+def _rate_limit_error():
+    request = httpx.Request("POST", "https://api.openai.com/v1/x")
+    response = httpx.Response(429, request=request)
+    return RateLimitError("rate limited", response=response, body=None)
 
 
 FAKE_PDF_BYTES = _make_pdf_bytes(1)
@@ -133,25 +142,40 @@ def test_page_chunks_exact_multiple_of_chunk_size():
 
 def test_multipage_pdf_makes_one_call_per_chunk_and_concatenates_in_order():
     # 7 pages / 3 per chunk (default) with 1-page overlap -> chunks
-    # (0,2), (2,4), (4,6) = 3 calls, each returning its own lines.
+    # (0,2), (2,4), (4,6) = 3 calls, each returning its own lines. Calls
+    # now run concurrently (EXTRACTION_CONCURRENCY) — the response is
+    # selected by reading the chunk's page range out of the request
+    # itself (not by call order, which a thread pool does not guarantee)
+    # so this test is robust to whichever order the pool's threads
+    # actually complete in.
     pdf_bytes = _make_pdf_bytes(7)
 
-    chunk_lines = [
-        [ExtractedPriceLine(
-            raw_name=f"Item chunk {i}", raw_sku=None, price=1.0,
-            currency="USD", availability=None, min_order_qty=None,
-            page_number=i * 2 + 1,
-        )]
-        for i in range(3)
-    ]
+    chunk_lines_by_start_page = {
+        1: [ExtractedPriceLine(
+            raw_name="Item chunk 0", raw_sku=None, price=1.0,
+            currency="USD", availability=None, min_order_qty=None, page_number=1,
+        )],
+        3: [ExtractedPriceLine(
+            raw_name="Item chunk 1", raw_sku=None, price=1.0,
+            currency="USD", availability=None, min_order_qty=None, page_number=3,
+        )],
+        5: [ExtractedPriceLine(
+            raw_name="Item chunk 2", raw_sku=None, price=1.0,
+            currency="USD", availability=None, min_order_qty=None, page_number=5,
+        )],
+    }
 
     mock_client = MagicMock()
-    responses = []
-    for lines in chunk_lines:
+
+    def _fake_parse(**kwargs):
+        prompt_text = kwargs["input"][0]["content"][0]["text"]
+        # start_page is the first number in "страницы {start}-{end}"
+        start_page = int(prompt_text.split("страницы ")[1].split("-")[0])
         mock_response = MagicMock()
-        mock_response.output_parsed = MagicMock(lines=lines)
-        responses.append(mock_response)
-    mock_client.responses.parse.side_effect = responses
+        mock_response.output_parsed = MagicMock(lines=chunk_lines_by_start_page[start_page])
+        return mock_response
+
+    mock_client.responses.parse.side_effect = _fake_parse
 
     with patch("app.price_ingestion.extraction.OpenAI", return_value=mock_client):
         with patch("app.price_ingestion.extraction.settings") as mock_settings:
@@ -162,7 +186,120 @@ def test_multipage_pdf_makes_one_call_per_chunk_and_concatenates_in_order():
             )
 
     assert mock_client.responses.parse.call_count == 3
-    assert result == [chunk_lines[0][0], chunk_lines[1][0], chunk_lines[2][0]]
+    assert result == [
+        chunk_lines_by_start_page[1][0],
+        chunk_lines_by_start_page[3][0],
+        chunk_lines_by_start_page[5][0],
+    ]
+
+
+def test_result_order_matches_chunk_order_regardless_of_thread_completion_order():
+    # Same 3-chunk document, but chunk 0's call is deliberately the
+    # slowest and chunk 2's the fastest — thread completion order is
+    # reversed relative to chunk order. The result must still be
+    # concatenated in chunk order (pool.map preserves input order in its
+    # return value; concatenation must not reorder based on which thread
+    # finished first).
+    pdf_bytes = _make_pdf_bytes(7)
+
+    def _fake_parse(**kwargs):
+        prompt_text = kwargs["input"][0]["content"][0]["text"]
+        start_page = int(prompt_text.split("страницы ")[1].split("-")[0])
+        chunk_index = {1: 0, 3: 1, 5: 2}[start_page]
+        # Reverse-order delay: chunk 0 slowest, chunk 2 fastest.
+        time.sleep((3 - chunk_index) * 0.05)
+        mock_response = MagicMock()
+        mock_response.output_parsed = MagicMock(lines=[
+            ExtractedPriceLine(
+                raw_name=f"Item chunk {chunk_index}", raw_sku=None, price=1.0,
+                currency="USD", availability=None, min_order_qty=None,
+                page_number=start_page,
+            )
+        ])
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.responses.parse.side_effect = _fake_parse
+
+    with patch("app.price_ingestion.extraction.OpenAI", return_value=mock_client):
+        with patch("app.price_ingestion.extraction.settings") as mock_settings:
+            mock_settings.openai_api_key = SecretStr("fake-key")
+            mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
+            result = extract_price_list_lines(
+                file_bytes=pdf_bytes, content_type="application/pdf"
+            )
+
+    assert [line.raw_name for line in result] == [
+        "Item chunk 0", "Item chunk 1", "Item chunk 2",
+    ]
+
+
+def test_one_chunk_exhausting_retries_fails_the_whole_extraction():
+    # Unlike matching's per-line isolation (ADR-0022 §2), a chunk has no
+    # safe partial-result placeholder — a lost page range would silently
+    # hide missing lines from the review screen. One chunk's exhausted
+    # retries must fail extract_price_list_lines entirely, not degrade to
+    # a partial result.
+    pdf_bytes = _make_pdf_bytes(7)
+
+    def _fake_parse(**kwargs):
+        prompt_text = kwargs["input"][0]["content"][0]["text"]
+        start_page = int(prompt_text.split("страницы ")[1].split("-")[0])
+        if start_page == 3:
+            raise _rate_limit_error()
+        mock_response = MagicMock()
+        mock_response.output_parsed = MagicMock(lines=[])
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.responses.parse.side_effect = _fake_parse
+
+    with patch("app.price_ingestion.extraction.OpenAI", return_value=mock_client):
+        with patch("app.price_ingestion.extraction.settings") as mock_settings:
+            mock_settings.openai_api_key = SecretStr("fake-key")
+            mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
+            with patch("app.price_ingestion.retry.time.sleep"):
+                with pytest.raises(PriceIngestionError):
+                    extract_price_list_lines(
+                        file_bytes=pdf_bytes, content_type="application/pdf"
+                    )
+
+
+def test_chunk_call_retries_on_rate_limit_then_succeeds():
+    # A chunk whose first two attempts hit RateLimitError must still
+    # succeed on the third (ADR-0022 §2 retry/backoff, MAX_ATTEMPTS=3) —
+    # proves RateLimitError actually reaches call_with_retry rather than
+    # being pre-mapped to PriceIngestionError before retry can see it.
+    pdf_bytes = _make_pdf_bytes(2)  # single chunk, simplest case
+    attempts = {"count": 0}
+
+    def _fake_parse(**kwargs):
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise _rate_limit_error()
+        mock_response = MagicMock()
+        mock_response.output_parsed = MagicMock(lines=[
+            ExtractedPriceLine(
+                raw_name="Recovered item", raw_sku=None, price=1.0,
+                currency="USD", availability=None, min_order_qty=None, page_number=1,
+            )
+        ])
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.responses.parse.side_effect = _fake_parse
+
+    with patch("app.price_ingestion.extraction.OpenAI", return_value=mock_client):
+        with patch("app.price_ingestion.extraction.settings") as mock_settings:
+            mock_settings.openai_api_key = SecretStr("fake-key")
+            mock_settings.openai_price_ingestion_model = "gpt-5.6-luna"
+            with patch("app.price_ingestion.retry.time.sleep"):
+                result = extract_price_list_lines(
+                    file_bytes=pdf_bytes, content_type="application/pdf"
+                )
+
+    assert attempts["count"] == 3
+    assert result[0].raw_name == "Recovered item"
 
 
 def test_document_fitting_in_one_chunk_makes_a_single_call():

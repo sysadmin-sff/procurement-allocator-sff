@@ -386,7 +386,8 @@ function EntryRow({
         {entry.reasoning && <span className={styles.reasoning}>{entry.reasoning}</span>}
         {entry.possible_duplicate_of.length > 0 && (
           <span className={styles.duplicateBadge}>
-            ⚠ похоже на другую новую позицию:{' '}
+            ⚠ похоже на ту же позицию каталога, что и другая строка прайса — возможно, это
+            одна и та же строка, обработанная дважды:{' '}
             {entry.possible_duplicate_of
               .map((id) => entriesById.get(id)?.supplier_raw_name ?? id)
               .join(', ')}

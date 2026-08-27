@@ -100,9 +100,9 @@ describe('PriceListImportReviewPage', () => {
     expect(within(bodyRows[1]).getByText('Row B')).toBeInTheDocument();
     expect(within(bodyRows[2]).getByText('Unrelated row')).toBeInTheDocument();
 
-    expect(within(bodyRows[0]).getByText(/похоже на другую новую позицию/)).toBeInTheDocument();
-    expect(within(bodyRows[1]).getByText(/похоже на другую новую позицию/)).toBeInTheDocument();
-    expect(within(bodyRows[2]).queryByText(/похоже на другую новую позицию/)).not.toBeInTheDocument();
+    expect(within(bodyRows[0]).getByText(/похоже на ту же позицию каталога/)).toBeInTheDocument();
+    expect(within(bodyRows[1]).getByText(/похоже на ту же позицию каталога/)).toBeInTheDocument();
+    expect(within(bodyRows[2]).queryByText(/похоже на ту же позицию каталога/)).not.toBeInTheDocument();
   });
 
   it('applies all checked pending rows and reports a summary', async () => {

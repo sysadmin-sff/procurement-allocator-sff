@@ -22,23 +22,52 @@ chunk explicitly, rather than relying on it to infer absolute numbering
 from a fragment. Used by dedup.py to scope chunk-overlap duplicate
 candidates to lines that share the one overlap page between two adjacent
 chunks (ADR-0021 §3), instead of comparing every line in the document.
+
+Chunk calls run concurrently (measured: 309s sequential on the real
+14-page/~700-line reference document — dominant half of total pipeline
+time, see docs/known-issues.md). Same ThreadPoolExecutor + retry/backoff
+pattern matching.py already uses for its own network calls (ADR-0022
+§2) — chunks are independent (each covers its own page range, no shared
+state besides the read-only input file bytes), so parallelizing them is
+a direct application of that pattern, not a new design. Results are
+concatenated by chunk index (pool.map preserves input order regardless
+of completion order), never by thread completion order — a chunk
+finishing late must not reorder the document. Unlike matching's
+per-line retry isolation, a chunk whose retries are exhausted is NOT
+given a placeholder — the whole extraction fails (PriceIngestionError
+propagates), same as the pre-parallelization sequential loop already
+did on any chunk's first failure. A lost chunk is a lost page range with
+no way to signal "some lines are missing" on the review screen (unlike
+matching's one-line processing_status="failed"), so silently degrading
+to a partial result would hide missing pages instead of surfacing the
+failure — worse than today's fail-loud behavior, not an improvement.
 """
 
 from __future__ import annotations
 
 import base64
 import io
+from concurrent.futures import ThreadPoolExecutor
 
 from openai import APIError, APITimeoutError, OpenAI
 from pydantic import BaseModel
 from pypdf import PdfReader, PdfWriter
 
 from app.core.config import settings
+from app.price_ingestion.retry import RetryExhaustedError, call_with_retry
 
 DEFAULT_PAGES_PER_CHUNK = 3
 """Pages per extraction chunk — ADR-0021 §1. Internal implementation
 parameter, not an operational setting like model choice, so a plain
 constant rather than an env var."""
+
+EXTRACTION_CONCURRENCY = 6
+"""Thread pool size for per-chunk extraction calls. Same value as
+matching.py's MATCHING_CONCURRENCY (ADR-0022 §2) — not imported/shared,
+since the two are independent internal tuning parameters for two
+different call sites that happen to currently agree, not a single
+constant with one shared meaning; each can be retuned independently
+without implying anything about the other."""
 
 
 class ExtractedPriceLine(BaseModel):
@@ -186,6 +215,39 @@ def _call_extraction_no_page(client: OpenAI, file_content: dict) -> list[Extract
     ]
 
 
+def _call_extraction_raw(
+    client: OpenAI, file_content: dict, *, start_page: int, end_page: int
+) -> list[ExtractedPriceLine]:
+    """The network call itself, with no exception mapping — lets
+    RateLimitError (a subclass of APIError) propagate unmodified so
+    call_with_retry (ADR-0022 §2) can see and retry it. Wrapping the
+    mapped PriceIngestionError instead (as this call's caller used to do
+    directly) would hide RateLimitError from the retry helper — it only
+    matches openai.RateLimitError specifically, not the broader
+    PriceIngestionError. See _call_extraction for the mapped, retried
+    version callers should use."""
+    prompt = _PROMPT_TEMPLATE.format(start_page=start_page, end_page=end_page)
+    response = client.responses.parse(
+        model=settings.openai_price_ingestion_model,
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": prompt},
+                    file_content,
+                ],
+            }
+        ],
+        text_format=_ExtractionResult,
+    )
+
+    parsed = response.output_parsed
+    if parsed is None:
+        raise PriceIngestionError("Не удалось распознать документ.")
+
+    return parsed.lines
+
+
 def _call_extraction(
     client: OpenAI, file_content: dict, *, start_page: int, end_page: int
 ) -> list[ExtractedPriceLine]:
@@ -193,34 +255,25 @@ def _call_extraction(
     matching — see module docstring / ADR-0019 §3). start_page/end_page are
     absolute 1-indexed page numbers of the whole document that this chunk
     covers — passed explicitly into the prompt (ADR-0023) so the model
-    doesn't have to infer absolute numbering from a fragment. Raises
-    PriceIngestionError on any API failure. An empty extraction (model
-    found nothing) is not an error and returns an empty list normally."""
-    prompt = _PROMPT_TEMPLATE.format(start_page=start_page, end_page=end_page)
+    doesn't have to infer absolute numbering from a fragment. Retries on
+    RateLimitError (ADR-0022 §2, same helper matching.py uses) before
+    mapping any remaining failure to PriceIngestionError. An empty
+    extraction (model found nothing) is not an error and returns an empty
+    list normally."""
     try:
-        response = client.responses.parse(
-            model=settings.openai_price_ingestion_model,
-            input=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "input_text", "text": prompt},
-                        file_content,
-                    ],
-                }
-            ],
-            text_format=_ExtractionResult,
+        return call_with_retry(
+            lambda: _call_extraction_raw(
+                client, file_content, start_page=start_page, end_page=end_page
+            )
         )
+    except RetryExhaustedError as exc:
+        raise PriceIngestionError(
+            "Не удалось связаться с сервисом распознавания. Попробуйте ещё раз."
+        ) from exc
     except (APIError, APITimeoutError) as exc:
         raise PriceIngestionError(
             "Не удалось связаться с сервисом распознавания. Попробуйте ещё раз."
         ) from exc
-
-    parsed = response.output_parsed
-    if parsed is None:
-        raise PriceIngestionError("Не удалось распознать документ.")
-
-    return parsed.lines
 
 
 def _page_chunks(*, total_pages: int, pages_per_chunk: int) -> list[tuple[int, int]]:
@@ -254,16 +307,33 @@ def _extract_pdf_page_range(file_bytes: bytes, start: int, end: int) -> bytes:
     return buf.getvalue()
 
 
+def _extract_one_chunk(
+    client: OpenAI, file_bytes: bytes, content_type: str, *, start: int, end: int, single: bool
+) -> list[ExtractedPriceLine]:
+    """Runs entirely in the thread pool — builds this chunk's own PDF
+    bytes/content payload and makes its own retried network call
+    (_call_extraction). No shared mutable state between chunks."""
+    chunk_bytes = file_bytes if single else _extract_pdf_page_range(file_bytes, start, end)
+    file_content = _build_file_content(chunk_bytes, content_type)
+    return _call_extraction(client, file_content, start_page=start + 1, end_page=end + 1)
+
+
 def extract_price_list_lines(
     *, file_bytes: bytes, content_type: str
 ) -> list[ExtractedPriceLine]:
     """Extraction step (ADR-0019 §3). For PDFs, internally splits the
     document into page chunks (ADR-0021) and issues one OpenAI call per
-    chunk, concatenating results in order — no deduplication at this stage
+    chunk, running the calls concurrently (EXTRACTION_CONCURRENCY, see
+    module docstring) and concatenating results in chunk order — never by
+    thread completion order — with no deduplication at this stage
     (ADR-0019 §4 dedup, applied after matching, already covers duplicates
     from chunk overlap). For input_image documents (single scan/photo),
     chunking does not apply — one call on the whole document, unchanged
-    from before ADR-0021. Raises PriceIngestionError on any API failure."""
+    from before ADR-0021. Raises PriceIngestionError if any chunk's
+    retries are exhausted or otherwise fails — a lost chunk has no safe
+    partial-result representation (see module docstring), so one failing
+    chunk still fails the whole extraction, same as before
+    parallelization."""
     if not settings.openai_api_key:
         raise PriceIngestionError(
             "OpenAI API не настроен (отсутствует OPENAI_API_KEY)"
@@ -277,15 +347,24 @@ def extract_price_list_lines(
 
     total_pages = len(PdfReader(io.BytesIO(file_bytes)).pages)
     chunks = _page_chunks(total_pages=total_pages, pages_per_chunk=DEFAULT_PAGES_PER_CHUNK)
+    single = len(chunks) == 1
+
+    with ThreadPoolExecutor(max_workers=EXTRACTION_CONCURRENCY) as pool:
+        # pool.map preserves input order in its return value regardless of
+        # which thread finishes first — chunk order in the result is
+        # exactly `chunks` order, not completion order.
+        chunk_results = list(
+            pool.map(
+                lambda chunk: _extract_one_chunk(
+                    client, file_bytes, content_type,
+                    start=chunk[0], end=chunk[1], single=single,
+                ),
+                chunks,
+            )
+        )
 
     all_lines: list[ExtractedPriceLine] = []
-    for start, end in chunks:
-        chunk_bytes = (
-            file_bytes if len(chunks) == 1 else _extract_pdf_page_range(file_bytes, start, end)
-        )
-        file_content = _build_file_content(chunk_bytes, content_type)
-        all_lines.extend(
-            _call_extraction(client, file_content, start_page=start + 1, end_page=end + 1)
-        )
+    for lines in chunk_results:
+        all_lines.extend(lines)
 
     return all_lines

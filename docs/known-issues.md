@@ -60,7 +60,13 @@
   решения», за полным разбором.
 
 - **Follow-up (не отложено — подтверждено критично, 2026-08-20):
-  дозаказ тому же поставщику при уже существующем draft.** Подтверждено
+  дозаказ тому же поставщику при уже существующем draft.**
+  **Backend-часть реализована 2026-08-31** (`acknowledge_conflict` в
+  `CreateOrdersIn`/`create_orders_for_run`, тесты в
+  `backend/tests/allocation/test_order_draft_conflict.py`); frontend-часть
+  (`OrderDraftConflictModal`, `AllocationResultPage.handleCreateOrders`,
+  кнопка «Создать дополнительно») — **ещё нет**, отдельная следующая
+  задача. Пункт закрывается целиком только после неё. Подтверждено
   пользователем как реальный, недавний сценарий из практики отдела
   закупок, не гипотетика — брать в работу скоро, не откладывать на
   "когда понадобится" (в отличие от остальных пунктов этого файла).
@@ -71,26 +77,33 @@
 
   Маленькая точечная задача (не новый ADR — не меняет ни одного из
   принципов ADR-0012 §1–§4, только достраивает API):
-  - Новое поле тела `POST .../orders`, например
+  - ✅ Новое поле тела `POST .../orders`, например
     `acknowledge_conflict: bool = false`, отдельное от `replace_drafts`
     (не переиспользовать `replace_drafts: false` для этого — именно
     неразличимость этих двух смыслов и есть причина текущего пробела).
-  - `create_orders_for_run()`
+  - ✅ `create_orders_for_run()`
     (`backend/app/allocation/order_service.py`): если конфликт есть,
     `replace_drafts` не `true`, но `acknowledge_conflict: true` —
     создание проходит как обычно (`201`), ничего не удаляется, старые
     draft остаются нетронутыми рядом с новыми. Без
     `acknowledge_conflict` — прежнее поведение (`409`).
-  - `OrderDraftConflictModal` (`frontend/src/components/
+    Реализовано так, что `replace_drafts: true` имеет приоритет, если
+    переданы оба флага (более конкретная инструкция; любой из флагов уже
+    означает, что пользователь конфликт видел).
+  - ⬜ `OrderDraftConflictModal` (`frontend/src/components/
     OrderDraftConflictModal.tsx`) и `AllocationResultPage.
     handleCreateOrders`: возвращают кнопку «Создать дополнительно»,
     повторный вызов отправляет `acknowledge_conflict: true` вместо
-    прежнего `replace_drafts: false`.
-  - Тесты: конфликт + `acknowledge_conflict: true` → `201`, старые
-    draft целы, новые созданы рядом (аналог удалённого в этой сессии
-    сценария из `AllocationResultPage.test.tsx`); конфликт +
-    `acknowledge_conflict` не передан → по-прежнему `409` (регресс на
-    поведение этого ADR).
+    прежнего `replace_drafts: false`. **Не сделано** — сознательно
+    отложено до проверки backend-части на основной машине.
+  - ✅ Тесты (backend): конфликт + `acknowledge_conflict: true` → `201`,
+    старые draft целы (включая `confirmed_price` на них), новые созданы
+    рядом; конфликт + `acknowledge_conflict` не передан / `false` →
+    по-прежнему `409` (регресс на поведение этого ADR). Плюс: приоритет
+    `replace_drafts` при обоих флагах и сохранение гранулярности
+    по поставщику (ADR-0012 п.3) на новом пути.
+    ⬜ Frontend-тест (аналог удалённого в frontend-сессии сценария из
+    `AllocationResultPage.test.tsx`) — вместе с задачей по модалке.
 
 - Нет `get_or_404` хелпера — дублирован в supplier/material/price/allocation роутах.
 - Нет пагинации на `GET /suppliers`, `GET /materials`, `GET /prices`.

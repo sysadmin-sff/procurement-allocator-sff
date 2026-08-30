@@ -76,9 +76,19 @@ class CreateOrdersIn(BaseModel):
     """Body for POST .../orders — see ADR-0012 п.2. replace_drafts=True
     deletes conflicting suppliers' existing draft Order/OrderItem rows
     before creating; default False surfaces a 409 instead of creating
-    anything when a conflict exists."""
+    anything when a conflict exists.
+
+    acknowledge_conflict=True means "I saw the 409 and want the additional
+    order anyway": creation proceeds, nothing is deleted, the existing
+    drafts stay alongside the new Orders. It is deliberately a field of its
+    own rather than a reuse of replace_drafts=False — the endpoint is
+    stateless and replace_drafts=False cannot distinguish "not asked yet"
+    from "asked and confirmed", which is exactly the gap recorded in
+    ADR-0012 "Отклонение реализации от принятого решения" and the follow-up
+    in docs/known-issues.md."""
 
     replace_drafts: bool = False
+    acknowledge_conflict: bool = False
 
 
 class ExistingDraftOrderOut(BaseModel):
@@ -100,8 +110,8 @@ class SupplierWithExistingDraftsOut(BaseModel):
 
 class OrderDraftConflictOut(BaseModel):
     """409 response body when create_orders_for_run finds pre-existing draft
-    Orders for one or more suppliers in the run and replace_drafts is not
-    True — see ADR-0012 п.4."""
+    Orders for one or more suppliers in the run and neither replace_drafts
+    nor acknowledge_conflict is True — see ADR-0012 п.4."""
 
     detail: str = "draft_orders_exist"
     suppliers_with_existing_drafts: list[SupplierWithExistingDraftsOut]

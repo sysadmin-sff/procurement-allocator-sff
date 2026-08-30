@@ -6,6 +6,11 @@ shape (list of existing_draft_orders per supplier, has_confirmed_prices per
 entry), replace_drafts=True semantics (delete old draft Order/OrderItem then
 recreate), per-supplier granularity, and approved/sent Orders never being
 treated as conflicts.
+
+Also covers the ADR-0012 follow-up (docs/known-issues.md, "дозаказ тому же
+поставщику при уже существующем draft"): acknowledge_conflict=True creates
+the additional Orders next to the existing drafts without deleting anything,
+while the default path keeps returning 409 exactly as before.
 """
 
 from fastapi.testclient import TestClient
@@ -325,3 +330,247 @@ def test_approved_or_sent_orders_never_conflict_or_get_deleted(
     assert len(replaced_orders) == 1
     assert session.get(Order, sent_order_id) is not None
     assert session.get(Order, sent_order_id).status == "sent"
+
+
+def test_acknowledge_conflict_creates_alongside_and_keeps_old_drafts(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Follow-up to ADR-0012 (docs/known-issues.md): conflict +
+    acknowledge_conflict=True is the "создать дополнительно" path — the new
+    Orders are created as in the no-conflict case and the pre-existing draft
+    survives untouched next to them, unlike replace_drafts=True which
+    deletes it."""
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    first_orders = create_orders_for_run(session, project.id, run.id)
+    old_order_id = first_orders[0].id
+    old_item_ids = {item.id for item in first_orders[0].items}
+
+    run2 = run_allocation(session, project.id)
+    new_orders = create_orders_for_run(
+        session, project.id, run2.id, acknowledge_conflict=True
+    )
+
+    assert len(new_orders) == 1
+    assert new_orders[0].id != old_order_id
+    assert new_orders[0].supplier_id == supplier.id
+
+    old_order = session.get(Order, old_order_id)
+    assert old_order is not None  # nothing deleted
+    assert old_order.status == "draft"
+    assert {item.id for item in old_order.items} == old_item_ids
+
+    drafts = (
+        session.query(Order)
+        .filter_by(project_id=project.id, supplier_id=supplier.id, status="draft")
+        .all()
+    )
+    assert {o.id for o in drafts} == {old_order_id, new_orders[0].id}
+
+
+def test_acknowledge_conflict_keeps_confirmed_prices_on_old_draft(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """The reason this path exists at all (docs/known-issues.md follow-up):
+    replacing a draft that already carries confirmed_price is an irreversible
+    loss of manual work. The additional-order path must leave those values
+    exactly where they were."""
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    first_orders = create_orders_for_run(session, project.id, run.id)
+    old_order_id = first_orders[0].id
+    old_item_id = first_orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+    client.patch(
+        f"/orders/{old_order_id}/items/{old_item_id}",
+        json={"confirmed_price": 5.50},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    run2 = run_allocation(session, project.id)
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        json={"acknowledge_conflict": True},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201
+    session.expire_all()
+    old_item = session.get(OrderItem, old_item_id)
+    assert old_item is not None
+    assert float(old_item.confirmed_price) == 5.50
+
+
+def test_acknowledge_conflict_via_api_returns_201(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    client = _employee_client(make_user, make_session)
+    first = client.post(
+        f"/projects/{project.id}/allocations/{run.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
+    assert first.status_code == 201
+    old_order_id = first.json()[0]["id"]
+
+    run2 = run_allocation(session, project.id)
+    conflicted = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
+    assert conflicted.status_code == 409
+
+    # Same request, now with the explicit acknowledgement the modal will send.
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        json={"acknowledge_conflict": True},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201
+    created = response.json()
+    assert len(created) == 1
+    assert created[0]["id"] != old_order_id
+    assert created[0]["supplier_id"] == str(supplier.id)
+
+    listed = client.get(f"/projects/{project.id}/orders").json()
+    assert {o["id"] for o in listed} == {old_order_id, created[0]["id"]}
+
+
+def test_conflict_without_acknowledge_conflict_still_409(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """Regression on ADR-0012's current behaviour: the new field must not
+    weaken the default path. Both "field omitted" and explicit false still
+    get the 409, and still create/delete nothing."""
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    client = _employee_client(make_user, make_session)
+    client.post(
+        f"/projects/{project.id}/allocations/{run.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    run2 = run_allocation(session, project.id)
+    omitted = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
+    explicit_false = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        json={"acknowledge_conflict": False},
+        headers={"X-CSRF-Token": CSRF},
+    )
+    both_false = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        json={"replace_drafts": False, "acknowledge_conflict": False},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    for response in (omitted, explicit_false, both_false):
+        assert response.status_code == 409
+        assert response.json()["detail"] == "draft_orders_exist"
+
+    all_orders = session.query(Order).filter_by(project_id=project.id).all()
+    assert len(all_orders) == 1  # nothing created, nothing deleted
+
+
+def test_acknowledge_conflict_false_at_service_level_still_raises(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    create_orders_for_run(session, project.id, run.id)
+
+    run2 = run_allocation(session, project.id)
+    try:
+        create_orders_for_run(session, project.id, run2.id, acknowledge_conflict=False)
+        raise AssertionError("expected DraftOrderConflictError")
+    except DraftOrderConflictError:
+        pass
+
+    assert len(session.query(Order).filter_by(project_id=project.id).all()) == 1
+
+
+def test_replace_drafts_wins_when_both_flags_set(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Both flags True is not a contradiction the endpoint has to reject —
+    replace_drafts is the more specific instruction, so the old draft is
+    replaced, not kept alongside."""
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    old_order_id = create_orders_for_run(session, project.id, run.id)[0].id
+
+    run2 = run_allocation(session, project.id)
+    new_orders = create_orders_for_run(
+        session, project.id, run2.id, replace_drafts=True, acknowledge_conflict=True
+    )
+
+    assert len(new_orders) == 1
+    assert session.get(Order, old_order_id) is None
+    assert len(session.query(Order).filter_by(project_id=project.id).all()) == 1
+
+
+def test_acknowledge_conflict_keeps_per_supplier_granularity(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Per-supplier granularity (ADR-0012 п.3) is unchanged by the new flag:
+    supplier A has a pre-existing draft, supplier B is new in this run —
+    acknowledge_conflict creates for both and deletes nothing."""
+    session, *_ = db_session
+    supplier_a = make_supplier(name="A ack", flat_fee=0.0, free_shipping_threshold=0.0)
+    supplier_b = make_supplier(name="B ack", flat_fee=0.0, free_shipping_threshold=0.0)
+    material_a = make_material()
+    material_b = make_material()
+    make_price(material_a, supplier_a, price=5.00, availability=10)
+    make_price(material_b, supplier_a, price=6.00, availability=10)
+    make_price(material_b, supplier_b, price=6.00, availability=10)
+    project = make_project([(material_a, 1), (material_b, 1)])
+
+    run0 = run_allocation(session, project.id)
+    first_orders = create_orders_for_run(session, project.id, run0.id)
+    assert {o.supplier_id for o in first_orders} == {supplier_a.id}
+    old_order_id = first_orders[0].id
+
+    from app.allocation.service import override_allocation_line_supplier
+
+    run1 = run_allocation(session, project.id)
+    line_b = (
+        session.query(AllocationLine)
+        .filter_by(allocation_run_id=run1.id, material_id=material_b.id)
+        .one()
+    )
+    override_allocation_line_supplier(session, run1.id, line_b.id, supplier_b.id)
+
+    new_orders = create_orders_for_run(
+        session, project.id, run1.id, acknowledge_conflict=True
+    )
+
+    assert {o.supplier_id for o in new_orders} == {supplier_a.id, supplier_b.id}
+    assert session.get(Order, old_order_id) is not None  # A's old draft kept
+    a_drafts = (
+        session.query(Order)
+        .filter_by(project_id=project.id, supplier_id=supplier_a.id, status="draft")
+        .all()
+    )
+    assert len(a_drafts) == 2

@@ -67,9 +67,10 @@ class MaterialNotInLatestRunError(Exception):
 
 
 class DraftOrderConflictError(Exception):
-    """Raised when create_orders_for_run() is called without replace_drafts
-    while at least one supplier in the run's supplier_summaries already has
-    a draft Order in this project from a prior run — see ADR-0012 п.1/п.2.
+    """Raised when create_orders_for_run() is called with neither
+    replace_drafts nor acknowledge_conflict while at least one supplier in
+    the run's supplier_summaries already has a draft Order in this project
+    from a prior run — see ADR-0012 п.1/п.2.
 
     suppliers_with_existing_drafts mirrors the 409 body shape exactly (list
     per supplier, list of existing_draft_orders per supplier — never a single
@@ -394,6 +395,7 @@ def create_orders_for_run(
     project_id: uuid.UUID,
     run_id: uuid.UUID,
     replace_drafts: bool = False,
+    acknowledge_conflict: bool = False,
     created_by_user_id: uuid.UUID | None = None,
 ) -> list[Order]:
     """Create one Order per supplier in the run's current supplier_summaries
@@ -404,17 +406,32 @@ def create_orders_for_run(
     Guards against accidental duplicate draft Orders — see ADR-0012. Before
     inserting, checks (per supplier in this run) whether a draft Order for
     that supplier already exists elsewhere in this project:
-    - No conflicts, or replace_drafts=True: proceeds as before (ADR-0007
-      п.2's "re-order is legitimate" is unchanged — this only gates the
-      *default*, unconfirmed path, not re-ordering itself).
-    - Conflicts and replace_drafts is not True: raises
-      DraftOrderConflictError, creates and deletes nothing.
+    - No conflicts: proceeds as before (ADR-0007 п.2's "re-order is
+      legitimate" is unchanged — this only gates the *default*,
+      unconfirmed path, not re-ordering itself).
+    - Conflicts and neither replace_drafts nor acknowledge_conflict is
+      True: raises DraftOrderConflictError, creates and deletes nothing.
     - replace_drafts=True: deletes the conflicting suppliers' existing draft
       Order/OrderItem rows (application-level cascade, no DB-level
       ON DELETE CASCADE exists for order_items.order_id) before the normal
       creation logic runs, in the same transaction. Suppliers without a
       conflict (new in this run) are unaffected. approved/sent Orders are
       never conflicts and are never touched, at any replace_drafts value.
+    - acknowledge_conflict=True (and replace_drafts not True): the caller
+      has already seen this conflict and explicitly wants the additional
+      order — creation proceeds exactly as in the no-conflict case, nothing
+      is deleted, the existing drafts (including any confirmed_price on
+      them) stay intact alongside the new Orders. This is the "создать
+      дополнительно" path of ADR-0012 §1/§2, which the original contract
+      could not express: the endpoint is stateless, so replace_drafts=False
+      alone cannot distinguish "user not asked yet" from "user asked and
+      explicitly wants the extra order" — hence a separate field rather
+      than a reused one. See ADR-0012 "Отклонение реализации от принятого
+      решения" and the follow-up in docs/known-issues.md.
+
+    replace_drafts takes precedence if both are True: it is the more
+    specific instruction, and either flag alone already means the user has
+    seen the conflict.
     """
     run = db.get(AllocationRun, run_id)
     if run is None or run.project_id != project_id:
@@ -424,10 +441,13 @@ def create_orders_for_run(
     conflicts = _conflicting_draft_orders_by_supplier(db, project_id, supplier_ids)
 
     if conflicts:
-        if not replace_drafts:
+        if replace_drafts:
+            _delete_orders(db, [order for orders in conflicts.values() for order in orders])
+            db.flush()
+        elif not acknowledge_conflict:
             raise DraftOrderConflictError(_serialize_conflicts(db, conflicts))
-        _delete_orders(db, [order for orders in conflicts.values() for order in orders])
-        db.flush()
+        # else: acknowledged additional order — fall through to the normal
+        # creation path, deleting nothing (ADR-0012 §1 "создать дополнительно").
 
     now = datetime.now(timezone.utc)
     orders: list[Order] = []

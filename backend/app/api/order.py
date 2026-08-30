@@ -107,6 +107,7 @@ def create_orders(
             project_id,
             run_id,
             replace_drafts=payload.replace_drafts,
+            acknowledge_conflict=payload.acknowledge_conflict,
             created_by_user_id=current_user.id,
         )
     except RunNotFoundError as exc:

@@ -87,33 +87,35 @@ export function ProjectsListPage() {
             )}
 
             {status === 'ready' && projects.length > 0 && (
-              <table className={`${styles.table} ${styles.rowClickable}`}>
-                <thead>
-                  <tr>
-                    <th>Название</th>
-                    <th>Статус</th>
-                    <th>Создан</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {projects.map((project) => (
-                    <tr key={project.id} onClick={() => navigate(`/projects/${project.id}`)}>
-                      <td>{project.title}</td>
-                      <td>{project.status}</td>
-                      <td>{formatDate(project.created_at)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className={styles.actionsCell}>
-                          <ConfirmButton
-                            label="Удалить"
-                            onConfirm={() => void handleDelete(project)}
-                          />
-                        </div>
-                      </td>
+              <div className={styles.tableScroll}>
+                <table className={`${styles.table} ${styles.rowClickable}`}>
+                  <thead>
+                    <tr>
+                      <th>Название</th>
+                      <th>Статус</th>
+                      <th>Создан</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {projects.map((project) => (
+                      <tr key={project.id} onClick={() => navigate(`/projects/${project.id}`)}>
+                        <td>{project.title}</td>
+                        <td>{project.status}</td>
+                        <td>{formatDate(project.created_at)}</td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className={styles.actionsCell}>
+                            <ConfirmButton
+                              label="Удалить"
+                              onConfirm={() => void handleDelete(project)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

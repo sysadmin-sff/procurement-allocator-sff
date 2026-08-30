@@ -186,32 +186,34 @@ export function OrderDetailPage() {
 
         <ParseResponseSection order={order} materialById={materialById} onApplied={handleParseApplied} />
 
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={styles.materialColHeader}>Материал</th>
-              <th className={styles.numCell}>Кол-во</th>
-              <th className={styles.numCell}>Отправленная цена</th>
-              <th className={styles.numCell}>Полученная цена</th>
-              <th className={styles.numCell}>Подтверждённая цена</th>
-              <th className={styles.numCell}>Расхождение</th>
-              <th className={styles.statusColHeader}>Статус</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedItems.map((item) => (
-              <OrderItemRow
-                key={item.id}
-                item={item}
-                order={order}
-                material={materialById.get(item.material_id)}
-                saving={savingItemId === item.id}
-                onPatch={(patch) => void handleItemPatch(item, patch)}
-                onReplacementApplied={handleReplacementApplied}
-              />
-            ))}
-          </tbody>
-        </table>
+        <div className={styles.tableScroll}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th className={styles.materialColHeader}>Материал</th>
+                <th className={styles.numCell}>Кол-во</th>
+                <th className={styles.numCell}>Отправленная цена</th>
+                <th className={styles.numCell}>Полученная цена</th>
+                <th className={styles.numCell}>Подтверждённая цена</th>
+                <th className={styles.numCell}>Расхождение</th>
+                <th className={styles.statusColHeader}>Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedItems.map((item) => (
+                <OrderItemRow
+                  key={item.id}
+                  item={item}
+                  order={order}
+                  material={materialById.get(item.material_id)}
+                  saving={savingItemId === item.id}
+                  onPatch={(patch) => void handleItemPatch(item, patch)}
+                  onReplacementApplied={handleReplacementApplied}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <div className={styles.footer}>
           <span className={styles.footerTotal}>

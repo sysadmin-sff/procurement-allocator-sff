@@ -107,6 +107,15 @@
   --shadow-primary-button: 0 6px 16px rgba(47, 86, 177, 0.24);
   --shadow-sticky-footer: 0 -6px 20px rgba(16, 34, 74, 0.06);
 
+  /* Breakpoints — project-wide responsive scale. Agreed standard: every
+     @media query in the app uses exactly these four widths, never ad-hoc
+     values. CSS custom properties can't be used inside @media conditions,
+     so these are documented here and hard-coded as literals in each query:
+       480px  — phone
+       768px  — tablet / small laptop
+       1024px — laptop
+       1180px — max content width (matches the .inner / .page max-width) */
+
   /* Spacing rhythm */
   --space-1: 4px;
   --space-2: 6px;

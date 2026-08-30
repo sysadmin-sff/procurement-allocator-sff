@@ -203,87 +203,89 @@ export function MaterialsPage() {
             )}
 
             {status === 'ready' && sortedMaterials.length > 0 && (
-              <table className={`${styles.table} ${styles.rowClickable}`}>
-                <thead>
-                  <tr>
-                    <th className={styles.expandHeaderCell}></th>
-                    <th
-                      className={styles.sortableHeader}
-                      onClick={() => toggleSort('internal_sku')}
-                    >
-                      internal_sku
-                      <span
-                        className={`${styles.sortIndicator} ${
-                          sortColumn === 'internal_sku' ? styles.sortIndicatorActive : ''
-                        }`}
+              <div className={styles.tableScroll}>
+                <table className={`${styles.table} ${styles.rowClickable}`}>
+                  <thead>
+                    <tr>
+                      <th className={styles.expandHeaderCell}></th>
+                      <th
+                        className={styles.sortableHeader}
+                        onClick={() => toggleSort('internal_sku')}
                       >
-                        {sortColumn === 'internal_sku' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
-                      </span>
-                    </th>
-                    <th
-                      className={styles.sortableHeader}
-                      onClick={() => toggleSort('canonical_name')}
-                    >
-                      Название
-                      <span
-                        className={`${styles.sortIndicator} ${
-                          sortColumn === 'canonical_name' ? styles.sortIndicatorActive : ''
-                        }`}
+                        internal_sku
+                        <span
+                          className={`${styles.sortIndicator} ${
+                            sortColumn === 'internal_sku' ? styles.sortIndicatorActive : ''
+                          }`}
+                        >
+                          {sortColumn === 'internal_sku' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                        </span>
+                      </th>
+                      <th
+                        className={styles.sortableHeader}
+                        onClick={() => toggleSort('canonical_name')}
                       >
-                        {sortColumn === 'canonical_name' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
-                      </span>
-                    </th>
-                    <th>Категория</th>
-                    <th>Ед.</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedMaterials.map((material) => {
-                    const expanded = expandedId === material.id;
-                    return (
-                      <Fragment key={material.id}>
-                        <tr onClick={() => toggleExpanded(material.id)}>
-                          <td className={styles.expandCell}>
-                            <span
-                              className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
-                              aria-hidden="true"
-                            >
-                              ▸
-                            </span>
-                          </td>
-                          <td>{material.internal_sku}</td>
-                          <td>{material.canonical_name}</td>
-                          <td>{material.category ?? <span className={styles.muted}>—</span>}</td>
-                          <td>{material.unit}</td>
-                          <td>
-                            <div
-                              className={styles.actionsCell}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Button variant="ghost" disabled={!isAdmin} onClick={() => openEdit(material)}>
-                                Изменить
-                              </Button>
-                              <ConfirmButton
-                                label="Удалить"
-                                disabled={!isAdmin}
-                                onConfirm={() => handleDelete(material)}
-                              />
-                            </div>
-                          </td>
-                        </tr>
-                        {expanded && (
-                          <tr>
-                            <td colSpan={6}>
-                              <MaterialPricesPanel materialId={material.id} suppliers={suppliers} />
+                        Название
+                        <span
+                          className={`${styles.sortIndicator} ${
+                            sortColumn === 'canonical_name' ? styles.sortIndicatorActive : ''
+                          }`}
+                        >
+                          {sortColumn === 'canonical_name' ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
+                        </span>
+                      </th>
+                      <th>Категория</th>
+                      <th>Ед.</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedMaterials.map((material) => {
+                      const expanded = expandedId === material.id;
+                      return (
+                        <Fragment key={material.id}>
+                          <tr onClick={() => toggleExpanded(material.id)}>
+                            <td className={styles.expandCell}>
+                              <span
+                                className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ''}`}
+                                aria-hidden="true"
+                              >
+                                ▸
+                              </span>
+                            </td>
+                            <td>{material.internal_sku}</td>
+                            <td>{material.canonical_name}</td>
+                            <td>{material.category ?? <span className={styles.muted}>—</span>}</td>
+                            <td>{material.unit}</td>
+                            <td>
+                              <div
+                                className={styles.actionsCell}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Button variant="ghost" disabled={!isAdmin} onClick={() => openEdit(material)}>
+                                  Изменить
+                                </Button>
+                                <ConfirmButton
+                                  label="Удалить"
+                                  disabled={!isAdmin}
+                                  onConfirm={() => handleDelete(material)}
+                                />
+                              </div>
                             </td>
                           </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          {expanded && (
+                            <tr>
+                              <td colSpan={6}>
+                                <MaterialPricesPanel materialId={material.id} suppliers={suppliers} />
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

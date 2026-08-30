@@ -149,93 +149,95 @@ export function UsersPage() {
             )}
 
             {status === 'ready' && users.length > 0 && (
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Email</th>
-                    <th>Имя</th>
-                    <th>Роль</th>
-                    <th>Статус</th>
-                    <th>Последний вход</th>
-                    <th>Создан</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => {
-                    const editing = editingId === user.id;
-                    return (
-                      <tr key={user.id}>
-                        <td>{user.email}</td>
-                        <td>{user.name ?? <span className={styles.muted}>—</span>}</td>
-                        <td>
-                          {editing ? (
-                            <select
-                              className={styles.select}
-                              value={user.role}
-                              onChange={(e) =>
-                                void handleUpdate(user, { role: e.target.value as UserRole })
-                              }
-                            >
-                              <option value="employee">Сотрудник</option>
-                              <option value="admin">Администратор</option>
-                            </select>
-                          ) : user.role === 'admin' ? (
-                            'Администратор'
-                          ) : (
-                            'Сотрудник'
-                          )}
-                        </td>
-                        <td>
-                          <span
-                            className={`${styles.badge} ${
-                              user.is_active ? styles.badgeActive : styles.badgeHistorical
-                            }`}
-                          >
-                            {user.is_active ? 'Активен' : 'Отключён'}
-                          </span>
-                        </td>
-                        <td>
-                          {user.last_login_at ? (
-                            formatDateTime(user.last_login_at)
-                          ) : (
-                            <span className={styles.muted}>Ещё не входил</span>
-                          )}
-                        </td>
-                        <td>{formatDateTime(user.created_at)}</td>
-                        <td>
-                          <div className={styles.actionsCell}>
+              <div className={styles.tableScroll}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Email</th>
+                      <th>Имя</th>
+                      <th>Роль</th>
+                      <th>Статус</th>
+                      <th>Последний вход</th>
+                      <th>Создан</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {users.map((user) => {
+                      const editing = editingId === user.id;
+                      return (
+                        <tr key={user.id}>
+                          <td>{user.email}</td>
+                          <td>{user.name ?? <span className={styles.muted}>—</span>}</td>
+                          <td>
                             {editing ? (
-                              <Button variant="ghost" onClick={() => setEditingId(null)}>
-                                Готово
-                              </Button>
+                              <select
+                                className={styles.select}
+                                value={user.role}
+                                onChange={(e) =>
+                                  void handleUpdate(user, { role: e.target.value as UserRole })
+                                }
+                              >
+                                <option value="employee">Сотрудник</option>
+                                <option value="admin">Администратор</option>
+                              </select>
+                            ) : user.role === 'admin' ? (
+                              'Администратор'
                             ) : (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  disabled={!isAdmin}
-                                  onClick={() => setEditingId(user.id)}
-                                >
-                                  Изменить роль
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  disabled={!isAdmin}
-                                  onClick={() =>
-                                    void handleUpdate(user, { is_active: !user.is_active })
-                                  }
-                                >
-                                  {user.is_active ? 'Отключить' : 'Активировать'}
-                                </Button>
-                              </>
+                              'Сотрудник'
                             )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td>
+                            <span
+                              className={`${styles.badge} ${
+                                user.is_active ? styles.badgeActive : styles.badgeHistorical
+                              }`}
+                            >
+                              {user.is_active ? 'Активен' : 'Отключён'}
+                            </span>
+                          </td>
+                          <td>
+                            {user.last_login_at ? (
+                              formatDateTime(user.last_login_at)
+                            ) : (
+                              <span className={styles.muted}>Ещё не входил</span>
+                            )}
+                          </td>
+                          <td>{formatDateTime(user.created_at)}</td>
+                          <td>
+                            <div className={styles.actionsCell}>
+                              {editing ? (
+                                <Button variant="ghost" onClick={() => setEditingId(null)}>
+                                  Готово
+                                </Button>
+                              ) : (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    disabled={!isAdmin}
+                                    onClick={() => setEditingId(user.id)}
+                                  >
+                                    Изменить роль
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    disabled={!isAdmin}
+                                    onClick={() =>
+                                      void handleUpdate(user, { is_active: !user.is_active })
+                                    }
+                                  >
+                                    {user.is_active ? 'Отключить' : 'Активировать'}
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

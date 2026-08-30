@@ -262,62 +262,64 @@ export function PriceListImportReviewPage() {
           </div>
         </div>
 
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={styles.checkboxCell} />
-              <th>Строка прайса</th>
-              <th className={styles.numCell}>Цена</th>
-              <th>Уверенность</th>
-              <th className={styles.actionColCell}>Действие</th>
-              <th className={styles.statusColCell} />
-            </tr>
-          </thead>
-          <tbody>
-            {sortedEntries.map((entry, index) => {
-              const prevEntry = sortedEntries[index - 1];
-              const startsNewDuplicateGroup =
-                entry.possible_duplicate_of.length > 0 &&
-                prevEntry != null &&
-                !prevEntry.possible_duplicate_of.includes(entry.id) &&
-                !entry.possible_duplicate_of.includes(prevEntry.id);
+        <div className={styles.tableScroll}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th className={styles.checkboxCell} />
+                <th>Строка прайса</th>
+                <th className={styles.numCell}>Цена</th>
+                <th>Уверенность</th>
+                <th className={styles.actionColCell}>Действие</th>
+                <th className={styles.statusColCell} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortedEntries.map((entry, index) => {
+                const prevEntry = sortedEntries[index - 1];
+                const startsNewDuplicateGroup =
+                  entry.possible_duplicate_of.length > 0 &&
+                  prevEntry != null &&
+                  !prevEntry.possible_duplicate_of.includes(entry.id) &&
+                  !entry.possible_duplicate_of.includes(prevEntry.id);
 
-              return (
-                <EntryRow
-                  key={entry.id}
-                  entry={entry}
-                  entriesById={new Map(priceListImport.entries.map((e) => [e.id, e]))}
-                  proposedMaterial={
-                    entry.matched_material_id != null
-                      ? materialById.get(entry.matched_material_id)
-                      : undefined
-                  }
-                  separateFromPrevious={startsNewDuplicateGroup}
-                  included={included[entry.id] ?? false}
-                  onToggleIncluded={(value) =>
-                    setIncluded((prev) => ({ ...prev, [entry.id]: value }))
-                  }
-                  matchOverride={matchOverride[entry.id] ?? null}
-                  matchQuery={matchQuery[entry.id] ?? ''}
-                  onMatchQueryChange={(q) =>
-                    setMatchQuery((prev) => ({ ...prev, [entry.id]: q }))
-                  }
-                  onMatchSelect={(material) =>
-                    setMatchOverride((prev) => ({ ...prev, [entry.id]: material }))
-                  }
-                  newSku={newSku[entry.id] ?? ''}
-                  onNewSkuChange={(v) => setNewSku((prev) => ({ ...prev, [entry.id]: v }))}
-                  newName={newName[entry.id] ?? ''}
-                  onNewNameChange={(v) => setNewName((prev) => ({ ...prev, [entry.id]: v }))}
-                  onSkip={() => void handleSkip(entry)}
-                  skipping={skippingId === entry.id}
-                  rowError={rowErrors[entry.id]}
-                  disabled={!isAdmin}
-                />
-              );
-            })}
-          </tbody>
-        </table>
+                return (
+                  <EntryRow
+                    key={entry.id}
+                    entry={entry}
+                    entriesById={new Map(priceListImport.entries.map((e) => [e.id, e]))}
+                    proposedMaterial={
+                      entry.matched_material_id != null
+                        ? materialById.get(entry.matched_material_id)
+                        : undefined
+                    }
+                    separateFromPrevious={startsNewDuplicateGroup}
+                    included={included[entry.id] ?? false}
+                    onToggleIncluded={(value) =>
+                      setIncluded((prev) => ({ ...prev, [entry.id]: value }))
+                    }
+                    matchOverride={matchOverride[entry.id] ?? null}
+                    matchQuery={matchQuery[entry.id] ?? ''}
+                    onMatchQueryChange={(q) =>
+                      setMatchQuery((prev) => ({ ...prev, [entry.id]: q }))
+                    }
+                    onMatchSelect={(material) =>
+                      setMatchOverride((prev) => ({ ...prev, [entry.id]: material }))
+                    }
+                    newSku={newSku[entry.id] ?? ''}
+                    onNewSkuChange={(v) => setNewSku((prev) => ({ ...prev, [entry.id]: v }))}
+                    newName={newName[entry.id] ?? ''}
+                    onNewNameChange={(v) => setNewName((prev) => ({ ...prev, [entry.id]: v }))}
+                    onSkip={() => void handleSkip(entry)}
+                    skipping={skippingId === entry.id}
+                    rowError={rowErrors[entry.id]}
+                    disabled={!isAdmin}
+                  />
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

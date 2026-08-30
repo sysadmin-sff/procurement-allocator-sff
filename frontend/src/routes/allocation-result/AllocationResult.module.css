@@ -220,6 +220,13 @@
   border-collapse: collapse;
 }
 
+/* Horizontal scroll container for the table — same pattern as
+   CrudScreen.module.css .tableScroll (keeps a wide table inside its own box
+   on narrow viewports instead of pushing the page sideways). */
+.tableScroll {
+  overflow-x: auto;
+}
+
 .materialColHeader,
 .materialColCell {
   width: 40%;

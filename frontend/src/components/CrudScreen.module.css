@@ -181,6 +181,12 @@
   gap: var(--space-7);
 }
 
+@media (max-width: 600px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .field {
   display: flex;
   flex-direction: column;

@@ -313,31 +313,33 @@ function AllocationResultOk({
                 </div>
               )}
 
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th className={styles.materialColHeader}>Материал</th>
-                    <th className={styles.numCell}>Кол-во</th>
-                    <th className={styles.numCell}>Цена за ед.</th>
-                    <th className={styles.numCell}>Поставщик</th>
-                    <th className={styles.numCell}>Сумма</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line) => (
-                    <LineRow
-                      key={line.id}
-                      line={line}
-                      material={materialById.get(line.material_id)}
-                      cheapest={cheapestByMaterial.get(line.material_id)}
-                      supplierOptions={pricesByMaterial.get(line.material_id) ?? []}
-                      supplierById={supplierById}
-                      saving={savingLineId === line.id}
-                      onOverride={(supplierId) => handleOverride(line.id, supplierId)}
-                    />
-                  ))}
-                </tbody>
-              </table>
+              <div className={styles.tableScroll}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th className={styles.materialColHeader}>Материал</th>
+                      <th className={styles.numCell}>Кол-во</th>
+                      <th className={styles.numCell}>Цена за ед.</th>
+                      <th className={styles.numCell}>Поставщик</th>
+                      <th className={styles.numCell}>Сумма</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((line) => (
+                      <LineRow
+                        key={line.id}
+                        line={line}
+                        material={materialById.get(line.material_id)}
+                        cheapest={cheapestByMaterial.get(line.material_id)}
+                        supplierOptions={pricesByMaterial.get(line.material_id) ?? []}
+                        supplierById={supplierById}
+                        saving={savingLineId === line.id}
+                        onOverride={(supplierId) => handleOverride(line.id, supplierId)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           );
         })}

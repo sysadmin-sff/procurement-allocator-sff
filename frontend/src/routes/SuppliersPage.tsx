@@ -126,36 +126,38 @@ export function SuppliersPage() {
             )}
 
             {status === 'ready' && suppliers.length > 0 && (
-              <table className={`${styles.table} ${styles.rowClickable}`}>
-                <thead>
-                  <tr>
-                    <th>Название</th>
-                    <th>Статус</th>
-                    <th>Валюта</th>
-                    <th>Доставка</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {suppliers.map((supplier) => (
-                    <tr key={supplier.id} onClick={() => navigate(`/suppliers/${supplier.id}`)}>
-                      <td>{supplier.name}</td>
-                      <td>{supplier.status ?? <span className={styles.muted}>—</span>}</td>
-                      <td>{supplier.currency}</td>
-                      <td>{summarizeDeliveryPolicy(supplier.delivery_policy)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        <div className={styles.actionsCell}>
-                          <ConfirmButton
-                            label="Удалить"
-                            disabled={!isAdmin}
-                            onConfirm={() => handleDelete(supplier)}
-                          />
-                        </div>
-                      </td>
+              <div className={styles.tableScroll}>
+                <table className={`${styles.table} ${styles.rowClickable}`}>
+                  <thead>
+                    <tr>
+                      <th>Название</th>
+                      <th>Статус</th>
+                      <th>Валюта</th>
+                      <th>Доставка</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {suppliers.map((supplier) => (
+                      <tr key={supplier.id} onClick={() => navigate(`/suppliers/${supplier.id}`)}>
+                        <td>{supplier.name}</td>
+                        <td>{supplier.status ?? <span className={styles.muted}>—</span>}</td>
+                        <td>{supplier.currency}</td>
+                        <td>{summarizeDeliveryPolicy(supplier.delivery_policy)}</td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          <div className={styles.actionsCell}>
+                            <ConfirmButton
+                              label="Удалить"
+                              disabled={!isAdmin}
+                              onConfirm={() => handleDelete(supplier)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         </div>

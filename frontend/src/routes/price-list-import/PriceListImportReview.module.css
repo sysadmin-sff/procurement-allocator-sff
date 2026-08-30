@@ -181,6 +181,13 @@
   overflow: hidden;
 }
 
+/* Horizontal scroll container for the table — same pattern as
+   CrudScreen.module.css .tableScroll (keeps a wide table inside its own box
+   on narrow viewports instead of pushing the page sideways). */
+.tableScroll {
+  overflow-x: auto;
+}
+
 .table th {
   text-align: left;
   padding: var(--space-4) var(--space-6);

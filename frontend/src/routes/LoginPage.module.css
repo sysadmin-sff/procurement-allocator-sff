@@ -240,3 +240,34 @@
   color: var(--color-text-tertiary-alt);
   text-align: center;
 }
+
+/* Phone / small tablet: the two-column split can't hold — the right panel's
+   420px min-width alone overflows a 360px viewport. Stack the panels and drop
+   the min-width so the login column can shrink to the screen. 768px is the
+   project's "tablet / small laptop" breakpoint from tokens.css (the four-width
+   standard; there is no 840px there). */
+@media (max-width: 768px) {
+  .wrap {
+    flex-direction: column;
+  }
+
+  /* Both panels size to their own content when stacked instead of the left
+     one flex-growing to eat the viewport height. */
+  .leftPanel {
+    flex: none;
+  }
+
+  .rightPanel {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* 33vh of reserved logo whitespace on top of the full brand panel pushes the
+     "Войти через Google" button far below the fold on a phone. Let the logo
+     size to itself (max-height still caps it). */
+  .rightPanelLogoWrap {
+    height: auto;
+    padding: var(--space-9) var(--space-4) var(--space-7);
+  }
+}

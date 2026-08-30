@@ -108,6 +108,29 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-5);
+}
+
+/* Phone: 20px of overlay padding plus 20px of modal padding eats a quarter of
+   a 360px screen before any content. */
+@media (max-width: 480px) {
+  .overlay {
+    padding: var(--space-5);
+  }
+
+  .modal {
+    padding: var(--space-6);
+    gap: var(--space-6);
+    max-height: 90vh;
+  }
+
+  .supplierRow {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .acknowledgeRow {
+    padding: var(--space-4) var(--space-5);
+  }
 }

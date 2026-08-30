@@ -42,6 +42,16 @@ class Settings(BaseSettings):
     """Secure flag on auth cookies (ADR-0024 §9) — defaults True (fail-safe
     for prod/deploy). Set COOKIE_SECURE=false only for local HTTP dev, where
     the browser silently drops Secure cookies without HTTPS."""
+    trusted_proxy_ip: str | None = None
+    """Address of the reverse proxy that terminates HTTPS (ADR-0024 §9), as it
+    appears on the TCP socket — an IP, not a hostname, since it is compared
+    against request.client.host verbatim. X-Forwarded-For is honoured for rate
+    limiting (ADR-0024 §10) only on requests whose peer is exactly this
+    address; every other request is treated as a direct connection and the
+    header is ignored. Unset (the default) means never trust the header —
+    fail-safe for local dev, and in prod it degrades the per-employee limit
+    into one bucket shared by the whole office rather than into a spoofable
+    one. See docs/DEPLOYMENT.md."""
 
 
 settings = Settings()

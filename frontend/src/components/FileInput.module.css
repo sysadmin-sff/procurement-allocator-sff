@@ -1,6 +1,7 @@
 .wrap {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-5);
 }
 
@@ -50,4 +51,14 @@
 .fileName {
   font-size: var(--text-sm-alt2);
   color: var(--color-text-secondary);
+  /* Uploaded price lists have long names with no spaces to break on; without
+     this the name runs past the card edge once it wraps to its own line. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .trigger {
+    padding: var(--space-4) var(--space-6);
+  }
 }

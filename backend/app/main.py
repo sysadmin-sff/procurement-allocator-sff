@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
 
 from app.api.allocation import router as allocation_router
 from app.api.auth import router as auth_router
@@ -15,6 +16,7 @@ from app.api.user import router as user_router
 from app.auth.service import bootstrap_admin
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.rate_limit import limiter, rate_limit_exceeded_handler
 
 app = FastAPI(title="procurement-allocator")
 
@@ -29,6 +31,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Per-IP sliding-window limit on the two OAuth endpoints (ADR-0024 §10).
+# app.state.limiter is slowapi's documented handle for the instance; the
+# @limiter.limit decorators use their own closure, but keeping it set means a
+# later switch to slowapi's own handler or middleware does not break.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 app.include_router(health_router)
 app.include_router(auth_router)

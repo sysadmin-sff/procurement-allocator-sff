@@ -1,5 +1,12 @@
+/* Capping the height is what makes the sticky header below do anything: this
+   element is already a scroll container (overflow-x: auto forces overflow-y to
+   auto), so a "top: 0" header would otherwise stick to a box that never
+   scrolls. With a cap, a long matrix scrolls inside the card and both the
+   header row and the material column stay pinned. Short matrices are under the
+   cap and render whole, with no inner scrollbar. */
 .matrixScroll {
   overflow-x: auto;
+  max-height: 70vh;
 }
 
 .matrixTable {
@@ -10,6 +17,9 @@
 }
 
 .matrixTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   text-align: left;
   padding: var(--space-4) var(--space-8);
   background: var(--color-surface-subtle);
@@ -39,6 +49,21 @@
   z-index: 1;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
+  /* The table is nowrap so supplier prices keep to one line each; the material
+     name is the only prose here. Bound it instead of letting a long name
+     stretch the matrix, or letting many supplier columns squeeze it down to a
+     few characters — it's the row's only label, and it stays on screen while
+     the rest scrolls sideways. */
+  min-width: 200px;
+  width: 320px;
+  white-space: normal;
+}
+
+/* Corner cell — sticky on both axes, so it has to sit above both the header
+   row (z-index 2) and the material column (z-index 1). Selector has to match
+   ".matrixTable thead th" specificity or that rule's z-index: 2 wins. */
+.matrixTable thead th.materialColHeader {
+  z-index: 3;
 }
 
 .matrixTable tbody tr:nth-child(even) .materialColCell {
@@ -102,4 +127,20 @@
   padding: var(--space-9) var(--space-8);
   color: var(--color-text-tertiary-alt);
   font-size: var(--text-base-alt);
+}
+
+@media (max-width: 480px) {
+  .matrixTable thead th {
+    padding: var(--space-3) var(--space-5);
+  }
+
+  .matrixTable tbody td {
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .materialColHeader,
+  .materialColCell {
+    min-width: 140px;
+    width: 180px;
+  }
 }

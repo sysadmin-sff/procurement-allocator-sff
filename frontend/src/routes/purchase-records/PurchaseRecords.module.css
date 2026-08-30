@@ -179,17 +179,6 @@
   border-right: 1px solid var(--color-border);
 }
 
-@media (max-width: 860px) {
-  .planFactGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .planFactGrid > div:first-child {
-    border-right: none;
-    border-bottom: 1px solid var(--color-border);
-  }
-}
-
 .columnLabel {
   padding: var(--space-4) var(--space-8);
   font-family: var(--font-heading);
@@ -359,12 +348,6 @@
   align-items: end;
 }
 
-@media (max-width: 960px) {
-  .addGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 .fieldLabel {
   display: block;
   font-family: var(--font-heading);
@@ -381,4 +364,71 @@
   text-transform: none;
   letter-spacing: normal;
   color: var(--color-text-tertiary-alt2);
+}
+
+/* One breakpoint for the whole screen, replacing the old 860px (plan/fact
+   split) and 960px (add-record form) rules. Two different widths left a
+   860-960px band where the form had already collapsed to two columns while
+   the plan and fact tables were still side by side and squeezing the actions
+   column. Both now flip together at 1024px — the project's "laptop" step from
+   tokens.css, which is also the first standard width above the old pair. */
+@media (max-width: 1024px) {
+  .planFactGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .planFactGrid > div:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .addGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: var(--space-8) var(--space-5) 40px;
+  }
+
+  .addGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 260px of actions plus a 32% description column leaves the two number
+     columns about 20px each on a phone. Let every column size to its content
+     instead and stack the buttons, which .actionsCell already wraps. */
+  .table {
+    table-layout: auto;
+  }
+
+  .descColHeader,
+  .descColCell,
+  .actionsColHeader,
+  .actionsColCell {
+    width: auto;
+  }
+
+  /* raw_description is free text off a supplier order response — an auto
+     layout would let one long unbroken code widen the whole table. */
+  .descColCell {
+    overflow-wrap: anywhere;
+  }
+
+  .actionsCell {
+    justify-content: flex-start;
+  }
+
+  .table th,
+  .table td {
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .columnLabel,
+  .addSection,
+  .editRow td {
+    padding-left: var(--space-5);
+    padding-right: var(--space-5);
+  }
 }

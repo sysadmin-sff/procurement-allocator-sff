@@ -25,6 +25,7 @@ from app.auth.service import (
 )
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import AUTH_RATE_LIMIT, limiter
 from app.models import User
 
 router = APIRouter(prefix="/auth")
@@ -73,6 +74,7 @@ def _exchange_code_for_id_token(code: str, code_verifier: str, redirect_uri: str
 
 
 @router.get("/login")
+@limiter.limit(AUTH_RATE_LIMIT)
 def login(request: Request) -> RedirectResponse:
     client_id, _, workspace_domain = _require_google_settings()
 
@@ -95,6 +97,7 @@ def login(request: Request) -> RedirectResponse:
 
 
 @router.get("/callback", name="auth_callback")
+@limiter.limit(AUTH_RATE_LIMIT)
 def callback(
     request: Request, code: str, state: str, db: Session = Depends(get_db)
 ) -> RedirectResponse:

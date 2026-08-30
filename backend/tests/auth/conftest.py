@@ -5,6 +5,7 @@ import pytest
 
 from app.auth.constants import SESSION_IDLE_TTL
 from app.core.database import SessionLocal, get_db
+from app.core.rate_limit import reset_rate_limits
 from app.main import app
 from app.models import User, UserSession
 
@@ -80,3 +81,14 @@ def make_session(db_session):
         return user_session
 
     return _make
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """The OAuth rate limiter (ADR-0024 §10) is process-global and every
+    TestClient request arrives from the same client host, so without this the
+    auth tests would pool into one 10/minute budget and whichever ran 11th
+    would get a 429 instead of its expected response."""
+    reset_rate_limits()
+    yield
+    reset_rate_limits()

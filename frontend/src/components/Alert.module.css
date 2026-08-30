@@ -1,6 +1,7 @@
 .alert {
   display: flex;
   align-items: flex-start;
+  flex-wrap: wrap;
   gap: var(--space-6);
   border-radius: var(--radius-2xl);
   padding: var(--space-7) var(--space-8);
@@ -52,6 +53,7 @@
 
 .action {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
   flex: none;
 }
@@ -103,4 +105,24 @@
 
 .info .dot {
   background: var(--color-accent);
+}
+
+/* Phone: the action buttons can't sit beside the message at this width.
+   flex-wrap on its own never fires here — .body has min-width: 0, so it
+   shrinks to nothing rather than pushing the actions onto their own line;
+   giving .action the full line is what actually forces the break.
+   480px is the project's "phone" step from tokens.css (480/768/1024/1180). */
+@media (max-width: 480px) {
+  .alert {
+    gap: var(--space-5);
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .compact {
+    padding: var(--space-4) var(--space-6);
+  }
+
+  .action {
+    flex: 1 1 100%;
+  }
 }

@@ -109,11 +109,13 @@ class DuplicateMaterialInDraftError(Exception):
     same reasoning as MultipleDraftOrdersConflictError. Raised before any
     write happens."""
 
-    def __init__(self, order_id: uuid.UUID, material_id: uuid.UUID):
+    def __init__(self, order_id: uuid.UUID, material_id: uuid.UUID, material_name: str):
         self.order_id = order_id
         self.material_id = material_id
+        self.material_name = material_name
         super().__init__(
-            f"Order {order_id} already has an OrderItem for material {material_id}"
+            f'В черновике ордера этого поставщика уже есть позиция "{material_name}" — '
+            "сначала объедините или уберите её вручную, прежде чем переносить сюда ещё одну."
         )
 
 
@@ -305,7 +307,8 @@ def replace_and_sync_order(
     if target_order is not None and any(
         oi.material_id == item.material_id for oi in target_order.items
     ):
-        raise DuplicateMaterialInDraftError(target_order.id, item.material_id)
+        material = db.get(Material, item.material_id)
+        raise DuplicateMaterialInDraftError(target_order.id, item.material_id, material.canonical_name)
 
     line = override_allocation_line_supplier(
         db,

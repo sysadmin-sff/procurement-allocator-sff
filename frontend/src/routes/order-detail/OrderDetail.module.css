@@ -296,6 +296,7 @@
   flex-direction: column;
   gap: var(--space-3);
   margin-top: var(--space-3);
+  min-width: 0;
 }
 
 .findReplacementButton {
@@ -349,6 +350,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: var(--space-4);
+  min-width: 0;
 }
 
 .replacementLoading {
@@ -360,6 +362,7 @@
   font-size: var(--text-xs-alt);
   font-weight: 600;
   color: var(--color-danger-text);
+  overflow-wrap: break-word;
 }
 
 .candidateList {

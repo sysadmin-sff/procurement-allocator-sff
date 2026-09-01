@@ -1,5 +1,9 @@
 """Полностью очищает dev-БД от тестовых данных и загружает реальные данные
-компании: 7 поставщиков, материалы из materials.csv, цены из prices_long.csv.
+компании: 7 поставщиков, материалы и цены из одного xlsx-файла
+(матрица "материал × поставщик", формат обновлённого прайса от компании —
+см. app/scripts/xlsx_price_matrix.py за разбором структуры и его же
+доктстринг про историю формата: раньше это были два CSV,
+materials.csv/prices_long.csv, тот путь оставлен только для справки).
 
 Отдельный скрипт от seed.py — seed.py остаётся для будущих dev-окружений
 с нуля (синтетические данные), этот скрипт — одноразовая замена реальных
@@ -14,7 +18,6 @@
 """
 
 import argparse
-import csv
 import datetime
 import random
 import sys
@@ -24,10 +27,10 @@ from sqlalchemy import text
 
 from app.core.database import SessionLocal
 from app.models import Material, Price, Supplier
+from app.scripts.xlsx_price_matrix import FALLBACK_UNIT, ParsedWorkbook, parse_price_matrix
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "import"
-MATERIALS_CSV = DATA_DIR / "materials.csv"
-PRICES_CSV = DATA_DIR / "prices_long.csv"
+PRICE_MATRIX_XLSX = DATA_DIR / "materials_price_matrix.xlsx"
 
 SUPPLIER_NAMES = [
     "EMS",
@@ -66,17 +69,11 @@ TABLES_IN_DELETE_ORDER = [
 ]
 
 
-def read_materials() -> list[dict]:
-    with MATERIALS_CSV.open(encoding="utf-8-sig", newline="") as f:
-        return list(csv.DictReader(f))
+def read_workbook() -> ParsedWorkbook:
+    return parse_price_matrix(PRICE_MATRIX_XLSX)
 
 
-def read_prices() -> list[dict]:
-    with PRICES_CSV.open(encoding="utf-8-sig", newline="") as f:
-        return list(csv.DictReader(f))
-
-
-def print_summary(db) -> None:
+def print_summary(db, workbook: ParsedWorkbook) -> None:
     print("=" * 70)
     print("СВОДКА — будет УДАЛЕНО (текущие данные dev-БД):")
     print("=" * 70)
@@ -84,16 +81,14 @@ def print_summary(db) -> None:
         n = db.execute(text(f"SELECT count(*) FROM {table}")).scalar()
         print(f"  {table:30s} {n}")
 
-    materials_rows = read_materials()
-    prices_rows = read_prices()
-
     print()
     print("=" * 70)
-    print("Будет СОЗДАНО (реальные данные компании):")
+    print("Будет СОЗДАНО (реальные данные компании, из"
+          f" {PRICE_MATRIX_XLSX.name}):")
     print("=" * 70)
     print(f"  suppliers                     {len(SUPPLIER_NAMES)}  ({', '.join(SUPPLIER_NAMES)})")
-    print(f"  materials                     {len(materials_rows)}  (из {MATERIALS_CSV.name})")
-    print(f"  prices                        {len(prices_rows)}  (из {PRICES_CSV.name})")
+    print(f"  materials                     {len(workbook.materials)}")
+    print(f"  prices                        {len(workbook.prices)}")
     print()
     print("ВАЖНО: delivery_policy у новых поставщиков создаётся с")
     print("  free_shipping_threshold = null (порог не настроен, ADR-0003)")
@@ -104,9 +99,34 @@ def print_summary(db) -> None:
     print("поставщиков — это ОЖИДАЕМОЕ поведение при flat_fee=0.0, не баг.")
     print()
     print("availability и min_order_qty на новых Price-записях будут NULL")
-    print("(в исходном CSV этих данных нет; NULL = 'неизвестно', выбрано вместо 0,")
+    print("(в исходном файле этих данных нет; NULL = 'неизвестно', выбрано вместо 0,")
     print("чтобы не путать с 'нет в наличии' / 'минимальный заказ не нужен' —")
     print("оба поля nullable в модели Price). Их тоже придётся заполнить вручную.")
+    print()
+
+    print("=" * 70)
+    print("Замечания парсинга исходного xlsx (проверить перед --confirm):")
+    print("=" * 70)
+    print(f"  Строк-разделителей секций пропущено: {workbook.divider_rows_skipped}")
+    if workbook.rows_with_fallback_unit:
+        print(
+            f"  Материалов без Quantity в файле — unit проставлен "
+            f"'{FALLBACK_UNIT}' по умолчанию, требует ручной проверки: "
+            f"{len(workbook.rows_with_fallback_unit)}"
+        )
+        for desc in workbook.rows_with_fallback_unit:
+            print(f"    - {desc}")
+    if workbook.unparseable_price_cells:
+        print(f"  Нечитаемых значений цены (пропущены): {len(workbook.unparseable_price_cells)}")
+        for row_number, supplier_name, raw in workbook.unparseable_price_cells:
+            print(f"    - строка {row_number}, {supplier_name}: {raw!r}")
+    if workbook.unmapped_supplier_headers:
+        print(
+            "  ВНИМАНИЕ: заголовки колонок в файле без сопоставления поставщику "
+            "(цены из этих колонок НЕ будут импортированы):"
+        )
+        for header in workbook.unmapped_supplier_headers:
+            print(f"    - {header!r}")
     print()
 
 
@@ -130,25 +150,25 @@ def create_suppliers(db) -> dict[str, Supplier]:
     return suppliers_by_name
 
 
-def create_materials(db, materials_rows: list[dict]) -> dict[str, Material]:
+def create_materials(db, materials_rows: list) -> dict[str, Material]:
     materials_by_description: dict[str, Material] = {}
     for row in materials_rows:
         material = Material(
-            internal_sku=row["internal_sku"],
-            canonical_name=row["description"],
-            category=row["group"] or None,
-            unit=row["unit"],
+            internal_sku=row.internal_sku,
+            canonical_name=row.description,
+            category=row.category,
+            unit=row.unit,
             attributes={},
         )
         db.add(material)
-        materials_by_description[row["description"]] = material
+        materials_by_description[row.description] = material
     db.flush()
     return materials_by_description
 
 
 def create_prices(
     db,
-    prices_rows: list[dict],
+    prices_rows: list,
     materials_by_description: dict[str, Material],
     suppliers_by_name: dict[str, Supplier],
 ) -> tuple[int, list[str]]:
@@ -157,14 +177,12 @@ def create_prices(
     skipped: list[str] = []
 
     for row in prices_rows:
-        description = row["description"]
-        supplier_name = row["supplier"]
-        material = materials_by_description.get(description)
-        supplier = suppliers_by_name.get(supplier_name)
+        material = materials_by_description.get(row.description)
+        supplier = suppliers_by_name.get(row.supplier_name)
 
         if material is None or supplier is None:
             skipped.append(
-                f"row={row.get('row')} description={description!r} supplier={supplier_name!r} "
+                f"description={row.description!r} supplier={row.supplier_name!r} "
                 f"(material_found={material is not None}, supplier_found={supplier is not None})"
             )
             continue
@@ -173,7 +191,7 @@ def create_prices(
             Price(
                 material=material,
                 supplier=supplier,
-                price=row["price"],
+                price=row.price,
                 currency="USD",
                 availability=None,
                 min_order_qty=None,
@@ -228,9 +246,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    workbook = read_workbook()
+
     db = SessionLocal()
     try:
-        print_summary(db)
+        print_summary(db, workbook)
 
         if not args.confirm:
             print("Dry-run: ничего не изменено. Перезапусти с --confirm, чтобы выполнить.")
@@ -240,12 +260,10 @@ def main() -> None:
         wipe_tables(db)
 
         suppliers_by_name = create_suppliers(db)
-        materials_rows = read_materials()
-        materials_by_description = create_materials(db, materials_rows)
+        materials_by_description = create_materials(db, workbook.materials)
 
-        prices_rows = read_prices()
         created, skipped = create_prices(
-            db, prices_rows, materials_by_description, suppliers_by_name
+            db, workbook.prices, materials_by_description, suppliers_by_name
         )
 
         db.commit()

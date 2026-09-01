@@ -51,8 +51,18 @@ def _require_google_settings() -> tuple[str, str, str]:
     )
 
 
-def _callback_redirect_uri(request: Request) -> str:
-    return str(request.url_for("auth_callback"))
+def _callback_redirect_uri() -> str:
+    """Built from settings.backend_public_url, a fixed config value — not
+    from the incoming Request. request.url_for()/request.base_url reflect
+    only what THIS request looked like on the backend's own socket, which
+    behind nginx's /api/ prefix-stripping (docs/DEPLOYMENT.md) is always
+    scheme=http and always missing /api — the prefix the request arrived
+    through externally is stripped before the backend ever sees it, so no
+    amount of trusting/parsing headers on this request recovers it (unlike
+    X-Forwarded-For in rate_limit.py, this isn't a spoofable-header problem
+    gated by TRUSTED_PROXY_IP — the correct value simply isn't observable
+    from inside a single request here). See Settings.backend_public_url."""
+    return f"{settings.backend_public_url.rstrip('/')}/auth/callback"
 
 
 def _exchange_code_for_id_token(code: str, code_verifier: str, redirect_uri: str) -> str:
@@ -83,7 +93,7 @@ def login(request: Request) -> RedirectResponse:
 
     params = {
         "client_id": client_id,
-        "redirect_uri": _callback_redirect_uri(request),
+        "redirect_uri": _callback_redirect_uri(),
         "response_type": "code",
         "scope": "openid email profile",
         "code_challenge": code_challenge,
@@ -115,9 +125,7 @@ def callback(
         )
 
     try:
-        id_token = _exchange_code_for_id_token(
-            code, code_verifier, _callback_redirect_uri(request)
-        )
+        id_token = _exchange_code_for_id_token(code, code_verifier, _callback_redirect_uri())
         claims = verify_google_id_token(id_token, client_id=settings.google_client_id)
     except (GoogleTokenInvalidError, httpx.HTTPError) as exc:
         logger.warning("OAuth callback token exchange/verification failed: %s", exc)

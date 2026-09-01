@@ -38,6 +38,27 @@ class Settings(BaseSettings):
     """Base URL the OAuth callback redirects to after login (ADR-0024 §1 п.11)
     — must be an absolute URL, a relative one resolves against the backend
     host instead of the frontend and 404s."""
+    backend_public_url: str = "http://localhost:8000"
+    """Externally-visible base URL of this backend, exactly as registered in
+    Google Cloud Console's authorized redirect URIs — scheme, host, and any
+    path prefix a reverse proxy adds (e.g. https://example.com/api). Used
+    only to build the OAuth `redirect_uri` (see
+    app/api/auth.py:_callback_redirect_uri).
+
+    Deliberately NOT derived from the incoming Request (neither
+    `request.url_for`/`request.base_url` nor `X-Forwarded-*` headers): behind
+    a reverse proxy that strips a path prefix before forwarding (this
+    project's nginx strips /api/, see docs/DEPLOYMENT.md), the backend never
+    sees that prefix on the request it receives, so no request-derived value
+    can ever reconstruct the externally-correct URL — this isn't a header
+    trust-boundary problem to fix with TRUSTED_PROXY_IP (ADR-0024 §10's
+    model), it's information the backend process has no way to observe at
+    all, prefix included. Wrong in exactly the same way local dev never
+    catches: localhost:8000 is reached directly, with no proxy and no
+    prefix, so `request.url_for` happens to produce the right answer there
+    and only breaks the first time a real deploy sits behind path-stripping
+    nginx.
+    """
     cookie_secure: bool = True
     """Secure flag on auth cookies (ADR-0024 §9) — defaults True (fail-safe
     for prod/deploy). Set COOKIE_SECURE=false only for local HTTP dev, where

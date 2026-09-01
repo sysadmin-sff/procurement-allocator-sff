@@ -70,8 +70,37 @@ URL. Если backend и прокси в Docker/Compose — это адрес п
 | `SESSION_SIGNING_SECRET` | Подпись короткоживущей cookie oauth-флоу. |
 | `BOOTSTRAP_ADMIN_EMAIL` | Первый админ создаётся на старте (ADR-0024 §2). |
 | `FRONTEND_URL` | Абсолютный URL, иначе редирект после логина резолвится относительно backend. |
+| `BACKEND_PUBLIC_URL` | Внешний адрес backend'а (схема+хост+path-префикс), ровно как зарегистрирован в Google Cloud Console. За host nginx с `/api/`-prefix-stripping — `https://<домен>/api`. См. ниже, отдельный раздел. |
 | `COOKIE_SECURE` | Оставить `true`; `false` только для локального HTTP. |
 | `TRUSTED_PROXY_IP` | См. выше. |
+
+## `BACKEND_PUBLIC_URL` — OAuth `redirect_uri` не выводится из запроса
+
+`GET /auth/login` и `GET /auth/callback` (`backend/app/api/auth.py`,
+`_callback_redirect_uri`) отправляют Google одно и то же значение
+`redirect_uri` — оно обязано побайтово совпадать с тем, что зарегистрировано
+в Google Cloud Console. Раньше оно строилось через `request.url_for(...)`
+(Starlette) — работало в локальной разработке (прямой доступ к
+`localhost:8000`, без прокси и без `/api`-префикса), но за host nginx с
+`/api/`-prefix-stripping (см. раздел "Docker Compose + host nginx" выше)
+ломалось систематически: backend получает запрос уже без `/api`-префикса и
+всегда по обычному HTTP внутри docker-сети — `request.url_for(...)`
+неизбежно возвращает `http://<host>/auth/callback` вместо реального
+`https://<домен>/api/auth/callback`.
+
+Это не проблема доверия заголовку (не тот же случай, что
+`X-Forwarded-For`/`TRUSTED_PROXY_IP` выше) — backend физически не может
+восстановить внешний префикс из одного конкретного запроса, потому что
+nginx уже обрезал его до того, как запрос дошёл до backend. Поэтому
+`BACKEND_PUBLIC_URL` — фиксированное значение в конфиге, не выводимое ни из
+`request`, ни из `X-Forwarded-*`:
+
+```
+BACKEND_PUBLIC_URL=https://<домен>/api
+```
+
+Должно точно соответствовать authorized redirect URI в Google Cloud
+Console (`<BACKEND_PUBLIC_URL>/auth/callback`).
 
 ## Docker Compose + host nginx
 

@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from app.api.auth import _callback_redirect_uri
 from app.auth.google import GoogleClaims
 from app.core.config import settings
 from app.main import app
@@ -32,6 +33,45 @@ def test_login_redirects_to_google_and_sets_oauth_flow_cookie(monkeypatch):
     assert qs["code_challenge_method"] == ["S256"]
     assert qs["hd"] == [DOMAIN]
     assert "oauth_flow" in response.cookies
+
+
+def test_callback_redirect_uri_built_from_backend_public_url_not_request(monkeypatch):
+    """The exact regression this guards against: behind nginx stripping an
+    /api/ prefix before proxying to the backend, request.url_for()/
+    request.base_url can only ever see http://<host>/auth/callback — never
+    the externally-correct https://<host>/api/auth/callback that's actually
+    registered with Google. This asserts the value comes from
+    settings.backend_public_url alone, regardless of what request looked
+    like (there is deliberately no Request argument to this function)."""
+    monkeypatch.setattr(
+        settings, "backend_public_url", "https://procurement.screen-company.com/api"
+    )
+    assert (
+        _callback_redirect_uri()
+        == "https://procurement.screen-company.com/api/auth/callback"
+    )
+
+
+def test_callback_redirect_uri_strips_trailing_slash_on_backend_public_url(monkeypatch):
+    monkeypatch.setattr(
+        settings, "backend_public_url", "https://procurement.screen-company.com/api/"
+    )
+    assert (
+        _callback_redirect_uri()
+        == "https://procurement.screen-company.com/api/auth/callback"
+    )
+
+
+def test_login_redirect_uri_param_uses_backend_public_url(monkeypatch):
+    _configure_settings(monkeypatch)
+    monkeypatch.setattr(
+        settings, "backend_public_url", "https://procurement.screen-company.com/api"
+    )
+    response = client.get("/auth/login")
+    qs = parse_qs(urlparse(response.headers["location"]).query)
+    assert qs["redirect_uri"] == [
+        "https://procurement.screen-company.com/api/auth/callback"
+    ]
 
 
 def test_login_without_google_settings_returns_500(monkeypatch):

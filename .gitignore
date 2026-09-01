@@ -7,3 +7,7 @@
 # Never hand-maintained; see backend/.gitignore for the rest of the
 # Python artefacts.
 *.egg-info/
+
+# Deploy-time secrets and build output — never committed.
+backend/.env
+deploy/frontend_dist/

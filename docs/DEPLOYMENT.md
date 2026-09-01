@@ -72,3 +72,126 @@ URL. Если backend и прокси в Docker/Compose — это адрес п
 | `FRONTEND_URL` | Абсолютный URL, иначе редирект после логина резолвится относительно backend. |
 | `COOKIE_SECURE` | Оставить `true`; `false` только для локального HTTP. |
 | `TRUSTED_PROXY_IP` | См. выше. |
+
+## Docker Compose + host nginx
+
+Файлы: `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`
+(корень репозитория — рядом с обоими build-контекстами, чтобы относительные
+пути `./backend`/`./frontend` не требовали переопределения), `deploy/nginx/
+<домен>.conf`, `backend/.env.example`.
+
+**nginx — на хосте, не в Docker.** `certbot --nginx` (обязательный первый
+TLS-шаг, см. ниже) редактирует конфиг живого nginx-процесса и умеет
+перегружать его — это рассчитано на хостовую установку, а не на
+nginx-контейнер (там потребовался бы отдельный certbot-контейнер с shared
+volume и ручной reload, заметно сложнее ради того же результата на
+масштабе одного сервера/одного проекта). Поэтому:
+- `backend` публикует порт **только на loopback** хоста
+  (`127.0.0.1:8000:8000` в `docker-compose.yml`) — недоступен снаружи
+  хоста, но виден хостовому nginx как `proxy_pass http://127.0.0.1:8000/`.
+- `frontend`-сервис в compose — не долгоживущий контейнер: собирает `npm
+  run build` и копирует `dist/` на **bind-mount** хостовой директории
+  `deploy/frontend_dist/` (не именованный Docker-volume — тот не был бы
+  напрямую читаем хостовым nginx без bind-mount, а именно bind-mount и
+  делает эту разницу неважной), которую nginx отдаёт через `root`.
+  Перезапуск после каждого фронтенд-деплоя: `docker compose run --rm
+  frontend`.
+- `postgres` не публикует порт на хост вообще — виден только `backend` по
+  имени сервиса внутри docker-сети.
+
+**Same-origin `/api/`-роутинг, не поддомен.** SPA (React Router) и backend
+(FastAPI) используют одинаковые верхнеуровневые пути (`/projects`,
+`/suppliers`, `/orders`, `/users` — ни один роутер в `main.py` не имеет
+общего префикса). Разнести их на `api.<домен>` было бы чище, но
+`session_id`/`csrf_token` cookies (ADR-0024 §3) выставляются без явного
+`Domain=`-атрибута — на отдельном поддомене такие cookies не долетали бы
+до фронтенда без правки кода аутентификации (вне объёма текущей задачи).
+Вместо этого nginx проксирует `/api/` → backend с обрезкой префикса
+(`/api/projects` → `/projects` на backend), фронтенд собран с
+`VITE_API_BASE_URL=/api` (`frontend/Dockerfile`) — один origin, cookies
+работают как есть, без изменений в auth-коде.
+
+**pgvector/Postgres — версия образа.** `docker-compose.yml` использует
+`pgvector/pgvector:pg17`. Это версия, подтверждённая для локальной
+Windows-разработки (`docs/known-issues.md`, EDB-инсталлятор + сборка
+pgvector из исходников под PG17) — **на проде эта версия не проверялась
+отдельно**, известных причин ожидать несовместимость нет (миграция
+`f1a6780bb7da_add_material_embedding_column.py` использует только
+`CREATE EXTENSION vector` + колонку `Vector(1536)`, ничего
+version-specific), но перед первым продовым запуском стоит явно
+подтвердить, что PG17 — осознанный выбор, а не унаследованное
+dev-предположение.
+
+**Тайминги nginx.** `proxy_read_timeout`/`proxy_send_timeout` в
+`deploy/nginx/<домен>.conf` — 1200s (20 минут): импорт прайс-листа
+занимает 13+ минут на реальных данных (см. ADR-0021/известные проблемы),
+дефолтный таймаут nginx (60s) обрывал бы запрос на середине.
+
+### Раннбук первого запуска
+
+1. Скопировать `deploy/nginx/example.com.conf` в
+   `/etc/nginx/sites-available/<домен>.conf` на сервере, заменить
+   `example.com` и `/path/to/procurement-allocator` на реальные значения,
+   включить (`sites-enabled`), `nginx -t`, `systemctl reload nginx`.
+2. Скопировать `backend/.env.example` → `backend/.env`, заполнить реальными
+   значениями (никогда не коммитить), **кроме** `TRUSTED_PROXY_IP` — его
+   значение неизвестно до запуска Docker-сети, заполняется отдельно на шаге 3.5.
+3. Поднять БД и дождаться healthy:
+   ```
+   docker compose up -d postgres
+   docker compose ps  # ждать postgres: healthy
+   ```
+3.5. Определить `TRUSTED_PROXY_IP`. Backend публикует порт на
+   `127.0.0.1:8000` хоста (не `0.0.0.0` внутри контейнера — см. раздел выше),
+   host-nginx проксирует туда же — но **пир, которого видит backend внутри
+   контейнера, это не `127.0.0.1` и не `host.docker.internal`** (последнее —
+   специфика Docker Desktop, на голом Docker Engine на Linux по умолчанию не
+   определено), а адрес шлюза Docker-сети (`docker-compose`-бридж). Взять
+   его отсюда:
+   ```
+   docker compose up -d backend
+   docker network inspect procurement-allocator_default \
+     --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}'
+   ```
+   (имя сети — `<имя-проекта>_default`, `docker compose config` покажет
+   точное имя, если оно отличается от имени директории репозитория).
+   Вписать полученный IP в `TRUSTED_PROXY_IP` в `backend/.env`, затем
+   перезапустить backend, чтобы подхватить переменную:
+   ```
+   docker compose up -d backend
+   ```
+   Подтвердить после первого реального запроса через nginx (шаг 9) — если
+   значение неверное, `TRUSTED_PROXY_IP` не совпадёт с реальным пиром и
+   rate limiting деградирует до одного бакета на весь офис (fail-safe, но
+   не то, что нужно) — см. таблицу в начале файла.
+4. Применить миграции:
+   ```
+   docker compose run --rm backend alembic upgrade head
+   ```
+5. Импортировать реальные данные (перезаписывает содержимое таблиц —
+   см. предупреждение в самом скрипте, сначала dry-run без `--confirm`):
+   ```
+   docker compose run --rm backend python -m app.scripts.import_real_data
+   docker compose run --rm backend python -m app.scripts.import_real_data --confirm
+   ```
+6. Бэкафилл эмбеддингов материалов (нужен для матчинга при импорте прайсов,
+   ADR-0019 §1):
+   ```
+   docker compose run --rm backend python -m app.scripts.backfill_material_embeddings
+   ```
+7. Собрать фронтенд и поднять backend:
+   ```
+   docker compose run --rm frontend
+   docker compose up -d
+   ```
+8. TLS — **ручной шаг, не автоматизируется этой задачей**:
+   ```
+   sudo certbot --nginx -d <домен>
+   ```
+   certbot сам допишет `listen 443 ssl`/сертификаты в конфиг из шага 1 и
+   настроит редирект с 80 на 443.
+9. Проверка: `docker compose config` (без реального `.env` — только на
+   синтаксис), затем открыть `https://<домен>` в браузере, пройти вход
+   через Google, и повторить проверку rate limiting из раздела выше (11
+   запросов к `/auth/login` с одной машины → 429 на 11-м, с другой машины
+   не блокируется).

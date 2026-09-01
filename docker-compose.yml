@@ -1,0 +1,52 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    # Same file as the backend's DATABASE_URL — POSTGRES_USER/PASSWORD/DB
+    # here must match the credentials embedded in that URL (see
+    # backend/.env.example). One file, not a second root-level .env, so
+    # there is only one place these credentials can drift out of sync.
+    env_file:
+      - backend/.env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No `ports:` — not published to the host, reachable only from other
+    # containers on this compose network, by service name ("postgres").
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - backend/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Published to the host loopback only (127.0.0.1), not 0.0.0.0 — reachable
+    # from host-level nginx via localhost:8000, unreachable from outside the
+    # host. See docker-compose vs. nginx placement note in DEPLOYMENT.md /
+    # this task's summary for why nginx runs on the host, not in Docker.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  # Build-only: compiles the SPA and copies dist/ onto a host-bind-mounted
+  # directory that host-level nginx serves directly. Exits after the copy —
+  # this service is never a long-running container. Re-run
+  # `docker compose run --rm frontend` after a frontend change to refresh it.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: "no"
+    command: ["sh", "-c", "rm -rf /frontend_dist/* && cp -r /app/dist/. /frontend_dist/"]
+    volumes:
+      - ./deploy/frontend_dist:/frontend_dist
+
+volumes:
+  postgres_data:

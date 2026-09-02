@@ -123,7 +123,21 @@ def _conflicting_draft_orders_by_supplier(
     db: Session, project_id: uuid.UUID, supplier_ids: set[uuid.UUID]
 ) -> dict[uuid.UUID, list[Order]]:
     """Existing draft Orders in this project for suppliers also present in
-    the current run — approved/sent Orders never participate (ADR-0012 п.1)."""
+    the current run — approved/sent Orders never participate (ADR-0012 п.1).
+
+    A draft that is fully_declined (ADR-0026 п.2) and carries no
+    confirmed_price on any item is excluded — there is nothing left to
+    protect (no live positions, no manual reconciliation work at risk), so
+    it does not count as a conflict and is not touched by replace_drafts
+    (ADR-0026 "Последствия"). A fully_declined draft that *does* have a
+    confirmed_price on some item is NOT excluded — the decline does not
+    erase the fact that reconciliation work already happened on it, so it
+    keeps guarding exactly as any other has_confirmed_prices draft would
+    (ADR-0026 п.2). This filter is local to this function — it does not
+    apply to replace_and_sync_order's own draft lookup (ADR-0015 §1 step 3),
+    which continues to find and reuse a fully_declined draft as-is;
+    see ADR-0026 п.2 "Решение" for why the two checks answer different
+    questions and are not supposed to agree."""
     if not supplier_ids:
         return {}
     existing = db.scalars(
@@ -137,6 +151,10 @@ def _conflicting_draft_orders_by_supplier(
     ).all()
     by_supplier: dict[uuid.UUID, list[Order]] = {}
     for order in existing:
+        if order_expected_totals(order)["fully_declined"] and not _order_has_confirmed_prices(
+            order
+        ):
+            continue
         by_supplier.setdefault(order.supplier_id, []).append(order)
     return by_supplier
 
@@ -498,6 +516,41 @@ def create_orders_for_run(
     for order in orders:
         db.refresh(order)
     return orders
+
+
+def order_expected_totals(order: Order) -> dict:
+    """Derived (not persisted) fields for OrderOut — see ADR-0026. Computed
+    from OrderItem.quoted_price (same scale as the total_amount/delivery_fee
+    snapshot, ADR-0007 §2 — not confirmed_price/received_price, a different
+    axis, ADR-0007 §4) split by declined_at (ADR-0013).
+
+    expected_delivery_fee is the delivery_fee snapshot unchanged unless every
+    item is declined, in which case it is 0 — a partial decline never
+    recomputes delivery against the supplier's free-shipping threshold (that
+    would be forecasting a hypothetical order that doesn't exist, not
+    describing a fact about this one). See ADR-0026 п.4.
+
+    fully_declined requires at least one item — an Order with no items has
+    no decline fact to report, so it is False, not True. See ADR-0026 п.2.
+    """
+    items = order.items
+    expected_goods_total = sum(
+        float(item.quoted_price) * item.quantity for item in items if item.declined_at is None
+    )
+    declined_amount = sum(
+        float(item.quoted_price) * item.quantity
+        for item in items
+        if item.declined_at is not None
+    )
+    expected_delivery_fee = 0.0 if expected_goods_total == 0 else float(order.delivery_fee)
+    fully_declined = len(items) > 0 and all(item.declined_at is not None for item in items)
+    return {
+        "expected_goods_total": expected_goods_total,
+        "expected_delivery_fee": expected_delivery_fee,
+        "expected_total": expected_goods_total + expected_delivery_fee,
+        "declined_amount": declined_amount,
+        "fully_declined": fully_declined,
+    }
 
 
 def price_delta(

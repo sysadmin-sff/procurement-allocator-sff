@@ -448,6 +448,125 @@ def test_order_item_out_includes_price_delta_via_api(
     assert round(confirmed_item["price_delta_pct"], 4) == 20.0
 
 
+def test_order_out_expected_total_when_no_declines(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0026 п.1/п.3: with nothing declined, expected_total must equal the
+    total_amount snapshot and declined_amount must be 0."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=5.0, free_shipping_threshold=1000.0)
+    material = make_material()
+    make_price(material, supplier, price=10.00, availability=10)
+    project = make_project([(material, 2)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order_id = orders[0].id
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/orders/{order_id}")
+
+    body = response.json()
+    assert body["declined_amount"] == 0
+    assert body["fully_declined"] is False
+    assert body["expected_goods_total"] == body["total_amount"]
+    assert body["expected_delivery_fee"] == body["delivery_fee"]
+    assert body["expected_total"] == body["total_amount"] + body["delivery_fee"]
+
+
+def test_order_out_expected_total_when_fully_declined(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0026 п.1/п.2/п.4: all items declined -> expected_goods_total=0,
+    expected_delivery_fee=0 (nothing left to ship), expected_total=0,
+    fully_declined=True, declined_amount equals the full snapshot goods
+    total."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=95.0, free_shipping_threshold=1000.0)
+    material = make_material()
+    make_price(material, supplier, price=14.826, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order = orders[0]
+    item_id = order.items[0].id
+    client = _employee_client(make_user, make_session)
+
+    client.patch(
+        f"/orders/{order.id}/items/{item_id}",
+        json={"declined": True, "decline_reason": "not available"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.get(f"/orders/{order.id}")
+    body = response.json()
+
+    assert body["fully_declined"] is True
+    assert body["declined_amount"] == body["total_amount"]
+    assert body["expected_goods_total"] == 0
+    assert body["expected_delivery_fee"] == 0
+    assert body["expected_total"] == 0
+
+
+def test_order_out_expected_total_when_partially_declined(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0026 п.3/п.4: only some items declined -> expected_delivery_fee
+    stays the snapshot delivery_fee (not recomputed against the supplier's
+    free-shipping threshold), expected_goods_total sums only the
+    non-declined items, and fully_declined is False."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=50.0, free_shipping_threshold=1000.0)
+    material_a = make_material()
+    material_b = make_material()
+    make_price(material_a, supplier, price=120.00, availability=10)
+    make_price(material_b, supplier, price=380.00, availability=10)
+    project = make_project([(material_a, 1), (material_b, 1)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order = orders[0]
+    declined_item = next(i for i in order.items if float(i.quoted_price) == 120.00)
+    client = _employee_client(make_user, make_session)
+
+    client.patch(
+        f"/orders/{order.id}/items/{declined_item.id}",
+        json={"declined": True},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.get(f"/orders/{order.id}")
+    body = response.json()
+
+    assert body["fully_declined"] is False
+    assert body["declined_amount"] == 120.00
+    assert body["expected_goods_total"] == 380.00
+    assert body["expected_delivery_fee"] == body["delivery_fee"] == 50.00
+    assert body["expected_total"] == 430.00
+
+
+def test_order_out_empty_order_is_not_fully_declined(
+    db_session, make_project, make_user, make_session, make_supplier
+):
+    """ADR-0026 п.2: an Order with no items at all is not "fully declined" —
+    there is no actual decline fact to report."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    project = make_project([])
+    empty_order = Order(
+        project_id=project.id, supplier_id=supplier.id, status="draft",
+        total_amount=0, delivery_fee=0,
+    )
+    session.add(empty_order)
+    session.commit()
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/orders/{empty_order.id}")
+
+    body = response.json()
+    assert body["fully_declined"] is False
+    assert body["expected_total"] == 0
+    assert body["declined_amount"] == 0
+
+
 def test_post_orders_returns_404_for_unknown_run(
     db_session, make_project, make_user, make_session
 ):

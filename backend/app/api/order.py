@@ -13,6 +13,7 @@ from app.allocation.order_service import (
     RunNotFoundError,
     create_orders_for_run,
     find_replacement_candidates,
+    order_expected_totals,
     price_delta,
     replace_and_sync_order,
     replacement_info_for_item,
@@ -86,6 +87,7 @@ def _to_order_out(db: Session, order: Order) -> OrderOut:
         total_amount=order.total_amount,
         delivery_fee=order.delivery_fee,
         items=[_to_order_item_out(db, item) for item in order.items],
+        **order_expected_totals(order),
     )
 
 

@@ -531,6 +531,156 @@ def test_replace_drafts_wins_when_both_flags_set(
     assert len(session.query(Order).filter_by(project_id=project.id).all()) == 1
 
 
+def test_fully_declined_draft_without_confirmed_prices_excluded_from_conflict(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0026 п.2/п.3 of "Последствия": a draft Order whose only item is
+    declined (and never confirmed) has nothing left to protect — it must not
+    appear in suppliers_with_existing_drafts, and creating again for that
+    supplier must proceed without a 409."""
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    first_orders = create_orders_for_run(session, project.id, run.id)
+    item_id = first_orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+    client.patch(
+        f"/orders/{first_orders[0].id}/items/{item_id}",
+        json={"declined": True, "decline_reason": "no stock"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    run2 = run_allocation(session, project.id)
+    new_orders = create_orders_for_run(session, project.id, run2.id)
+
+    assert len(new_orders) == 1
+    assert new_orders[0].supplier_id == supplier.id
+    all_drafts = (
+        session.query(Order)
+        .filter_by(project_id=project.id, supplier_id=supplier.id, status="draft")
+        .all()
+    )
+    assert len(all_drafts) == 2  # the old, fully-declined draft is left alone, not deleted
+
+
+def test_fully_declined_draft_with_confirmed_price_still_conflicts(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0026 п.2: fully_declined does not override has_confirmed_prices —
+    a declined item that was confirmed before being declined still guards
+    the draft, same as any other has_confirmed_prices draft (ADR-0012 §1)."""
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    first_orders = create_orders_for_run(session, project.id, run.id)
+    item_id = first_orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+    client.patch(
+        f"/orders/{first_orders[0].id}/items/{item_id}",
+        json={"confirmed_price": 5.00},
+        headers={"X-CSRF-Token": CSRF},
+    )
+    client.patch(
+        f"/orders/{first_orders[0].id}/items/{item_id}",
+        json={"declined": True, "decline_reason": "cancelled after confirming"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    run2 = run_allocation(session, project.id)
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 409
+    suppliers = response.json()["suppliers_with_existing_drafts"]
+    assert len(suppliers) == 1
+    assert suppliers[0]["existing_draft_orders"][0]["has_confirmed_prices"] is True
+
+
+def test_one_fully_declined_draft_filtered_other_supplier_draft_still_listed(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0026 "Последствия": a supplier with two drafts, one fully declined
+    (no confirmed prices) and one ordinary, must show only the ordinary one
+    in suppliers_with_existing_drafts."""
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    first_orders = create_orders_for_run(session, project.id, run.id)
+    item_id = first_orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+    client.patch(
+        f"/orders/{first_orders[0].id}/items/{item_id}",
+        json={"declined": True, "decline_reason": "no stock"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    run2 = run_allocation(session, project.id)
+    second_orders = create_orders_for_run(session, project.id, run2.id, acknowledge_conflict=True)
+    ordinary_draft_id = second_orders[0].id
+
+    run3 = run_allocation(session, project.id)
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run3.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 409
+    suppliers = response.json()["suppliers_with_existing_drafts"]
+    assert len(suppliers) == 1
+    existing = suppliers[0]["existing_draft_orders"]
+    assert len(existing) == 1
+    assert existing[0]["order_id"] == str(ordinary_draft_id)
+
+
+def test_supplier_whose_only_draft_is_fully_declined_absent_from_conflict_list(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0026 "Последствия": when filtering leaves a supplier with zero
+    remaining existing_draft_orders, that supplier must not appear in
+    suppliers_with_existing_drafts at all — same as "no conflict"."""
+    session, *_ = db_session
+    supplier_a, material_a, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    supplier_b = make_supplier(name="B fully declined", flat_fee=0.0, free_shipping_threshold=0.0)
+    material_b = make_material()
+    make_price(material_b, supplier_b, price=6.00, availability=10)
+    from app.models import ProjectItem
+
+    session.add(ProjectItem(project_id=project.id, material_id=material_b.id, quantity=1))
+    session.commit()
+
+    run = run_allocation(session, project.id)
+    first_orders = create_orders_for_run(session, project.id, run.id)
+    client = _employee_client(make_user, make_session)
+    b_order = next(o for o in first_orders if o.supplier_id == supplier_b.id)
+    client.patch(
+        f"/orders/{b_order.id}/items/{b_order.items[0].id}",
+        json={"declined": True, "decline_reason": "no stock"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    run2 = run_allocation(session, project.id)
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run2.id}/orders",
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 409
+    suppliers = response.json()["suppliers_with_existing_drafts"]
+    supplier_ids = {s["supplier_id"] for s in suppliers}
+    assert str(supplier_a.id) in supplier_ids
+    assert str(supplier_b.id) not in supplier_ids
+
+
 def test_acknowledge_conflict_keeps_per_supplier_granularity(
     db_session, make_supplier, make_material, make_price, make_project
 ):

@@ -290,6 +290,73 @@ def test_material_missing_from_latest_run_returns_404(
     assert response.status_code == 404
 
 
+# --- regression: ADR-0026 fully_declined filter must not apply here (ADR-0015 §1) ---
+
+
+def test_fully_declined_existing_draft_still_found_and_receives_new_item(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0026 §2 explicit carve-out: the fully_declined-without-
+    confirmed-prices filter added to _conflicting_draft_orders_by_supplier
+    (ADR-0012) must NOT apply to replace_and_sync_order's own draft lookup
+    (ADR-0015 §1 step 3). A candidate supplier's only existing draft, whose
+    sole item is declined, must still be found as "the one existing draft"
+    and receive the newly transferred item — not be treated as absent,
+    which would create a second draft for the same supplier/project."""
+    session, *_ = db_session
+    _declining, material, project, run, order, item = _declined_item(
+        session, make_supplier, make_material, make_price, make_project
+    )
+    candidate = make_supplier(
+        name="Fully Declined Candidate", flat_fee=0.0, free_shipping_threshold=0.0
+    )
+    make_price(material, candidate, price=6.00, availability=10)
+
+    other_material = make_material()
+    make_price(other_material, candidate, price=3.00, availability=10)
+    from app.models import ProjectItem
+
+    session.add(ProjectItem(project_id=project.id, material_id=other_material.id, quantity=1))
+    session.commit()
+    seed_run = run_allocation(session, project.id)
+    seed_orders = create_orders_for_run(session, project.id, seed_run.id, replace_drafts=True)
+    candidate_draft = next(o for o in seed_orders if o.supplier_id == candidate.id)
+    assert len(candidate_draft.items) == 1
+    fully_declined_item_id = candidate_draft.items[0].id
+    set_order_item_fields(session, candidate_draft.id, fully_declined_item_id, declined=True)
+
+    declining_order = next(o for o in seed_orders if o.supplier_id == _declining.id)
+    declining_item = declining_order.items[0]
+    set_order_item_fields(session, declining_order.id, declining_item.id, declined=True)
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/orders/{declining_order.id}/items/{declining_item.id}/replace-and-order",
+        json={"supplier_id": str(candidate.id)},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    # Found (not ignored) -> the existing, fully-declined draft is reused, no new Order created.
+    assert body["replacement_draft_order_id"] == str(candidate_draft.id)
+
+    session.refresh(candidate_draft)
+    assert len(candidate_draft.items) == 2
+    still_declined = next(i for i in candidate_draft.items if i.id == fully_declined_item_id)
+    assert still_declined.declined_at is not None  # untouched
+    new_item = next(i for i in candidate_draft.items if i.id != fully_declined_item_id)
+    assert new_item.material_id == material.id
+    assert new_item.declined_at is None
+
+    all_candidate_drafts = (
+        session.query(Order)
+        .filter_by(project_id=project.id, supplier_id=candidate.id, status="draft")
+        .all()
+    )
+    assert len(all_candidate_drafts) == 1  # no second draft was created alongside it
+
+
 # --- regression: plain PATCH .../lines/{line_id} (ADR-0006/ADR-0014) unaffected ---
 
 

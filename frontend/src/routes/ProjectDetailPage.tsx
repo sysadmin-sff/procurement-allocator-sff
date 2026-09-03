@@ -5,6 +5,7 @@ import { ordersApi } from '../api/orders';
 import { projectsApi } from '../api/projects';
 import { suppliersApi } from '../api/suppliers';
 import type { Material, Order, ProjectItem, ProjectWithItems, Supplier } from '../api/types';
+import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -202,7 +203,15 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                         const supplier = suppliers.find((s) => s.id === order.supplier_id);
                         return (
                           <tr key={order.id} onClick={() => navigate(`/orders/${order.id}`)}>
-                            <td>{supplier?.name ?? order.supplier_id}</td>
+                            <td>
+                              {supplier?.name ?? order.supplier_id}
+                              {order.fully_declined && (
+                                <>
+                                  {' '}
+                                  <Badge variant="danger">Полностью отклонён</Badge>
+                                </>
+                              )}
+                            </td>
                             <td>{order.status}</td>
                             <td>{formatMoney(order.total_amount)}</td>
                             <td>{formatMoney(order.delivery_fee)}</td>

@@ -579,6 +579,7 @@ def set_order_item_fields(
     *,
     confirmed_price: float | None = _UNSET,
     received_price: float | None = _UNSET,
+    target_price: float | None = _UNSET,
     declined: bool | None = _UNSET,
     decline_reason: str | None = _UNSET,
 ) -> OrderItem:
@@ -600,6 +601,9 @@ def set_order_item_fields(
 
     if received_price is not _UNSET:
         item.received_price = received_price
+
+    if target_price is not _UNSET:
+        item.target_price = target_price
 
     if declined is not _UNSET:
         if declined:

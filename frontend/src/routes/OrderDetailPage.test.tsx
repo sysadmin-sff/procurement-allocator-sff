@@ -58,6 +58,30 @@ const material: Material = {
   attributes: {},
 };
 
+/** Fills in the ADR-0026 derived fields with the "no declines" defaults
+ * (declined_amount 0, expected_* mirroring the sent snapshot) so existing
+ * fixtures don't need to compute them by hand; tests that care about
+ * declines pass overrides explicitly. */
+function orderFixture(base: {
+  id: string;
+  project_id: string;
+  supplier_id: string;
+  status: string;
+  total_amount: number;
+  delivery_fee: number;
+  items: OrderItem[];
+}, overrides: Partial<Pick<Order, 'expected_goods_total' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined'>> = {}): Order {
+  return {
+    ...base,
+    expected_goods_total: base.total_amount,
+    expected_delivery_fee: base.delivery_fee,
+    expected_total: base.total_amount + base.delivery_fee,
+    declined_amount: 0,
+    fully_declined: false,
+    ...overrides,
+  };
+}
+
 function itemFixture(overrides: Partial<OrderItem> = {}): OrderItem {
   return {
     id: 'item-1',
@@ -103,7 +127,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('renders quoted price and an empty confirmed-price cell when unconfirmed', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -111,7 +135,7 @@ describe('OrderDetailPage', () => {
       total_amount: 250,
       delivery_fee: 25,
       items: [itemFixture()],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
 
     renderPage();
@@ -123,7 +147,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('saves confirmed_price on blur and shows the resulting delta', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -131,7 +155,7 @@ describe('OrderDetailPage', () => {
       total_amount: 250,
       delivery_fee: 25,
       items: [itemFixture()],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
     patchItemMock.mockResolvedValue(
       itemFixture({ confirmed_price: 27.5, confirmed_at: '2026-08-18T10:00:00Z', price_delta: 2.5, price_delta_pct: 10.0 }),
@@ -150,7 +174,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('saves received_price on blur without touching confirmed_price', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -158,7 +182,7 @@ describe('OrderDetailPage', () => {
       total_amount: 250,
       delivery_fee: 25,
       items: [itemFixture()],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
     patchItemMock.mockResolvedValue(itemFixture({ received_price: 23.75 }));
 
@@ -174,7 +198,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('highlights the row and shows the summary banner when |price_delta_pct| > 10', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -190,7 +214,7 @@ describe('OrderDetailPage', () => {
           price_delta_pct: 16,
         }),
       ],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
 
     renderPage();
@@ -200,7 +224,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('does not flag a small discrepancy under the 10% threshold', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -215,7 +239,7 @@ describe('OrderDetailPage', () => {
           price_delta_pct: 2.0,
         }),
       ],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
 
     renderPage();
@@ -225,7 +249,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('renders received_price and shows decline reason for a declined row', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -239,7 +263,7 @@ describe('OrderDetailPage', () => {
           decline_reason: 'нет в наличии',
         }),
       ],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
 
     renderPage();
@@ -251,7 +275,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('marks a row as declined when the decline button is clicked', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -259,7 +283,7 @@ describe('OrderDetailPage', () => {
       total_amount: 250,
       delivery_fee: 25,
       items: [itemFixture()],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
     patchItemMock.mockResolvedValue(itemFixture({ declined_at: '2026-08-18T10:00:00Z' }));
 
@@ -273,7 +297,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('un-declines a row when the active decline button is clicked again', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -281,7 +305,7 @@ describe('OrderDetailPage', () => {
       total_amount: 250,
       delivery_fee: 25,
       items: [itemFixture({ declined_at: '2026-08-18T10:00:00Z' })],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
     patchItemMock.mockResolvedValue(itemFixture({ declined_at: null, decline_reason: null }));
 
@@ -295,7 +319,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('sorts declined rows to the bottom, keeping non-declined rows in their original order', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -308,7 +332,7 @@ describe('OrderDetailPage', () => {
         itemFixture({ id: 'item-3', material_id: 'mat-3', declined_at: '2026-08-18T11:00:00Z' }),
         itemFixture({ id: 'item-4', material_id: 'mat-4' }),
       ],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
     materialsListMock.mockResolvedValue([
       material,
@@ -326,7 +350,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('moves a row to the bottom immediately after it is declined, without waiting for a refetch', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -337,7 +361,7 @@ describe('OrderDetailPage', () => {
         itemFixture({ id: 'item-1', material_id: 'mat-1' }),
         itemFixture({ id: 'item-2', material_id: 'mat-2' }),
       ],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
     materialsListMock.mockResolvedValue([material, { ...material, id: 'mat-2', canonical_name: 'Material Two' }]);
     patchItemMock.mockResolvedValue(itemFixture({ id: 'item-1', declined_at: '2026-08-18T10:00:00Z' }));
@@ -355,7 +379,7 @@ describe('OrderDetailPage', () => {
   });
 
   it('renders copyable material lists with and without prices', async () => {
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -363,7 +387,7 @@ describe('OrderDetailPage', () => {
       total_amount: 250,
       delivery_fee: 25,
       items: [itemFixture()],
-    };
+    });
     getOrderMock.mockResolvedValue(order);
 
     renderPage();
@@ -384,21 +408,9 @@ describe('OrderDetailPage', () => {
     expect(withoutPricesText?.value).not.toContain('Grand total');
   });
 
-  describe('find-replacement (ADR-0014)', () => {
-    function declinedOrder(overrides: Partial<OrderItem> = {}): Order {
-      return {
-        id: 'order-1',
-        project_id: 'proj-1',
-        supplier_id: 'sup-a',
-        status: 'draft',
-        total_amount: 250,
-        delivery_fee: 25,
-        items: [itemFixture({ declined_at: '2026-08-18T10:00:00Z', decline_reason: 'нет в наличии', ...overrides })],
-      };
-    }
-
-    it('does not show the find-replacement button on a non-declined row', async () => {
-      getOrderMock.mockResolvedValue({
+  describe('expected total after declines (ADR-0026)', () => {
+    it('does not show the "Ожидается" block when declined_amount is 0', async () => {
+      const order: Order = orderFixture({
         id: 'order-1',
         project_id: 'proj-1',
         supplier_id: 'sup-a',
@@ -407,6 +419,97 @@ describe('OrderDetailPage', () => {
         delivery_fee: 25,
         items: [itemFixture()],
       });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText(material.canonical_name);
+      expect(screen.queryByText('Ожидается:')).not.toBeInTheDocument();
+    });
+
+    it('shows the "Ожидается" block with $0.00 everywhere when the order is fully declined', async () => {
+      const order: Order = orderFixture(
+        {
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 148.26,
+          delivery_fee: 95,
+          items: [itemFixture({ declined_at: '2026-08-18T10:00:00Z' })],
+        },
+        {
+          expected_goods_total: 0,
+          expected_delivery_fee: 0,
+          expected_total: 0,
+          declined_amount: 148.26,
+          fully_declined: true,
+        },
+      );
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      expect(await screen.findByText('Отправлено:')).toBeInTheDocument();
+      expect(screen.getByText(/из них отклонено поставщиком: \$148\.26/)).toBeInTheDocument();
+      expect(screen.getByText('Ожидается:')).toBeInTheDocument();
+      expect(screen.getByText(/Товары \$0\.00 \+ доставка \$0\.00 = \$0\.00/)).toBeInTheDocument();
+    });
+
+    it('shows correct intermediate sums for a partially declined order', async () => {
+      const order: Order = orderFixture(
+        {
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 500,
+          delivery_fee: 50,
+          items: [
+            itemFixture({ id: 'item-1', declined_at: '2026-08-18T10:00:00Z' }),
+            itemFixture({ id: 'item-2', material_id: 'mat-1' }),
+          ],
+        },
+        {
+          expected_goods_total: 380,
+          expected_delivery_fee: 50,
+          expected_total: 430,
+          declined_amount: 120,
+          fully_declined: false,
+        },
+      );
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      expect(await screen.findByText(/из них отклонено поставщиком: \$120\.00/)).toBeInTheDocument();
+      expect(screen.getByText(/Товары \$380\.00 \+ доставка \$50\.00 = \$430\.00/)).toBeInTheDocument();
+    });
+  });
+
+  describe('find-replacement (ADR-0014)', () => {
+    function declinedOrder(overrides: Partial<OrderItem> = {}): Order {
+      return orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ declined_at: '2026-08-18T10:00:00Z', decline_reason: 'нет в наличии', ...overrides })],
+      });
+    }
+
+    it('does not show the find-replacement button on a non-declined row', async () => {
+      getOrderMock.mockResolvedValue(orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      }));
 
       renderPage();
 

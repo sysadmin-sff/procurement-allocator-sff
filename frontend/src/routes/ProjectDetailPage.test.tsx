@@ -61,6 +61,29 @@ const material2: Material = {
   attributes: {},
 };
 
+/** Fills in the ADR-0026 derived fields with the "no declines" defaults
+ * (declined_amount 0, expected_* mirroring the sent snapshot); tests here
+ * don't exercise declines except via the explicit fully_declined override. */
+function orderFixture(base: {
+  id: string;
+  project_id: string;
+  supplier_id: string;
+  status: string;
+  total_amount: number;
+  delivery_fee: number;
+  items: Order['items'];
+}, overrides: Partial<Pick<Order, 'expected_goods_total' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined'>> = {}): Order {
+  return {
+    ...base,
+    expected_goods_total: base.total_amount,
+    expected_delivery_fee: base.delivery_fee,
+    expected_total: base.total_amount + base.delivery_fee,
+    declined_amount: 0,
+    fully_declined: false,
+    ...overrides,
+  };
+}
+
 function renderPage() {
   return render(
     <MemoryRouter initialEntries={['/projects/proj-1']}>
@@ -255,7 +278,7 @@ describe('ProjectDetailPage', () => {
       portal_url: null,
       comments: null,
     };
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -263,7 +286,7 @@ describe('ProjectDetailPage', () => {
       total_amount: 150,
       delivery_fee: 25,
       items: [],
-    };
+    });
     getMock.mockResolvedValue(project);
     suppliersListMock.mockResolvedValue([supplier]);
     ordersListForProjectMock.mockResolvedValue([order]);
@@ -273,6 +296,100 @@ describe('ProjectDetailPage', () => {
     expect(await screen.findByText('Ордера')).toBeInTheDocument();
     expect(screen.getByText(supplier.name)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Открыть »' })).toHaveAttribute('href', '/orders/order-1');
+  });
+
+  it('shows a "Полностью отклонён" badge for an order with fully_declined true', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: { id: 'run-1', created_at: '2026-08-17T12:00:00Z', status: 'ok' },
+    };
+    const supplier: Supplier = {
+      id: 'sup-a',
+      name: 'Lancing',
+      short_name: null,
+      contacts: null,
+      currency: 'USD',
+      delivery_policy: { flat_fee: 95, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },
+      website: null,
+      region: null,
+      catalog_link: null,
+      status: null,
+      payment_terms: null,
+      portal_url: null,
+      comments: null,
+    };
+    const fullyDeclinedOrder: Order = orderFixture(
+      {
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 148.26,
+        delivery_fee: 95,
+        items: [],
+      },
+      { expected_goods_total: 0, expected_delivery_fee: 0, expected_total: 0, declined_amount: 148.26, fully_declined: true },
+    );
+    getMock.mockResolvedValue(project);
+    suppliersListMock.mockResolvedValue([supplier]);
+    ordersListForProjectMock.mockResolvedValue([fullyDeclinedOrder]);
+
+    renderPage();
+
+    expect(await screen.findByText('Lancing')).toBeInTheDocument();
+    expect(screen.getByText('Полностью отклонён')).toBeInTheDocument();
+  });
+
+  it('does not show the "Полностью отклонён" badge for a partially declined order', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: { id: 'run-1', created_at: '2026-08-17T12:00:00Z', status: 'ok' },
+    };
+    const supplier: Supplier = {
+      id: 'sup-a',
+      name: 'ABC Supply',
+      short_name: null,
+      contacts: null,
+      currency: 'USD',
+      delivery_policy: { flat_fee: 50, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },
+      website: null,
+      region: null,
+      catalog_link: null,
+      status: null,
+      payment_terms: null,
+      portal_url: null,
+      comments: null,
+    };
+    const partiallyDeclinedOrder: Order = orderFixture(
+      {
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 500,
+        delivery_fee: 50,
+        items: [],
+      },
+      { expected_goods_total: 380, expected_delivery_fee: 50, expected_total: 430, declined_amount: 120, fully_declined: false },
+    );
+    getMock.mockResolvedValue(project);
+    suppliersListMock.mockResolvedValue([supplier]);
+    ordersListForProjectMock.mockResolvedValue([partiallyDeclinedOrder]);
+
+    renderPage();
+
+    expect(await screen.findByText(supplier.name)).toBeInTheDocument();
+    expect(screen.queryByText('Полностью отклонён')).not.toBeInTheDocument();
   });
 
   it('navigates to the order screen when clicking anywhere on the order row, not just "Открыть »"', async () => {
@@ -291,7 +408,7 @@ describe('ProjectDetailPage', () => {
       portal_url: null,
       comments: null,
     };
-    const order: Order = {
+    const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
       supplier_id: 'sup-a',
@@ -299,7 +416,7 @@ describe('ProjectDetailPage', () => {
       total_amount: 150,
       delivery_fee: 25,
       items: [],
-    };
+    });
     const project: ProjectWithItems = {
       id: 'proj-1',
       title: 'Pool cage — Bayshore Rd',

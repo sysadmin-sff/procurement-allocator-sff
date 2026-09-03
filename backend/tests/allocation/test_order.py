@@ -690,3 +690,183 @@ def test_list_project_orders_returns_404_for_unknown_project(make_user, make_ses
     response = client.get(f"/projects/{uuid.uuid4()}/orders")
 
     assert response.status_code == 404
+
+
+def test_patch_target_price_does_not_touch_other_fields(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0027: target_price PATCH follows the same independent _UNSET
+    pattern as confirmed_price/received_price — setting it must not touch
+    received_price/confirmed_price/declined_at."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    set_order_item_fields(session, orders[0].id, item_id, received_price=4.75)
+    set_order_item_fields(
+        session, orders[0].id, item_id, declined=True, decline_reason="торгуемся"
+    )
+    item = set_order_item_fields(session, orders[0].id, item_id, target_price=4.60)
+
+    assert float(item.target_price) == 4.60
+    assert float(item.received_price) == 4.75
+    assert item.confirmed_price is None
+    assert item.declined_at is not None
+    assert item.decline_reason == "торгуемся"
+
+
+def test_patch_target_price_null_clears_field(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    set_order_item_fields(session, orders[0].id, item_id, target_price=4.60)
+    item = set_order_item_fields(session, orders[0].id, item_id, target_price=None)
+
+    assert item.target_price is None
+
+
+def test_patch_target_price_via_api_leaves_other_fields_untouched(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+
+    client.patch(
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"received_price": 4.90},
+        headers={"X-CSRF-Token": CSRF},
+    )
+    response = client.patch(
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"target_price": 4.60},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["target_price"] == 4.60
+    assert body["received_price"] == 4.90
+    assert body["confirmed_price"] is None
+
+
+def test_received_price_delta_null_when_no_received_price():
+    delta, delta_pct = price_delta(10.00, None)
+    assert delta is None
+    assert delta_pct is None
+
+
+def test_order_item_out_includes_received_price_delta_via_api(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0027 §3: received_price_delta/received_price_delta_pct compare
+    received_price against quoted_price, independently of price_delta
+    (which compares confirmed_price against quoted_price)."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=10.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order_id = orders[0].id
+    item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+
+    unset = client.get(f"/orders/{order_id}")
+    unset_item = unset.json()["items"][0]
+    assert unset_item["received_price_delta"] is None
+    assert unset_item["received_price_delta_pct"] is None
+
+    client.patch(
+        f"/orders/{order_id}/items/{item_id}",
+        json={"received_price": 11.00},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    received = client.get(f"/orders/{order_id}")
+    received_item = received.json()["items"][0]
+    assert received_item["received_price_delta"] == 1.00
+    assert round(received_item["received_price_delta_pct"], 4) == 10.0
+
+
+def test_received_price_delta_independent_of_price_delta_both_set(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """A row can have a discrepancy on both axes at once — negotiated down
+    from received_price but still not back to quoted_price (ADR-0027 §3)."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=10.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order_id = orders[0].id
+    item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+
+    client.patch(
+        f"/orders/{order_id}/items/{item_id}",
+        json={"received_price": 13.00},
+        headers={"X-CSRF-Token": CSRF},
+    )
+    client.patch(
+        f"/orders/{order_id}/items/{item_id}",
+        json={"confirmed_price": 12.00},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.get(f"/orders/{order_id}")
+    item = response.json()["items"][0]
+
+    assert item["received_price_delta"] == 3.00
+    assert round(item["received_price_delta_pct"], 4) == 30.0
+    assert item["price_delta"] == 2.00
+    assert round(item["price_delta_pct"], 4) == 20.0
+
+
+def test_order_item_out_includes_target_price_via_api(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=10.00, availability=10)
+    project = make_project([(material, 1)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order_id = orders[0].id
+    item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+
+    client.patch(
+        f"/orders/{order_id}/items/{item_id}",
+        json={"target_price": 8.50},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.get(f"/orders/{order_id}")
+    item = response.json()["items"][0]
+    assert item["target_price"] == 8.50

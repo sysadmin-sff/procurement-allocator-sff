@@ -334,6 +334,13 @@ export interface Order {
   status: string;
   total_amount: number;
   delivery_fee: number;
+  /** Derived, non-persistent — computed on GET, see ADR-0026 §1. */
+  expected_goods_total: number;
+  expected_delivery_fee: number;
+  expected_total: number;
+  declined_amount: number;
+  /** Derived, non-persistent — see ADR-0026 §2. */
+  fully_declined: boolean;
   items: OrderItem[];
 }
 

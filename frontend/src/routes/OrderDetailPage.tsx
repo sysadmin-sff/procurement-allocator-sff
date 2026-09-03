@@ -216,9 +216,29 @@ export function OrderDetailPage() {
         </div>
 
         <div className={styles.footer}>
-          <span className={styles.footerTotal}>
-            Товары: {formatMoney(order.total_amount)} + доставка {formatMoney(order.delivery_fee)}
-          </span>
+          <div className={styles.footerTotals}>
+            <div className={styles.footerLine}>
+              <span className={styles.footerLabel}>Отправлено:</span>{' '}
+              <span className={styles.footerTotal}>
+                Товары {formatMoney(order.total_amount)} + доставка {formatMoney(order.delivery_fee)} ={' '}
+                {formatMoney(order.total_amount + order.delivery_fee)}
+              </span>
+            </div>
+            {order.declined_amount > 0 && (
+              <>
+                <div className={styles.footerDeclinedNote}>
+                  из них отклонено поставщиком: {formatMoney(order.declined_amount)}
+                </div>
+                <div className={styles.footerLine}>
+                  <span className={styles.footerLabel}>Ожидается:</span>{' '}
+                  <span className={styles.footerTotal}>
+                    Товары {formatMoney(order.expected_goods_total)} + доставка{' '}
+                    {formatMoney(order.expected_delivery_fee)} = {formatMoney(order.expected_total)}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div className={styles.copySection}>

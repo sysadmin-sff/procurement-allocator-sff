@@ -56,6 +56,7 @@ disk, so this bound also caps peak request memory."""
 
 def _to_order_item_out(db: Session, item) -> OrderItemOut:
     delta, delta_pct = price_delta(item.quoted_price, item.confirmed_price)
+    received_delta, received_delta_pct = price_delta(item.quoted_price, item.received_price)
     replaced_supplier_id, replaced_supplier_name, replacement_draft_order_id = (
         replacement_info_for_item(db, item)
     )
@@ -66,12 +67,15 @@ def _to_order_item_out(db: Session, item) -> OrderItemOut:
         quantity=item.quantity,
         quoted_price=item.quoted_price,
         received_price=item.received_price,
+        target_price=item.target_price,
         confirmed_price=item.confirmed_price,
         confirmed_at=item.confirmed_at,
         declined_at=item.declined_at,
         decline_reason=item.decline_reason,
         price_delta=delta,
         price_delta_pct=delta_pct,
+        received_price_delta=received_delta,
+        received_price_delta_pct=received_delta_pct,
         replaced_by_supplier_id=replaced_supplier_id,
         replaced_by_supplier_name=replaced_supplier_name,
         replacement_draft_order_id=replacement_draft_order_id,
@@ -157,7 +161,13 @@ def patch_order_item(
     fields_set = payload.model_fields_set
     kwargs = {
         field: getattr(payload, field)
-        for field in ("confirmed_price", "received_price", "declined", "decline_reason")
+        for field in (
+            "confirmed_price",
+            "received_price",
+            "target_price",
+            "declined",
+            "decline_reason",
+        )
         if field in fields_set
     }
 

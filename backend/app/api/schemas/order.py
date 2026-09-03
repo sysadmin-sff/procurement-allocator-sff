@@ -26,12 +26,18 @@ class OrderItemOut(BaseModel):
     quantity: int
     quoted_price: float
     received_price: float | None = None
+    target_price: float | None = None
+    """Наша целевая цена для торга — не факт от поставщика. См. ADR-0027 п.1."""
     confirmed_price: float | None = None
     confirmed_at: datetime | None = None
     declined_at: datetime | None = None
     decline_reason: str | None = None
     price_delta: float | None = None
     price_delta_pct: float | None = None
+    received_price_delta: float | None = None
+    received_price_delta_pct: float | None = None
+    """quoted vs received (не quoted vs confirmed, как price_delta) — см.
+    ADR-0027 §3. NULL при received_price IS NULL, не 0."""
     replaced_by_supplier_id: uuid.UUID | None = None
     replaced_by_supplier_name: str | None = None
     """Derived, not persisted — see ADR-0014 п.3. Set only when the latest
@@ -56,6 +62,7 @@ class OrderItemConfirmIn(BaseModel):
 
     confirmed_price: float | None = Field(default=None)
     received_price: float | None = Field(default=None)
+    target_price: float | None = Field(default=None)
     declined: bool | None = Field(default=None)
     decline_reason: str | None = Field(default=None)
 

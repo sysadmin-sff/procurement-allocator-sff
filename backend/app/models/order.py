@@ -28,6 +28,11 @@ class Order(UUIDPKMixin, TimestampMixin, Base):
     """draft/approved/sent"""
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     delivery_fee: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    tax_amount: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    """7% (TAX_RATE) от total_amount на момент создания Order — снимок, не
+    пересчитывается при последующих изменениях AllocationLine. NULL для
+    Order, созданных до ADR-0029 (налог не отслеживался на момент создания),
+    не задним числом вычисленный 0. См. ADR-0029 §4/§5б."""
     file_ref: Mapped[str | None] = mapped_column(String(500))
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id")

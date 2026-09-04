@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.allocation.preprocess import split_orphaned_materials
 from app.allocation.solver import STRICT_CATEGORIES, solve_allocation
+from app.allocation.tax import calculate_tax
 from app.allocation.types import AllocationInput, MaterialInput, PriceInput, SupplierInput
 from app.models import (
     AllocationLine,
@@ -152,6 +153,10 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
                 "supplier_id": s.supplier_id,
                 "goods_total": _from_cents(s.goods_total_cents),
                 "delivery_fee": _from_cents(s.delivery_fee_cents),
+                "tax_amount": _from_cents(calculate_tax(s.goods_total_cents)),
+                "total_with_tax": _from_cents(
+                    s.goods_total_cents + calculate_tax(s.goods_total_cents) + s.delivery_fee_cents
+                ),
                 "free_shipping_achieved": s.free_shipping_achieved,
                 # Always False fresh out of the solver: ADR-0002 Constraint 4
                 # (per_order_min_amount) is a hard ILP constraint, so a
@@ -259,10 +264,14 @@ def _rebuild_supplier_summary(
     per_order_min_amount_cents = _to_cents(supplier.delivery_policy.get("per_order_min_amount", 0))
     below_min_order = goods_total_cents < per_order_min_amount_cents
 
+    tax_amount_cents = calculate_tax(goods_total_cents)
+
     return {
         "supplier_id": str(supplier_id),
         "goods_total": _from_cents(goods_total_cents),
         "delivery_fee": _from_cents(delivery_fee_cents),
+        "tax_amount": _from_cents(tax_amount_cents),
+        "total_with_tax": _from_cents(goods_total_cents + tax_amount_cents + delivery_fee_cents),
         "free_shipping_achieved": free_shipping_achieved,
         "below_min_order": below_min_order,
     }

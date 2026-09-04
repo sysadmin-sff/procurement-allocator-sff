@@ -76,20 +76,27 @@ class OrderOut(BaseModel):
     status: str
     total_amount: float
     delivery_fee: float
+    tax_amount: float | None = None
+    """7% (TAX_RATE) от total_amount, снимок на момент создания Order —
+    NULL для Order, созданных до ADR-0029. См. ADR-0029 §4/§5б."""
     items: list[OrderItemOut]
     expected_goods_total: float
+    expected_tax_amount: float
     expected_delivery_fee: float
     expected_total: float
     declined_amount: float
     fully_declined: bool
-    """Derived, not persisted — see ADR-0026. total_amount/delivery_fee stay
-    the ADR-0007 §2 snapshot unchanged; these fields compute what the order
-    now amounts to after declined items (ADR-0013), summed from quoted_price
-    (same scale as total_amount, not confirmed_price/received_price — see
-    ADR-0026 п.1). expected_delivery_fee is the delivery_fee snapshot as-is
-    unless every item is declined, in which case it is 0 (nothing left to
-    ship) — never recomputed against the supplier's free-shipping threshold
-    for a partial decline (ADR-0026 п.4)."""
+    """Derived, not persisted — see ADR-0026, extended by ADR-0029 §5в.
+    total_amount/delivery_fee/tax_amount stay the ADR-0007 §2/ADR-0029 §5б
+    snapshot unchanged; these fields compute what the order now amounts to
+    after declined items (ADR-0013), summed from quoted_price (same scale as
+    total_amount, not confirmed_price/received_price — see ADR-0026 п.1).
+    expected_delivery_fee is the delivery_fee snapshot as-is unless every
+    item is declined, in which case it is 0 (nothing left to ship) — never
+    recomputed against the supplier's free-shipping threshold for a partial
+    decline (ADR-0026 п.4). expected_tax_amount is recomputed from
+    expected_goods_total, not read from the tax_amount snapshot — it must
+    shrink along with the non-declined subtotal (ADR-0029 §5в)."""
 
 
 class CreateOrdersIn(BaseModel):

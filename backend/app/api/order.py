@@ -90,6 +90,7 @@ def _to_order_out(db: Session, order: Order) -> OrderOut:
         status=order.status,
         total_amount=order.total_amount,
         delivery_fee=order.delivery_fee,
+        tax_amount=order.tax_amount,
         items=[_to_order_item_out(db, item) for item in order.items],
         **order_expected_totals(order),
     )

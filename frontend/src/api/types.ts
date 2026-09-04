@@ -286,6 +286,9 @@ export interface AllocationRun {
   lines: AllocationLine[];
   orphaned_materials: OrphanedMaterial[];
   supplier_summaries: SupplierAllocationSummary[];
+  /** Strict categories (Doors/Gutter/Profil/Mesh/Roof panels) actually split
+   * across more than one supplier in the current line state — see ADR-0028 §4. */
+  split_categories: string[];
 }
 
 export interface OrderItem {

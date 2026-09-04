@@ -220,6 +220,7 @@ describe('ProjectBuilderPage', () => {
       lines: [],
       orphaned_materials: [],
       supplier_summaries: [],
+      split_categories: [],
     });
 
     renderPage();

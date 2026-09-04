@@ -111,6 +111,80 @@ def test_get_allocation_run_exposes_ordered_at_on_line(
     assert line["ordered_at"] is not None
 
 
+def test_create_orders_sets_tax_amount_from_total_amount(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0029 §5б: Order.tax_amount = calculate_tax(total_amount), 7% of
+    the goods-only snapshot, computed once at creation."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=10.0, free_shipping_threshold=1000.0)
+    material = make_material()
+    make_price(material, supplier, price=100.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+
+    order = orders[0]
+    assert float(order.total_amount) == 100.00
+    assert float(order.tax_amount) == 7.00
+
+
+def test_order_tax_amount_stays_a_snapshot_after_line_changes(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0029 §5б, following ADR-0007 §2's "snapshot, not live reference":
+    Order.tax_amount must not recompute if the underlying AllocationLine
+    later changes (e.g. a subsequent override on the same run) — it reflects
+    what was true when this specific Order was created."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    other_supplier = make_supplier(
+        name="Other Supplier", flat_fee=0.0, free_shipping_threshold=0.0
+    )
+    material = make_material()
+    make_price(material, supplier, price=100.00, availability=10)
+    make_price(material, other_supplier, price=200.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order = orders[0]
+    assert float(order.tax_amount) == 7.00
+
+    # Override the line after the Order already exists (ADR-0007 п.2
+    # explicitly allows this) -- the already-created Order's tax_amount must
+    # not follow the new price.
+    line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    override_allocation_line_supplier(session, run.id, line.id, other_supplier.id)
+    session.refresh(order)
+
+    assert float(order.tax_amount) == 7.00
+
+
+def test_existing_orders_before_migration_have_null_tax_amount(
+    db_session, make_project, make_supplier
+):
+    """ADR-0029 §4: tax_amount is nullable, NULL for Order rows that existed
+    before this feature (simulated here by constructing an Order directly,
+    bypassing create_orders_for_run, the same way
+    test_order_out_empty_order_is_not_fully_declined already does for
+    fully_declined) -- NULL means "not tracked at creation time", never
+    silently backfilled to 0 or computed retroactively."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    project = make_project([])
+    pre_migration_order = Order(
+        project_id=project.id, supplier_id=supplier.id, status="draft",
+        total_amount=100.00, delivery_fee=0,
+    )
+    session.add(pre_migration_order)
+    session.commit()
+    session.refresh(pre_migration_order)
+
+    assert pre_migration_order.tax_amount is None
+
+
 def test_create_orders_one_per_supplier(
     db_session, make_supplier, make_material, make_price, make_project
 ):
@@ -448,11 +522,32 @@ def test_order_item_out_includes_price_delta_via_api(
     assert round(confirmed_item["price_delta_pct"], 4) == 20.0
 
 
+def test_order_out_exposes_tax_amount_snapshot(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0029 §5б: OrderOut must expose the persisted tax_amount snapshot,
+    not just the internal ORM column — a Pydantic schema silently drops an
+    unlisted field."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=5.0, free_shipping_threshold=1000.0)
+    material = make_material()
+    make_price(material, supplier, price=100.00, availability=10)
+    project = make_project([(material, 1)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/orders/{orders[0].id}")
+
+    assert response.json()["tax_amount"] == 7.00
+
+
 def test_order_out_expected_total_when_no_declines(
     db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
-    """ADR-0026 п.1/п.3: with nothing declined, expected_total must equal the
-    total_amount snapshot and declined_amount must be 0."""
+    """ADR-0026 п.1/п.3, extended by ADR-0029 §5в: with nothing declined,
+    expected_total must equal the total_amount + tax_amount + delivery_fee
+    snapshot and declined_amount must be 0."""
     session, *_ = db_session
     supplier = make_supplier(flat_fee=5.0, free_shipping_threshold=1000.0)
     material = make_material()
@@ -469,8 +564,11 @@ def test_order_out_expected_total_when_no_declines(
     assert body["declined_amount"] == 0
     assert body["fully_declined"] is False
     assert body["expected_goods_total"] == body["total_amount"]
+    assert body["expected_tax_amount"] == body["tax_amount"]
     assert body["expected_delivery_fee"] == body["delivery_fee"]
-    assert body["expected_total"] == body["total_amount"] + body["delivery_fee"]
+    assert body["expected_total"] == (
+        body["total_amount"] + body["tax_amount"] + body["delivery_fee"]
+    )
 
 
 def test_order_out_expected_total_when_fully_declined(
@@ -510,10 +608,12 @@ def test_order_out_expected_total_when_fully_declined(
 def test_order_out_expected_total_when_partially_declined(
     db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):
-    """ADR-0026 п.3/п.4: only some items declined -> expected_delivery_fee
-    stays the snapshot delivery_fee (not recomputed against the supplier's
-    free-shipping threshold), expected_goods_total sums only the
-    non-declined items, and fully_declined is False."""
+    """ADR-0026 п.3/п.4, extended by ADR-0029 §5в: only some items declined
+    -> expected_delivery_fee stays the snapshot delivery_fee (not recomputed
+    against the supplier's free-shipping threshold), expected_goods_total
+    sums only the non-declined items, expected_tax_amount is recomputed from
+    that reduced subtotal (not the original order.tax_amount snapshot), and
+    fully_declined is False."""
     session, *_ = db_session
     supplier = make_supplier(flat_fee=50.0, free_shipping_threshold=1000.0)
     material_a = make_material()
@@ -539,8 +639,11 @@ def test_order_out_expected_total_when_partially_declined(
     assert body["fully_declined"] is False
     assert body["declined_amount"] == 120.00
     assert body["expected_goods_total"] == 380.00
+    # 7% of the reduced 380.00 subtotal, not of the original order's 500.00
+    # total_amount -- proves this is recomputed, not order.tax_amount as-is.
+    assert body["expected_tax_amount"] == 26.60
     assert body["expected_delivery_fee"] == body["delivery_fee"] == 50.00
-    assert body["expected_total"] == 430.00
+    assert body["expected_total"] == 456.60
 
 
 def test_order_out_empty_order_is_not_fully_declined(

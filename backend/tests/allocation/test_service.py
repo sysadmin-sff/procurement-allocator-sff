@@ -98,6 +98,29 @@ def test_run_allocation_records_supplier_summary_with_delivery_fee(
     assert summary["free_shipping_achieved"] is False
 
 
+def test_run_allocation_records_supplier_summary_with_tax_amount(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0029 §5а: SupplierAllocationSummaryOut carries tax_amount (7% of
+    goods_total, never delivery_fee) and total_with_tax (goods + tax +
+    delivery)."""
+    session, *_ = db_session
+    supplier = make_supplier(
+        flat_fee=10.0, free_shipping_threshold=1000.0, per_order_min_amount=0.0
+    )
+    material = make_material()
+    make_price(material, supplier, price=100.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+
+    summary = run.supplier_summaries[0]
+    assert summary["goods_total"] == 100.00
+    assert summary["delivery_fee"] == 10.00
+    assert summary["tax_amount"] == 7.00
+    assert summary["total_with_tax"] == 117.00
+
+
 def test_run_allocation_records_supplier_summary_with_free_shipping(
     db_session, make_supplier, make_material, make_price, make_project
 ):

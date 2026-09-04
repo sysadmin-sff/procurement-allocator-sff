@@ -475,6 +475,53 @@ def test_aggregates_compare_against_order_total_amount_when_order_exists(
     assert supplier_total["delta"] == 10.00
 
 
+def test_planned_total_stays_goods_only_and_excludes_tax_amount(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """Regression for ADR-0029 §5г: adding Order.tax_amount must NOT widen
+    planned_total to "goods + tax" while purchased_total (a free-text,
+    tax-unaware PurchaseRecord sum) stays goods-only -- that would introduce
+    a systematic ~7% skew into a comparison that is correct today specifically
+    because both sides are on the same (goods-only) basis. This asserts the
+    plan/fact comparison is byte-for-byte identical to pre-ADR-0029 behavior
+    even though the underlying Order now carries a non-zero tax_amount."""
+    session, *_ = db_session
+    supplier = make_supplier(name="Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=100.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order = orders[0]
+    assert float(order.total_amount) == 100.00
+    # Sanity: this Order really does carry a non-zero tax_amount now -- the
+    # regression this test guards against can only happen if this is true.
+    assert float(order.tax_amount) == 7.00
+
+    create_purchase_record(
+        session,
+        project_id=project.id,
+        supplier_id=supplier.id,
+        raw_description="Actual buy, matches plan exactly",
+        quantity=1,
+        unit_price=100.00,
+        material_id=None,
+    )
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/projects/{project.id}/purchase-records")
+    body = response.json()
+
+    # If planned_total had been widened to total_amount + tax_amount
+    # (107.00), this would show a spurious -7.00 delta despite fact matching
+    # plan exactly. It must not.
+    assert body["project_total"]["purchased_total"] == 100.00
+    assert body["project_total"]["planned_total"] == 100.00
+    assert body["project_total"]["delta"] == 0.00
+    assert body["project_total"]["delta_pct"] == 0.00
+
+
 def test_aggregates_sum_multiple_records_for_same_supplier(
     db_session, make_supplier, make_project, make_user, make_session
 ):

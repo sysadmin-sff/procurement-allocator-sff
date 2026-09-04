@@ -167,6 +167,34 @@ def test_override_breaks_free_shipping_for_old_supplier(
     assert new_summary["delivery_fee"] == 15.00
 
 
+def test_override_recomputes_tax_amount_on_rebuilt_summary(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0029 §5а: _rebuild_supplier_summary (the override recompute path,
+    ADR-0006 §4) must produce tax_amount/total_with_tax too, not just
+    run_allocation's initial build — both call sites are listed in ADR-0029's
+    inventory as needing to stay consistent."""
+    session, *_ = db_session
+    old_supplier = make_supplier(name="Old Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    new_supplier = make_supplier(name="New Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, old_supplier, price=50.00, availability=10)
+    make_price(material, new_supplier, price=100.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+    line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+
+    override_allocation_line_supplier(session, run.id, line.id, new_supplier.id)
+    session.refresh(run)
+
+    summaries = {s["supplier_id"]: s for s in run.supplier_summaries}
+    new_summary = summaries[str(new_supplier.id)]
+    assert new_summary["goods_total"] == 100.00
+    assert new_summary["tax_amount"] == 7.00
+    assert new_summary["total_with_tax"] == 107.00
+
+
 def test_override_achieves_free_shipping_for_new_supplier(
     db_session, make_supplier, make_material, make_price, make_project
 ):

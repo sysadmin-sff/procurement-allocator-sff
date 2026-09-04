@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.allocation.service import InvalidOverrideSupplierError, override_allocation_line_supplier
+from app.allocation.tax import calculate_tax_dollars
 from app.models import (
     AllocationLine,
     AllocationRun,
@@ -484,12 +485,14 @@ def create_orders_for_run(
         if not lines:
             continue
 
+        total_amount = sum(float(line.line_total) for line in lines)
         order = Order(
             project_id=project_id,
             supplier_id=supplier_id,
             status="draft",
-            total_amount=sum(float(line.line_total) for line in lines),
+            total_amount=total_amount,
             delivery_fee=summary["delivery_fee"],
+            tax_amount=calculate_tax_dollars(total_amount),
             created_by_user_id=created_by_user_id,
         )
         db.add(order)
@@ -519,16 +522,24 @@ def create_orders_for_run(
 
 
 def order_expected_totals(order: Order) -> dict:
-    """Derived (not persisted) fields for OrderOut — see ADR-0026. Computed
-    from OrderItem.quoted_price (same scale as the total_amount/delivery_fee
-    snapshot, ADR-0007 §2 — not confirmed_price/received_price, a different
-    axis, ADR-0007 §4) split by declined_at (ADR-0013).
+    """Derived (not persisted) fields for OrderOut — see ADR-0026, extended
+    by ADR-0029 §5в. Computed from OrderItem.quoted_price (same scale as the
+    total_amount/delivery_fee snapshot, ADR-0007 §2 — not confirmed_price/
+    received_price, a different axis, ADR-0007 §4) split by declined_at
+    (ADR-0013).
 
     expected_delivery_fee is the delivery_fee snapshot unchanged unless every
     item is declined, in which case it is 0 — a partial decline never
     recomputes delivery against the supplier's free-shipping threshold (that
     would be forecasting a hypothetical order that doesn't exist, not
     describing a fact about this one). See ADR-0026 п.4.
+
+    expected_tax_amount is recomputed from expected_goods_total (the
+    still-live, non-declined subset), not read from the frozen
+    order.tax_amount snapshot — the same reasoning ADR-0026 п.4 already
+    applies to expected_delivery_fee: the snapshot reflects the tax on the
+    original, undeclined total_amount, but the "what's actually expected
+    now" number must shrink along with expected_goods_total. See ADR-0029 §5в.
 
     fully_declined requires at least one item — an Order with no items has
     no decline fact to report, so it is False, not True. See ADR-0026 п.2.
@@ -542,12 +553,14 @@ def order_expected_totals(order: Order) -> dict:
         for item in items
         if item.declined_at is not None
     )
+    expected_tax_amount = calculate_tax_dollars(expected_goods_total)
     expected_delivery_fee = 0.0 if expected_goods_total == 0 else float(order.delivery_fee)
     fully_declined = len(items) > 0 and all(item.declined_at is not None for item in items)
     return {
         "expected_goods_total": expected_goods_total,
+        "expected_tax_amount": expected_tax_amount,
         "expected_delivery_fee": expected_delivery_fee,
-        "expected_total": expected_goods_total + expected_delivery_fee,
+        "expected_total": expected_goods_total + expected_tax_amount + expected_delivery_fee,
         "declined_amount": declined_amount,
         "fully_declined": fully_declined,
     }

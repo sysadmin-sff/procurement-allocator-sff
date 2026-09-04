@@ -62,6 +62,11 @@ class SupplierAllocationSummaryOut(BaseModel):
     supplier_id: uuid.UUID
     goods_total: float
     delivery_fee: float
+    tax_amount: float = 0.0
+    """7% (TAX_RATE, backend/app/allocation/tax.py) от goods_total, никогда
+    от delivery_fee — см. ADR-0029."""
+    total_with_tax: float = 0.0
+    """goods_total + tax_amount + delivery_fee — см. ADR-0029 §5а."""
     free_shipping_achieved: bool
     below_min_order: bool = False
     """True если goods_total ниже Supplier.delivery_policy.per_order_min_amount
@@ -81,3 +86,7 @@ class AllocationRunOut(BaseModel):
     lines: list[AllocationLineOut]
     orphaned_materials: list[OrphanedMaterialOut]
     supplier_summaries: list[SupplierAllocationSummaryOut]
+    split_categories: list[str] = []
+    """Строгие категории (STRICT_CATEGORIES, ADR-0028), фактически оказавшиеся
+    разбитыми между >1 поставщиком в текущем состоянии строк — см.
+    AllocationRun.split_categories. Чисто информационное для UI-предупреждения."""

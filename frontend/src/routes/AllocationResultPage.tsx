@@ -155,6 +155,7 @@ function AllocationResultOk({
 
   const cheapestByMaterial = buildCheapestPriceIndex(prices);
   const pricesByMaterial = buildPricesByMaterialIndex(prices);
+  const splitCategorySuppliers = buildSplitCategorySupplierIndex(run, materialById);
 
   const [overrideError, setOverrideError] = useState<unknown>(null);
   const [savingLineId, setSavingLineId] = useState<string | null>(null);
@@ -325,18 +326,26 @@ function AllocationResultOk({
                     </tr>
                   </thead>
                   <tbody>
-                    {lines.map((line) => (
-                      <LineRow
-                        key={line.id}
-                        line={line}
-                        material={materialById.get(line.material_id)}
-                        cheapest={cheapestByMaterial.get(line.material_id)}
-                        supplierOptions={pricesByMaterial.get(line.material_id) ?? []}
-                        supplierById={supplierById}
-                        saving={savingLineId === line.id}
-                        onOverride={(supplierId) => handleOverride(line.id, supplierId)}
-                      />
-                    ))}
+                    {lines.map((line) => {
+                      const material = materialById.get(line.material_id);
+                      const splitSupplierIds =
+                        material?.category != null
+                          ? splitCategorySuppliers.get(material.category)
+                          : undefined;
+                      return (
+                        <LineRow
+                          key={line.id}
+                          line={line}
+                          material={material}
+                          cheapest={cheapestByMaterial.get(line.material_id)}
+                          supplierOptions={pricesByMaterial.get(line.material_id) ?? []}
+                          supplierById={supplierById}
+                          saving={savingLineId === line.id}
+                          onOverride={(supplierId) => handleOverride(line.id, supplierId)}
+                          splitCategorySupplierIds={splitSupplierIds}
+                        />
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -384,6 +393,7 @@ function LineRow({
   supplierById,
   saving,
   onOverride,
+  splitCategorySupplierIds,
 }: {
   line: AllocationLine;
   material: Material | undefined;
@@ -392,6 +402,10 @@ function LineRow({
   supplierById: Map<string, Supplier>;
   saving: boolean;
   onOverride: (supplierId: string) => void;
+  /** Distinct supplier_ids currently holding lines of this line's strict
+   * category, project-wide — set only when that category is actually split
+   * (present in AllocationRun.split_categories). See ADR-0028 §4. */
+  splitCategorySupplierIds: Set<string> | undefined;
 }) {
   const isCheapest = !cheapest || line.unit_price <= cheapest.price;
   const delta = cheapest ? line.unit_price - cheapest.price : null;
@@ -418,7 +432,7 @@ function LineRow({
   const availabilityShort =
     currentPrice?.availability != null && currentPrice.availability < line.quantity;
 
-  return (
+  const row = (
     <tr>
       <td className={styles.materialColCell}>
         <span className={styles.materialCell}>
@@ -476,6 +490,63 @@ function LineRow({
       <td className={styles.numCell}>{formatMoney(line.line_total)}</td>
     </tr>
   );
+
+  // ADR-0028 §4: separate warning line under the material row, same visual
+  // language as belowMinOrderNotice (ADR-0006 §4) — not a badge in the
+  // already-dense material cell.
+  const splitCategoryWarning =
+    splitCategorySupplierIds && material?.category != null ? (
+      <tr>
+        <td colSpan={5} className={styles.splitCategoryNoticeCell}>
+          <Alert variant="warning" compact>
+            Категория {material.category} разбита между {splitCategorySupplierIds.size}{' '}
+            поставщиками:{' '}
+            {[...splitCategorySupplierIds]
+              .map((supplierId) => supplierById.get(supplierId)?.short_name ?? supplierById.get(supplierId)?.name ?? supplierId)
+              .join(', ')}
+          </Alert>
+        </td>
+      </tr>
+    ) : null;
+
+  return (
+    <>
+      {row}
+      {splitCategoryWarning}
+    </>
+  );
+}
+
+/** Distinct supplier_ids currently holding a line of each category in
+ * run.split_categories, grouped across the whole project's current line
+ * state (not per-supplier-card) — ADR-0028 §4: the warning is a property of
+ * the category's line set, shown on every line of that category, not just
+ * the overridden one. N/supplier list is a grouping of already-loaded data
+ * (unique supplier_id count), not a money calculation — same allowance
+ * CLAUDE.md принцип 4 already grants to other non-monetary client-side
+ * comparisons on this page (e.g. buildCheapestPriceIndex). Categories not
+ * present in run.split_categories are intentionally absent from the
+ * returned map (including non-strict categories, which the backend never
+ * lists there — see ADR-0028 §2/§4), so a lookup miss means "no warning". */
+function buildSplitCategorySupplierIndex(
+  run: AllocationRun,
+  materialById: Map<string, Material>,
+): Map<string, Set<string>> {
+  const index = new Map<string, Set<string>>();
+  if (run.split_categories.length === 0) return index;
+
+  const splitCategories = new Set(run.split_categories);
+  for (const line of run.lines) {
+    const category = materialById.get(line.material_id)?.category;
+    if (category == null || !splitCategories.has(category)) continue;
+    const suppliers = index.get(category);
+    if (suppliers) {
+      suppliers.add(line.supplier_id);
+    } else {
+      index.set(category, new Set([line.supplier_id]));
+    }
+  }
+  return index;
 }
 
 function buildCheapestPriceIndex(

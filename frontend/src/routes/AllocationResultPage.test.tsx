@@ -103,6 +103,33 @@ const materialScreen: Material = {
   attributes: {},
 };
 
+const doorMaterial1: Material = {
+  id: 'mat-door-1',
+  internal_sku: 'DOOR-001',
+  canonical_name: 'Дверь 36x80',
+  category: 'Doors',
+  unit: 'шт',
+  attributes: {},
+};
+
+const doorMaterial2: Material = {
+  id: 'mat-door-2',
+  internal_sku: 'DOOR-002',
+  canonical_name: 'Дверь 40x80',
+  category: 'Doors',
+  unit: 'шт',
+  attributes: {},
+};
+
+const connectorMaterial: Material = {
+  id: 'mat-conn-1',
+  internal_sku: 'CONN-001',
+  canonical_name: 'Уголок 1x1',
+  category: 'Connectors',
+  unit: 'шт',
+  attributes: {},
+};
+
 function renderPage(projectId = 'proj-1') {
   return render(
     <MemoryRouter initialEntries={[`/projects/${projectId}/allocation`]}>
@@ -138,6 +165,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'infeasible',
+      split_categories: [],
       lines: [],
       orphaned_materials: [],
       supplier_summaries: [],
@@ -161,6 +189,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [
         {
           id: 'line-1',
@@ -212,6 +241,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [
         {
           id: 'line-1',
@@ -293,6 +323,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [
         {
           id: 'line-1',
@@ -335,6 +366,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [
         {
           id: 'line-1',
@@ -382,6 +414,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [
         {
           id: 'line-1',
@@ -444,6 +477,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [],
       orphaned_materials: [],
       supplier_summaries: [
@@ -492,6 +526,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [],
       orphaned_materials: [],
       supplier_summaries: [
@@ -538,6 +573,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [],
       orphaned_materials: [],
       supplier_summaries: [
@@ -600,6 +636,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [],
       orphaned_materials: [],
       supplier_summaries: [
@@ -646,6 +683,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [
         {
           id: 'line-1',
@@ -688,6 +726,7 @@ describe('AllocationResultPage', () => {
       created_at: '2026-08-17T00:00:00Z',
       algorithm_version: 'v1',
       status: 'ok',
+      split_categories: [],
       lines: [
         {
           id: 'line-1',
@@ -722,5 +761,291 @@ describe('AllocationResultPage', () => {
 
     expect(await screen.findByText(supplierA.name)).toBeInTheDocument();
     expect(screen.queryByText(/изменено после отправки ордера/)).not.toBeInTheDocument();
+  });
+
+  it('shows no split-category warning when split_categories is empty', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-11',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      split_categories: [],
+      lines: [
+        {
+          id: 'line-door-1',
+          material_id: 'mat-door-1',
+          supplier_id: 'sup-a',
+          quantity: 1,
+          unit_price: 200,
+          line_total: 200,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 200,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    materialsListMock.mockResolvedValue([doorMaterial1]);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-door-1', supplier_id: 'sup-a', price: 200, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    expect(await screen.findByText(doorMaterial1.canonical_name)).toBeInTheDocument();
+    expect(screen.queryByText(/разбита между/)).not.toBeInTheDocument();
+  });
+
+  it('shows the split-category warning with correct count and suppliers on every line of that category, not on other categories', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-12',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      split_categories: ['Doors'],
+      lines: [
+        {
+          id: 'line-door-1',
+          material_id: 'mat-door-1',
+          supplier_id: 'sup-a',
+          quantity: 1,
+          unit_price: 200,
+          line_total: 200,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+        {
+          id: 'line-door-2',
+          material_id: 'mat-door-2',
+          supplier_id: 'sup-b',
+          quantity: 1,
+          unit_price: 210,
+          line_total: 210,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+        {
+          id: 'line-conn-1',
+          material_id: 'mat-conn-1',
+          supplier_id: 'sup-a',
+          quantity: 1,
+          unit_price: 5,
+          line_total: 5,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 205,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+        {
+          supplier_id: 'sup-b',
+          goods_total: 210,
+          delivery_fee: 15,
+          free_shipping_achieved: false,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    materialsListMock.mockResolvedValue([doorMaterial1, doorMaterial2, connectorMaterial]);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-door-1', supplier_id: 'sup-a', price: 200, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      { id: 'p2', material_id: 'mat-door-2', supplier_id: 'sup-b', price: 210, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      { id: 'p3', material_id: 'mat-conn-1', supplier_id: 'sup-a', price: 5, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    await screen.findByText(doorMaterial1.canonical_name);
+
+    // Both Doors lines get the warning, mentioning the category, 2 suppliers
+    // and both supplier names.
+    const doorWarnings = screen.getAllByText(/Категория Doors разбита между 2 поставщиками/);
+    expect(doorWarnings).toHaveLength(2);
+    expect(screen.getAllByText(/ABC Supply.*Screenmobile Wholesale|Screenmobile Wholesale.*ABC Supply/).length).toBeGreaterThan(0);
+
+    // The Connectors line (non-strict category) never gets a warning, even
+    // though split_categories mentions Doors and this run technically has
+    // materials at two different suppliers overall.
+    const connectorRow = screen.getByText(connectorMaterial.canonical_name).closest('tr');
+    expect(connectorRow).not.toBeNull();
+    expect(within(connectorRow as HTMLElement).queryByText(/разбита между/)).not.toBeInTheDocument();
+  });
+
+  it('does not show a split-category warning for a non-strict category even when its lines are at different suppliers', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-13',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      // Backend contract: only strict categories are ever listed here — a
+      // non-strict category split across suppliers never appears, even if
+      // technically "split" by raw supplier_id count.
+      split_categories: [],
+      lines: [
+        {
+          id: 'line-conn-1',
+          material_id: 'mat-conn-1',
+          supplier_id: 'sup-a',
+          quantity: 1,
+          unit_price: 5,
+          line_total: 5,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 5,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    materialsListMock.mockResolvedValue([connectorMaterial]);
+    pricesListMock.mockResolvedValue([
+      { id: 'p3', material_id: 'mat-conn-1', supplier_id: 'sup-a', price: 5, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    expect(await screen.findByText(connectorMaterial.canonical_name)).toBeInTheDocument();
+    expect(screen.queryByText(/разбита между/)).not.toBeInTheDocument();
+  });
+
+  it('updates the split-category warning reactively after an override, without a page reload', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-14',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      split_categories: [],
+      lines: [
+        {
+          id: 'line-door-1',
+          material_id: 'mat-door-1',
+          supplier_id: 'sup-a',
+          quantity: 1,
+          unit_price: 200,
+          line_total: 200,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+        {
+          id: 'line-door-2',
+          material_id: 'mat-door-2',
+          supplier_id: 'sup-a',
+          quantity: 1,
+          unit_price: 220,
+          line_total: 220,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 420,
+          delivery_fee: 0,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    const refetchedRun: AllocationRun = {
+      ...okRun,
+      split_categories: ['Doors'],
+      lines: [
+        okRun.lines[0],
+        {
+          ...okRun.lines[1],
+          supplier_id: 'sup-b',
+          unit_price: 210,
+          line_total: 210,
+          overridden_at: '2026-08-19T00:00:00Z',
+          original_supplier_id: 'sup-a',
+          original_unit_price: 220,
+        },
+      ],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 200,
+          delivery_fee: 0,
+          free_shipping_achieved: false,
+          below_min_order: false,
+        },
+        {
+          supplier_id: 'sup-b',
+          goods_total: 210,
+          delivery_fee: 15,
+          free_shipping_achieved: false,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    getRunMock.mockResolvedValue(refetchedRun);
+    overrideLineMock.mockResolvedValue(refetchedRun.lines[1]);
+    materialsListMock.mockResolvedValue([doorMaterial1, doorMaterial2]);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-door-1', supplier_id: 'sup-a', price: 200, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      { id: 'p2', material_id: 'mat-door-2', supplier_id: 'sup-a', price: 220, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      { id: 'p3', material_id: 'mat-door-2', supplier_id: 'sup-b', price: 210, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    await screen.findByText(doorMaterial1.canonical_name);
+    expect(screen.queryByText(/разбита между/)).not.toBeInTheDocument();
+
+    const selects = screen.getAllByRole('combobox');
+    const doorTwoSelect = selects.find(
+      (el) => (el as HTMLSelectElement).value === 'sup-a' && within(el as HTMLElement).queryAllByRole('option').some((o) => o.textContent?.includes('210')),
+    );
+    const user = userEvent.setup();
+    await user.selectOptions(doorTwoSelect ?? selects[1], 'sup-b');
+
+    const warnings = await screen.findAllByText(/Категория Doors разбита между 2 поставщиками/);
+    expect(warnings).toHaveLength(2);
   });
 });

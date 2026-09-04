@@ -159,6 +159,51 @@ def test_allocate_includes_supplier_summaries_in_response(
     assert summary["free_shipping_achieved"] is False
 
 
+def test_allocate_includes_tax_amount_in_supplier_summary_response(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0029 §5а: tax_amount/total_with_tax must be exposed through
+    SupplierAllocationSummaryOut, not just present in the internal JSON
+    dict — the Pydantic schema would silently drop an unlisted field."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=10.0, free_shipping_threshold=1000.0)
+    material = make_material()
+    make_price(material, supplier, price=100.00, availability=10)
+    project = make_project([(material, 1)])
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
+
+    summary = response.json()["supplier_summaries"][0]
+    assert summary["tax_amount"] == 7.00
+    assert summary["total_with_tax"] == 117.00
+
+
+def test_allocate_includes_split_categories_in_response(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0028 §4: split_categories must be exposed on the API response, not
+    just persisted internally — the frontend warning depends on it."""
+    session, *_ = db_session
+    s1 = make_supplier(name="Supplier One", flat_fee=0.0, free_shipping_threshold=0.0)
+    s2 = make_supplier(name="Supplier Two", flat_fee=0.0, free_shipping_threshold=0.0)
+    mesh1 = make_material(category="Mesh")
+    mesh2 = make_material(category="Mesh")
+    make_price(mesh1, s1, price=5.00, availability=10)
+    make_price(mesh2, s2, price=6.00, availability=10)
+    project = make_project([(mesh1, 1), (mesh2, 1)])
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
+
+    assert response.status_code == 200
+    assert response.json()["split_categories"] == ["Mesh"]
+
+
 def test_allocate_returns_404_for_nonexistent_project(make_user, make_session):
     client = _employee_client(make_user, make_session)
     response = client.post(

@@ -4,6 +4,7 @@ import type { FindReplacementResult, Order, OrderItem, ParseOrderResponseResult 
 export interface OrderItemPatch {
   confirmed_price?: number | null;
   received_price?: number | null;
+  target_price?: number | null;
   declined?: boolean;
   decline_reason?: string | null;
 }

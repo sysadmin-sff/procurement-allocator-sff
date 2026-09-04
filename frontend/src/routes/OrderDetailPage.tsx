@@ -146,6 +146,20 @@ export function OrderDetailPage() {
     (item) => item.price_delta_pct != null && Math.abs(item.price_delta_pct) > SIGNIFICANT_PRICE_DELTA_PCT,
   ).length;
   const declinedCount = order.items.filter((item) => item.declined_at != null).length;
+
+  // "Ожидается" footer line: goods total by confirmed_price where set,
+  // falling back to quoted_price where a position hasn't been confirmed
+  // yet — declined items are excluded outright, same as expected_goods_total
+  // (ADR-0026) excludes them. No server-computed field exists for a
+  // confirmed_price-based total (expected_goods_total is quoted_price-based),
+  // so this is a local sum for this one footer line — same reasoning as the
+  // target-price copy block (ADR-0027), not a recomputation of the Order's
+  // own money fields. Delivery reuses expected_delivery_fee unchanged — it
+  // doesn't depend on which price axis the goods total is read from.
+  const expectedGoodsTotalByConfirmed = order.items
+    .filter((item) => item.declined_at == null)
+    .reduce((sum, item) => sum + (item.confirmed_price ?? item.quoted_price) * item.quantity, 0);
+  const expectedTotalByConfirmed = expectedGoodsTotalByConfirmed + order.expected_delivery_fee;
   // Declined items sort to the bottom, keeping their relative order (and the
   // relative order of everything else) intact — Array.prototype.sort is a
   // stable sort per spec, so a single boolean comparator is enough. Purely a
@@ -184,7 +198,20 @@ export function OrderDetailPage() {
           </div>
         )}
 
-        <ParseResponseSection order={order} materialById={materialById} onApplied={handleParseApplied} />
+        <ParseResponseSection
+          order={order}
+          materialById={materialById}
+          onApplied={handleParseApplied}
+          targetField="received_price"
+          title="Распознавание ответа поставщика"
+        />
+        <ParseResponseSection
+          order={order}
+          materialById={materialById}
+          onApplied={handleParseApplied}
+          targetField="confirmed_price"
+          title="Распознавание финального ответа (после торга)"
+        />
 
         <div className={styles.tableScroll}>
           <table className={styles.table}>
@@ -192,9 +219,26 @@ export function OrderDetailPage() {
               <tr>
                 <th className={styles.materialColHeader}>Материал</th>
                 <th className={styles.numCell}>Кол-во</th>
-                <th className={styles.numCell}>Отправленная цена</th>
-                <th className={styles.numCell}>Полученная цена</th>
-                <th className={styles.numCell}>Подтверждённая цена</th>
+                <th className={styles.numCell}>
+                  Отправленная
+                  <br />
+                  цена
+                </th>
+                <th className={styles.numCell}>
+                  Полученная
+                  <br />
+                  цена
+                </th>
+                <th className={styles.numCell}>
+                  Целевая
+                  <br />
+                  цена
+                </th>
+                <th className={styles.numCell}>
+                  Подтверждённая
+                  <br />
+                  цена
+                </th>
                 <th className={styles.numCell}>Расхождение</th>
                 <th className={styles.statusColHeader}>Статус</th>
               </tr>
@@ -224,20 +268,13 @@ export function OrderDetailPage() {
                 {formatMoney(order.total_amount + order.delivery_fee)}
               </span>
             </div>
-            {order.declined_amount > 0 && (
-              <>
-                <div className={styles.footerDeclinedNote}>
-                  из них отклонено поставщиком: {formatMoney(order.declined_amount)}
-                </div>
-                <div className={styles.footerLine}>
-                  <span className={styles.footerLabel}>Ожидается:</span>{' '}
-                  <span className={styles.footerTotal}>
-                    Товары {formatMoney(order.expected_goods_total)} + доставка{' '}
-                    {formatMoney(order.expected_delivery_fee)} = {formatMoney(order.expected_total)}
-                  </span>
-                </div>
-              </>
-            )}
+            <div className={styles.footerLine}>
+              <span className={styles.footerLabel}>Ожидается:</span>{' '}
+              <span className={styles.footerTotal}>
+                Товары {formatMoney(expectedGoodsTotalByConfirmed)} + доставка{' '}
+                {formatMoney(order.expected_delivery_fee)} = {formatMoney(expectedTotalByConfirmed)}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -249,6 +286,10 @@ export function OrderDetailPage() {
           <CopyBlock
             title="Список материалов (без цен)"
             text={buildOrderText({ supplierName: supplier?.name ?? order.supplier_id, order, materialById, includePrices: false })}
+          />
+          <CopyBlock
+            title="Список материалов (с целевыми ценами)"
+            text={buildTargetPriceOrderText({ supplierName: supplier?.name ?? order.supplier_id, order, materialById })}
           />
         </div>
       </div>
@@ -311,7 +352,12 @@ function buildOrderText({
 }): string {
   const lines: string[] = [`Order for ${supplierName}`, ''];
 
-  order.items.forEach((item, index) => {
+  // Declined items are the supplier's own answer — repeating "declined" back
+  // to them in their own outgoing order text is redundant, so they are left
+  // out entirely rather than marked. See ADR-0027 §5.
+  const includedItems = order.items.filter((item) => item.declined_at == null);
+
+  includedItems.forEach((item, index) => {
     const material = materialById.get(item.material_id);
     const name = material?.canonical_name ?? item.material_id;
     const unit = material?.unit ?? '';
@@ -325,14 +371,69 @@ function buildOrderText({
   });
 
   if (includePrices) {
-    const goodsTotal = order.total_amount;
-    const grandTotal = goodsTotal + order.delivery_fee;
-    lines.push(`Goods total: ${formatMoney(goodsTotal)}`);
-    lines.push(`Delivery: ${formatMoney(order.delivery_fee)}`);
-    lines.push(`Grand total: ${formatMoney(grandTotal)}`);
+    // expected_goods_total/expected_delivery_fee already exclude declined
+    // items (ADR-0026, computed server-side) — not order.total_amount/
+    // delivery_fee (the as-sent snapshot) and not a client-side recompute
+    // from includedItems. See ADR-0027 §5.
+    lines.push(`Goods total: ${formatMoney(order.expected_goods_total)}`);
+    lines.push(`Delivery: ${formatMoney(order.expected_delivery_fee)}`);
+    lines.push(`Grand total: ${formatMoney(order.expected_total)}`);
   } else {
     lines.pop();
   }
+
+  return lines.join('\n');
+}
+
+/** Third copy block — the second negotiation round (ADR-0027): after seeing
+ * received_price, the employee decided what to counter-offer and wants a
+ * message to send back with those numbers. Only items with target_price set
+ * are relevant here — a row with no counter-offer isn't part of this
+ * message. Declined items are still excluded (same reasoning as
+ * buildOrderText, ADR-0027 §5).
+ *
+ * The per-line/total figures here use target_price, which has no
+ * server-computed total to read (unlike expected_goods_total, which is
+ * quoted_price-based, ADR-0026) — this is a local sum for one outgoing
+ * message's line items, not a recomputation of the Order's own money
+ * fields (total_amount/expected_*), so it doesn't conflict with CLAUDE.md
+ * principle 4. Delivery still comes from expected_delivery_fee — the
+ * delivery fee doesn't depend on which price axis (quoted vs target) the
+ * goods total is read from. */
+function buildTargetPriceOrderText({
+  supplierName,
+  order,
+  materialById,
+}: {
+  supplierName: string;
+  order: Order;
+  materialById: Map<string, Material>;
+}): string {
+  const lines: string[] = [`Order for ${supplierName}`, ''];
+
+  const includedItems = order.items.filter(
+    (item) => item.declined_at == null && item.target_price != null,
+  );
+
+  let goodsTotal = 0;
+  includedItems.forEach((item, index) => {
+    const material = materialById.get(item.material_id);
+    const name = material?.canonical_name ?? item.material_id;
+    const unit = material?.unit ?? '';
+    const targetPrice = item.target_price as number;
+    const lineTotal = targetPrice * item.quantity;
+    goodsTotal += lineTotal;
+
+    lines.push(`${index + 1}. ${name}`);
+    lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
+    lines.push(`   Price: ${formatMoney(targetPrice)}/unit`);
+    lines.push(`   Total: ${formatMoney(lineTotal)}`);
+    lines.push('');
+  });
+
+  lines.push(`Goods total: ${formatMoney(goodsTotal)}`);
+  lines.push(`Delivery: ${formatMoney(order.expected_delivery_fee)}`);
+  lines.push(`Grand total: ${formatMoney(goodsTotal + order.expected_delivery_fee)}`);
 
   return lines.join('\n');
 }
@@ -389,6 +490,26 @@ function OrderItemRow({
       </td>
       <td className={styles.numCell}>
         <input
+          key={item.target_price ?? 'empty'}
+          className={styles.priceInput}
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="—"
+          defaultValue={item.target_price ?? ''}
+          disabled={saving}
+          onBlur={(e) => {
+            const raw = e.target.value.trim();
+            const value = raw === '' ? null : Number(raw);
+            if (value !== item.target_price) onPatch({ target_price: value });
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+        />
+      </td>
+      <td className={styles.numCell}>
+        <input
           key={item.confirmed_price ?? 'empty'}
           className={styles.priceInput}
           type="number"
@@ -408,15 +529,7 @@ function OrderItemRow({
         />
       </td>
       <td className={styles.numCell}>
-        {item.price_delta != null && item.price_delta_pct != null ? (
-          <span className={isDiscrepant ? styles.deltaDiscrepant : styles.delta}>
-            {item.price_delta >= 0 ? '+' : ''}
-            {formatMoney(item.price_delta)} ({item.price_delta_pct >= 0 ? '+' : ''}
-            {item.price_delta_pct.toFixed(1)}%)
-          </span>
-        ) : (
-          <span className={styles.deltaEmpty}>—</span>
-        )}
+        <PriceDelta delta={item.price_delta} deltaPct={item.price_delta_pct} isDiscrepant={isDiscrepant} />
       </td>
       <td className={styles.statusColCell}>
         <button
@@ -452,6 +565,32 @@ function OrderItemRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** Same visual language/threshold as the existing price_delta display,
+ * reused for received_price_delta (quoted vs received) — see ADR-0027 §3.
+ * Not a new pattern, just parameterized over which delta pair is shown. */
+function PriceDelta({
+  delta,
+  deltaPct,
+  isDiscrepant,
+  className,
+}: {
+  delta: number | null;
+  deltaPct: number | null;
+  isDiscrepant: boolean;
+  className?: string;
+}) {
+  if (delta == null || deltaPct == null) {
+    return <span className={[styles.deltaEmpty, className].filter(Boolean).join(' ')}>—</span>;
+  }
+  return (
+    <span className={[isDiscrepant ? styles.deltaDiscrepant : styles.delta, className].filter(Boolean).join(' ')}>
+      {delta >= 0 ? '+' : ''}
+      {formatMoney(delta)} ({deltaPct >= 0 ? '+' : ''}
+      {deltaPct.toFixed(1)}%)
+    </span>
   );
 }
 
@@ -597,10 +736,19 @@ function ParseResponseSection({
   order,
   materialById,
   onApplied,
+  targetField,
+  title,
 }: {
   order: Order;
   materialById: Map<string, Material>;
   onApplied: () => void;
+  /** Which OrderItem field "Применить все совпадения" writes — the first
+   * block writes received_price (first supplier answer), the second writes
+   * confirmed_price (answer after negotiating on target_price). Same
+   * parse-response endpoint and matching logic either way — only the PATCH
+   * target differs. See ADR-0027 §2. */
+  targetField: 'received_price' | 'confirmed_price';
+  title: string;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [parsing, setParsing] = useState(false);
@@ -655,7 +803,7 @@ function ParseResponseSection({
     try {
       for (const line of toApply) {
         const price = matchedPrices[line.order_item_id];
-        await ordersApi.patchItem(order.id, line.order_item_id, { received_price: price });
+        await ordersApi.patchItem(order.id, line.order_item_id, { [targetField]: price });
         succeeded += 1;
       }
       onApplied();
@@ -674,7 +822,7 @@ function ParseResponseSection({
 
   return (
     <div className={styles.parseSection}>
-      <div className={styles.parseSectionTitle}>Распознавание ответа поставщика</div>
+      <div className={styles.parseSectionTitle}>{title}</div>
 
       <div className={styles.parseUploadRow}>
         <FileInput ref={fileInputRef} accept=".pdf,image/*" disabled={parsing} />
@@ -717,7 +865,9 @@ function ParseResponseSection({
                     <th className={styles.parseCheckboxCell} />
                     <th>Наша позиция</th>
                     <th className={styles.numCell}>Отправленная цена</th>
-                    <th className={styles.numCell}>Полученная цена</th>
+                    <th className={styles.numCell}>
+                      {targetField === 'confirmed_price' ? 'Подтверждённая цена' : 'Полученная цена'}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

@@ -65,6 +65,19 @@ input::placeholder {
   color: var(--color-text-tertiary-alt2);
 }
 
+/* Hide the native up/down spinner on every number input in the app —
+   Chrome/Edge/Safari reserve space for it on the right, which visually
+   pushes centered text off-center in narrow price/quantity cells. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

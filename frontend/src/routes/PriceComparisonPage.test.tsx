@@ -169,7 +169,7 @@ describe('PriceComparisonPage', () => {
     expect(await screen.findByText(/у поставщика доступно 3 рулон, требуется 10/)).toBeInTheDocument();
   });
 
-  it('leaves an unsent supplier response cell blank, not a dash', async () => {
+  it('shows a dash for a supplier response with neither received_price nor confirmed_price set', async () => {
     const rows: MaterialComparisonRow[] = [
       {
         project_item_id: 'item-1',
@@ -194,37 +194,10 @@ describe('PriceComparisonPage', () => {
     renderPage();
 
     await screen.findByText(material.canonical_name);
-    // ABC Supply appears in the response table but Better Supply column doesn't exist at all
-    // since only one supplier ever responded — assert the response price renders.
-    expect(screen.getByText('$25.00')).toBeInTheDocument();
-  });
-
-  it('shows "Отправлена (план)" as the price source tooltip when only quoted_price is set', async () => {
-    const rows: MaterialComparisonRow[] = [
-      {
-        project_item_id: 'item-1',
-        material_id: 'mat-1',
-        plan: [],
-        supplier_responses: [
-          {
-            supplier_id: 'sup-a',
-            supplier_name: 'ABC Supply',
-            quoted_price: 25,
-            received_price: null,
-            confirmed_price: null,
-            declined_at: null,
-            decline_reason: null,
-            is_cheapest: true,
-          },
-        ],
-      },
-    ];
-    getComparisonMock.mockResolvedValue({ rows });
-
-    renderPage();
-
-    const cell = await screen.findByText('$25.00');
-    expect(cell).toHaveAttribute('title', 'Отправлена (план)');
+    // No answer yet from the supplier — quoted_price (the plan) is not shown
+    // here, that's what the "План" table is for.
+    expect(screen.queryByText('$25.00')).not.toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
   });
 
   it('shows "Получена" as the price source tooltip when received_price is set but not confirmed', async () => {

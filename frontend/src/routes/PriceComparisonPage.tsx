@@ -105,6 +105,19 @@ export function PriceComparisonPage() {
         <div className={crudStyles.stack}>
           <div className={crudStyles.card}>
             <div className={crudStyles.sectionHeader}>
+              <div className={crudStyles.sectionTitle}>Ответы поставщиков</div>
+            </div>
+            {!hasAnyResponse ? (
+              <div className={styles.emptyState}>
+                Ордера ещё не созданы — сравнение по факту появится после отправки.
+              </div>
+            ) : (
+              <ResponseMatrix rows={rows} columns={responseColumns} materialById={materialById} />
+            )}
+          </div>
+
+          <div className={crudStyles.card}>
+            <div className={crudStyles.sectionHeader}>
               <div className={crudStyles.sectionTitle}>План</div>
             </div>
             {planColumns.length === 0 ? (
@@ -118,19 +131,6 @@ export function PriceComparisonPage() {
                 materialById={materialById}
                 project={project}
               />
-            )}
-          </div>
-
-          <div className={crudStyles.card}>
-            <div className={crudStyles.sectionHeader}>
-              <div className={crudStyles.sectionTitle}>Ответы поставщиков</div>
-            </div>
-            {!hasAnyResponse ? (
-              <div className={styles.emptyState}>
-                Ордера ещё не созданы — сравнение по факту появится после отправки.
-              </div>
-            ) : (
-              <ResponseMatrix rows={rows} columns={responseColumns} materialById={materialById} />
             )}
           </div>
         </div>
@@ -311,7 +311,13 @@ function ResponseCell({ response }: { response: SupplierResponse | undefined }) 
     );
   }
 
-  const effectivePrice = response.confirmed_price ?? response.received_price ?? response.quoted_price;
+  // Only an actual supplier answer (received or confirmed) is shown here —
+  // the plan/quoted price has its own table ("План") already, so there is
+  // no fallback to it. No answer yet reads the same as no Order at all.
+  const effectivePrice = response.confirmed_price ?? response.received_price;
+  if (effectivePrice == null) {
+    return <td className={styles.blankCell}>—</td>;
+  }
   const source = priceSource(response);
 
   return (
@@ -321,11 +327,10 @@ function ResponseCell({ response }: { response: SupplierResponse | undefined }) 
   );
 }
 
-/** Matches the confirmed → received → quoted priority used for effectivePrice (ADR-0016 §4). */
+/** Matches the confirmed → received priority used for effectivePrice (ADR-0016 §4). */
 function priceSource(response: SupplierResponse): string {
   if (response.confirmed_price != null) return 'Подтверждена';
-  if (response.received_price != null) return 'Получена';
-  return 'Отправлена (план)';
+  return 'Получена';
 }
 
 function AvailabilityWarning({

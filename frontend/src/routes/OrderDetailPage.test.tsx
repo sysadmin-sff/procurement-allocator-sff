@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +17,7 @@ vi.mock('../api/orders', () => ({
     patchItem: vi.fn(),
     findReplacement: vi.fn(),
     replaceAndOrder: vi.fn(),
+    parseResponse: vi.fn(),
   },
 }));
 vi.mock('../api/materials', () => ({
@@ -30,6 +31,7 @@ const getOrderMock = vi.mocked(ordersApi.get);
 const patchItemMock = vi.mocked(ordersApi.patchItem);
 const findReplacementMock = vi.mocked(ordersApi.findReplacement);
 const replaceAndOrderMock = vi.mocked(ordersApi.replaceAndOrder);
+const parseResponseMock = vi.mocked(ordersApi.parseResponse);
 const materialsListMock = vi.mocked(materialsApi.list);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 
@@ -90,12 +92,15 @@ function itemFixture(overrides: Partial<OrderItem> = {}): OrderItem {
     quantity: 10,
     quoted_price: 25,
     received_price: null,
+    target_price: null,
     confirmed_price: null,
     confirmed_at: null,
     declined_at: null,
     decline_reason: null,
     price_delta: null,
     price_delta_pct: null,
+    received_price_delta: null,
+    received_price_delta_pct: null,
     replaced_by_supplier_id: null,
     replaced_by_supplier_name: null,
     replacement_draft_order_id: null,
@@ -120,6 +125,7 @@ describe('OrderDetailPage', () => {
     patchItemMock.mockReset();
     findReplacementMock.mockReset();
     replaceAndOrderMock.mockReset();
+    parseResponseMock.mockReset();
     materialsListMock.mockReset();
     suppliersListMock.mockReset();
     materialsListMock.mockResolvedValue([material]);
@@ -164,7 +170,7 @@ describe('OrderDetailPage', () => {
     renderPage();
 
     const inputs = await screen.findAllByPlaceholderText('—');
-    const confirmedInput = inputs[1]; // received price, confirmed price, in column order
+    const confirmedInput = inputs[2]; // received, target, confirmed, in column order
     const user = userEvent.setup();
     await user.type(confirmedInput, '27.50');
     await user.tab();
@@ -408,8 +414,8 @@ describe('OrderDetailPage', () => {
     expect(withoutPricesText?.value).not.toContain('Grand total');
   });
 
-  describe('expected total after declines (ADR-0026)', () => {
-    it('does not show the "Ожидается" block when declined_amount is 0', async () => {
+  describe('footer totals: sent (DB snapshot) vs expected (confirmed prices)', () => {
+    it('always shows the "Ожидается" block, even with nothing confirmed or declined', async () => {
       const order: Order = orderFixture({
         id: 'order-1',
         project_id: 'proj-1',
@@ -424,66 +430,61 @@ describe('OrderDetailPage', () => {
       renderPage();
 
       await screen.findByText(material.canonical_name);
-      expect(screen.queryByText('Ожидается:')).not.toBeInTheDocument();
+      expect(screen.getByText('Ожидается:')).toBeInTheDocument();
+      // No confirmed_price anywhere -> falls back to quoted_price per item,
+      // same total as the sent snapshot.
+      expect(screen.getAllByText(/Товары \$250\.00 \+ доставка \$25\.00 = \$275\.00/)).toHaveLength(2);
     });
 
-    it('shows the "Ожидается" block with $0.00 everywhere when the order is fully declined', async () => {
-      const order: Order = orderFixture(
-        {
-          id: 'order-1',
-          project_id: 'proj-1',
-          supplier_id: 'sup-a',
-          status: 'draft',
-          total_amount: 148.26,
-          delivery_fee: 95,
-          items: [itemFixture({ declined_at: '2026-08-18T10:00:00Z' })],
-        },
-        {
-          expected_goods_total: 0,
-          expected_delivery_fee: 0,
-          expected_total: 0,
-          declined_amount: 148.26,
-          fully_declined: true,
-        },
-      );
+    it('uses confirmed_price where set and quoted_price as a fallback where not', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 500,
+        delivery_fee: 50,
+        items: [
+          itemFixture({ id: 'item-1', quoted_price: 100, quantity: 1, confirmed_price: 90 }),
+          itemFixture({ id: 'item-2', material_id: 'mat-1', quoted_price: 400, quantity: 1 }),
+        ],
+      });
       getOrderMock.mockResolvedValue(order);
 
       renderPage();
 
       expect(await screen.findByText('Отправлено:')).toBeInTheDocument();
-      expect(screen.getByText(/из них отклонено поставщиком: \$148\.26/)).toBeInTheDocument();
+      expect(screen.getByText(/Товары \$500\.00 \+ доставка \$50\.00 = \$550\.00/)).toBeInTheDocument();
       expect(screen.getByText('Ожидается:')).toBeInTheDocument();
-      expect(screen.getByText(/Товары \$0\.00 \+ доставка \$0\.00 = \$0\.00/)).toBeInTheDocument();
+      // item-1: confirmed_price 90, item-2: no confirmed_price -> falls back
+      // to quoted_price 400. 90 + 400 = 490, + delivery 50 = 540.
+      expect(screen.getByText(/Товары \$490\.00 \+ доставка \$50\.00 = \$540\.00/)).toBeInTheDocument();
     });
 
-    it('shows correct intermediate sums for a partially declined order', async () => {
-      const order: Order = orderFixture(
-        {
-          id: 'order-1',
-          project_id: 'proj-1',
-          supplier_id: 'sup-a',
-          status: 'draft',
-          total_amount: 500,
-          delivery_fee: 50,
-          items: [
-            itemFixture({ id: 'item-1', declined_at: '2026-08-18T10:00:00Z' }),
-            itemFixture({ id: 'item-2', material_id: 'mat-1' }),
-          ],
-        },
-        {
-          expected_goods_total: 380,
-          expected_delivery_fee: 50,
-          expected_total: 430,
-          declined_amount: 120,
-          fully_declined: false,
-        },
-      );
+    it('excludes declined items from the expected total, regardless of their confirmed_price', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 500,
+        delivery_fee: 50,
+        items: [
+          itemFixture({
+            id: 'item-1',
+            quoted_price: 120,
+            quantity: 1,
+            confirmed_price: 999,
+            declined_at: '2026-08-18T10:00:00Z',
+          }),
+          itemFixture({ id: 'item-2', material_id: 'mat-1', quoted_price: 380, quantity: 1, confirmed_price: 380 }),
+        ],
+      });
       getOrderMock.mockResolvedValue(order);
 
       renderPage();
 
-      expect(await screen.findByText(/из них отклонено поставщиком: \$120\.00/)).toBeInTheDocument();
-      expect(screen.getByText(/Товары \$380\.00 \+ доставка \$50\.00 = \$430\.00/)).toBeInTheDocument();
+      expect(await screen.findByText(/Товары \$380\.00 \+ доставка \$50\.00 = \$430\.00/)).toBeInTheDocument();
     });
   });
 
@@ -643,6 +644,320 @@ describe('OrderDetailPage', () => {
 
       const link = await screen.findByText('черновик уже создан »');
       expect(link.closest('a')).toHaveAttribute('href', '/orders/order-2');
+    });
+  });
+
+  describe('target_price column (ADR-0027)', () => {
+    it('renders an empty target-price cell and saves it on blur', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      patchItemMock.mockResolvedValue(itemFixture({ target_price: 21.5 }));
+
+      renderPage();
+
+      // "Целевая" / "цена" render on separate lines via <br/>, so match the
+      // header by its normalized textContent instead of an exact text node.
+      expect(
+        await screen.findByRole('columnheader', {
+          name: (_, el) => el.textContent?.replace(/\s+/g, '') === 'Целеваяцена',
+        }),
+      ).toBeInTheDocument();
+      const inputs = await screen.findAllByPlaceholderText('—');
+      const targetInput = inputs[1]; // received, target, confirmed, in column order
+      const user = userEvent.setup();
+      await user.type(targetInput, '21.50');
+      await user.tab();
+
+      expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { target_price: 21.5 });
+    });
+
+    it('places the target-price column between received and confirmed price', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      // Two-word headers wrap onto a second line via <br/>, so textContent
+      // concatenates without a space ("Полученнаяцена") — compare with
+      // whitespace stripped instead of an exact string match.
+      const headers = (await screen.findAllByRole('columnheader')).map((h) =>
+        h.textContent?.replace(/\s+/g, ''),
+      );
+      const receivedIdx = headers.indexOf('Полученнаяцена');
+      const targetIdx = headers.indexOf('Целеваяцена');
+      const confirmedIdx = headers.indexOf('Подтверждённаяцена');
+      expect(receivedIdx).toBeGreaterThanOrEqual(0);
+      expect(targetIdx).toBe(receivedIdx + 1);
+      expect(confirmedIdx).toBe(targetIdx + 1);
+    });
+  });
+
+  describe('second parse-response round (ADR-0027 §2)', () => {
+    it('renders both parse-response blocks at once', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      expect(await screen.findByText('Распознавание ответа поставщика')).toBeInTheDocument();
+      expect(screen.getByText('Распознавание финального ответа (после торга)')).toBeInTheDocument();
+    });
+
+    it('applying matches from the first block PATCHes received_price', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '' },
+        ],
+        missing: [],
+        extra: [],
+      });
+      patchItemMock.mockResolvedValue(itemFixture({ received_price: 23.75 }));
+
+      renderPage();
+
+      const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+      const firstSection = firstBlockTitle.parentElement as HTMLElement;
+      const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
+      const user = userEvent.setup();
+      await user.upload(fileInput, file);
+      await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+      const applyButton = await within(firstSection).findByText('Применить все совпадения');
+      await user.click(applyButton);
+
+      expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { received_price: 23.75 });
+    });
+
+    it('applying matches from the second block PATCHes confirmed_price, not received_price', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '' },
+        ],
+        missing: [],
+        extra: [],
+      });
+      patchItemMock.mockResolvedValue(itemFixture({ confirmed_price: 22.0 }));
+
+      renderPage();
+
+      const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
+      const secondSection = secondBlockTitle.parentElement as HTMLElement;
+      const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
+      const user = userEvent.setup();
+      await user.upload(fileInput, file);
+      await user.click(within(secondSection).getByText('Распознать цены из документа'));
+
+      const applyButton = await within(secondSection).findByText('Применить все совпадения');
+      await user.click(applyButton);
+
+      expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { confirmed_price: 22.0 });
+      expect(patchItemMock).not.toHaveBeenCalledWith('order-1', 'item-1', { received_price: 22.0 });
+    });
+  });
+
+  describe('buildOrderText excludes declined items (ADR-0027 §5)', () => {
+    it('omits declined items and renumbers sequentially, using expected_* totals', async () => {
+      const order: Order = orderFixture(
+        {
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 500,
+          delivery_fee: 50,
+          items: [
+            itemFixture({ id: 'item-1', material_id: 'mat-1', declined_at: '2026-08-18T10:00:00Z' }),
+            itemFixture({ id: 'item-2', material_id: 'mat-2' }),
+            itemFixture({ id: 'item-3', material_id: 'mat-3' }),
+          ],
+        },
+        {
+          expected_goods_total: 380,
+          expected_delivery_fee: 50,
+          expected_total: 430,
+          declined_amount: 120,
+          fully_declined: false,
+        },
+      );
+      getOrderMock.mockResolvedValue(order);
+      materialsListMock.mockResolvedValue([
+        material,
+        { ...material, id: 'mat-2', canonical_name: 'Material Two' },
+        { ...material, id: 'mat-3', canonical_name: 'Material Three' },
+      ]);
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с ценами)');
+      const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
+      const withPricesText = textareas.find((t) => t.value.includes('Price:'))!.value;
+
+      expect(withPricesText).not.toContain(material.canonical_name);
+      expect(withPricesText).toContain('1. Material Two');
+      expect(withPricesText).toContain('2. Material Three');
+      expect(withPricesText).not.toMatch(/3\./);
+      expect(withPricesText).toContain('Goods total: $380.00');
+      expect(withPricesText).toContain('Delivery: $50.00');
+      expect(withPricesText).toContain('Grand total: $430.00');
+    });
+
+    it('matches prior behavior exactly when nothing is declined', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с ценами)');
+      const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
+      const withPricesText = textareas.find((t) => t.value.includes('Price:'))!.value;
+
+      expect(withPricesText).toContain('Order for ABC Supply');
+      expect(withPricesText).toContain('1. ' + material.canonical_name);
+      expect(withPricesText).toContain('Grand total: $275.00');
+    });
+  });
+
+  describe('copyable list with target prices (ADR-0027)', () => {
+    function getBlockTextarea(title: string): HTMLTextAreaElement {
+      const heading = screen.getByText(title);
+      // heading is .copyBlockTitle, its parent is .copyBlockHeader, and the
+      // textarea is a sibling of .copyBlockHeader inside .copyBlock.
+      const block = heading.parentElement?.parentElement as HTMLElement;
+      return within(block).getByRole('textbox') as HTMLTextAreaElement;
+    }
+
+    it('includes only items with a target_price set, using target_price for the per-line and total figures', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 500,
+        delivery_fee: 50,
+        items: [
+          itemFixture({ id: 'item-1', material_id: 'mat-1', target_price: 20, quantity: 1 }),
+          itemFixture({ id: 'item-2', material_id: 'mat-2', target_price: null }),
+          itemFixture({ id: 'item-3', material_id: 'mat-3', target_price: 30, quantity: 2 }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+      materialsListMock.mockResolvedValue([
+        material,
+        { ...material, id: 'mat-2', canonical_name: 'Material Two' },
+        { ...material, id: 'mat-3', canonical_name: 'Material Three' },
+      ]);
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с целевыми ценами)');
+      const text = getBlockTextarea('Список материалов (с целевыми ценами)').value;
+
+      expect(text).toContain('1. ' + material.canonical_name);
+      expect(text).toContain('Price: $20.00/unit');
+      expect(text).toContain('Total: $20.00');
+      expect(text).not.toContain('Material Two');
+      expect(text).toContain('2. Material Three');
+      expect(text).toContain('Price: $30.00/unit');
+      expect(text).toContain('Total: $60.00');
+      expect(text).toContain('Goods total: $80.00');
+    });
+
+    it('excludes declined items even if they have a target_price', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [
+          itemFixture({ target_price: 20, declined_at: '2026-08-18T10:00:00Z' }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с целевыми ценами)');
+      const text = getBlockTextarea('Список материалов (с целевыми ценами)').value;
+
+      expect(text).not.toContain(material.canonical_name);
+      expect(text).toContain('Goods total: $0.00');
+    });
+
+    it('shows an empty-list message when no item has a target_price', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ target_price: null })],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с целевыми ценами)');
+      const text = getBlockTextarea('Список материалов (с целевыми ценами)').value;
+
+      expect(text).toContain('Goods total: $0.00');
+      expect(text).not.toContain(material.canonical_name);
     });
   });
 });

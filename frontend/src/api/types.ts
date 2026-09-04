@@ -295,12 +295,18 @@ export interface OrderItem {
   quantity: number;
   quoted_price: number;
   received_price: number | null;
+  /** Наша целевая цена для торга — не факт от поставщика. См. ADR-0027. */
+  target_price: number | null;
   confirmed_price: number | null;
   confirmed_at: string | null;
   declined_at: string | null;
   decline_reason: string | null;
   price_delta: number | null;
   price_delta_pct: number | null;
+  /** quoted vs received (не quoted vs confirmed, как price_delta) — см.
+   * ADR-0027 §3. NULL при received_price === null, не 0. */
+  received_price_delta: number | null;
+  received_price_delta_pct: number | null;
   /** Derived, not persisted — see ADR-0014 п.3. Set only when this declined
    * item caused the current override of its material's line in the
    * project's latest AllocationRun. */

@@ -39,6 +39,13 @@ class AllocationRun(UUIDPKMixin, Base):
     order_total[s]/free[s] из ADR-0002, которые солвер иначе считает только
     внутри модели. Список объектов {supplier_id, goods_total, delivery_fee,
     free_shipping_achieved}, снимок на момент run_allocation()."""
+    split_categories: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    """Строгие категории (STRICT_CATEGORIES, ADR-0028), фактически оказавшиеся
+    разбитыми между >1 поставщиком в текущем состоянии строк проекта — список
+    названий категорий (например ["Doors"]). Пересчитывается после
+    run_allocation() и после каждого override_allocation_line_supplier(), той
+    же точкой, что supplier_summaries (ADR-0006 §4). Чисто информационное для
+    UI-предупреждения, не участвует в дальнейших расчётах."""
 
     project: Mapped["Project"] = relationship(back_populates="allocation_runs")
     lines: Mapped[list["AllocationLine"]] = relationship(back_populates="allocation_run")

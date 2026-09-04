@@ -125,6 +125,8 @@ erDiagram
         string algorithm_version
         string status "ok/infeasible, см. ADR-0003"
         json orphaned_materials "недостижимые материалы, см. ADR-0002"
+        json supplier_summaries "сводка по каждому задействованному поставщику, см. ADR-0002/ADR-0006"
+        json split_categories "строгие категории, разбитые между поставщиками, см. ADR-0028"
     }
     AllocationLine {
         uuid allocation_run_id
@@ -237,6 +239,18 @@ NULL` естественно исключаются из результатов 
 единственного поставщика материала не достигается) или на входе солвера не осталось
 материалов после предобработки; `lines`/`supplier_summaries` в этом случае пустые,
 но `AllocationRun` всё равно создаётся и сохраняется — попытка расчёта не теряется.
+
+`AllocationRun.split_categories` добавлено сверх исходной диаграммы — см.
+`docs/decisions/0028-strict-category-supplier-grouping.md`. Список строгих
+категорий (`Doors`/`Gutter`/`Profil`/`Mesh`/`Roof panels` — константа
+`STRICT_CATEGORIES` в `backend/app/allocation/solver.py`, не колонка в БД),
+фактически оказавшихся разбитыми между более чем одним поставщиком в текущем
+состоянии строк проекта. Солвер группирует эти категории только мягко —
+штрафом в целевой функции, не hard-ограничением — поэтому разброс возможен и
+не является признаком ошибки; поле чисто информационное для UI-предупреждения,
+не участвует в дальнейших расчётах. Пересчитывается после `run_allocation()` и
+после каждого `override_allocation_line_supplier()`, той же точкой, что
+`supplier_summaries` (ADR-0006 §4).
 
 `Office`/`SupplierContact` добавлены сверх исходной диаграммы, новые поля на `Supplier`
 (`website`, `region`, `catalog_link`, `status`, `payment_terms`, `portal_url`, `comments`) —

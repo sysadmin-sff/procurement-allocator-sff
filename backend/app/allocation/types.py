@@ -14,6 +14,10 @@ from dataclasses import dataclass, field
 class MaterialInput:
     material_id: str
     quantity: int
+    category: str | None = None
+    """Material.category, passed through so the solver can apply strict-category
+    supplier grouping — see ADR-0028. None for materials without a category or
+    when the caller doesn't care (e.g. preprocess.py, unrelated to grouping)."""
 
 
 @dataclass(frozen=True)

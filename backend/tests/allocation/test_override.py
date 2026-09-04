@@ -246,6 +246,37 @@ def test_override_flags_below_min_order_without_blocking(
     assert gated_summary["below_min_order"] is True
 
 
+def test_override_recomputes_split_categories(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0028 §4/§6: split_categories is recomputed after override, same
+    point as supplier_summaries. Overriding one Doors line onto a different
+    supplier, when the category started out unified at a single supplier,
+    must make split_categories == ["Doors"]."""
+    session, *_ = db_session
+    old_supplier = make_supplier(name="Old Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    new_supplier = make_supplier(name="New Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    door1 = make_material(category="Doors")
+    door2 = make_material(category="Doors")
+    make_price(door1, old_supplier, price=5.00, availability=10)
+    make_price(door2, old_supplier, price=6.00, availability=10)
+    make_price(door1, new_supplier, price=7.00, availability=10)
+    project = make_project([(door1, 1), (door2, 1)])
+
+    run = run_allocation(session, project.id)
+    assert run.split_categories == []
+    line = (
+        session.query(AllocationLine)
+        .filter_by(allocation_run_id=run.id, material_id=door1.id)
+        .one()
+    )
+
+    override_allocation_line_supplier(session, run.id, line.id, new_supplier.id)
+    session.refresh(run)
+
+    assert run.split_categories == ["Doors"]
+
+
 def test_override_clears_below_min_order_when_no_longer_applicable(
     db_session, make_supplier, make_material, make_price, make_project
 ):

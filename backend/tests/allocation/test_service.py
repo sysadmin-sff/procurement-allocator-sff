@@ -181,6 +181,46 @@ def test_run_allocation_marks_infeasible_when_sole_supplier_misses_min_order_amo
     assert run.supplier_summaries == []
 
 
+def test_run_allocation_leaves_split_categories_empty_when_category_unified(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    door1 = make_material(category="Doors")
+    door2 = make_material(category="Doors")
+    make_price(door1, supplier, price=5.00, availability=10)
+    make_price(door2, supplier, price=6.00, availability=10)
+    project = make_project([(door1, 1), (door2, 1)])
+
+    run = run_allocation(session, project.id)
+
+    assert run.status == "ok"
+    assert run.split_categories == []
+
+
+def test_run_allocation_reports_split_categories_when_category_actually_split(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0028 §4: AllocationRun.split_categories lists a strict category
+    only when the solver's actual chosen lines land on more than one distinct
+    supplier -- computed after run_allocation, same point as supplier_summaries."""
+    session, *_ = db_session
+    s1 = make_supplier(name="Supplier One", flat_fee=0.0, free_shipping_threshold=0.0)
+    s2 = make_supplier(name="Supplier Two", flat_fee=0.0, free_shipping_threshold=0.0)
+    mesh1 = make_material(category="Mesh")
+    mesh2 = make_material(category="Mesh")
+    # No common supplier for both -- forces a split (mirrors the ADR's
+    # empirical Mesh catalog-coverage gap).
+    make_price(mesh1, s1, price=5.00, availability=10)
+    make_price(mesh2, s2, price=6.00, availability=10)
+    project = make_project([(mesh1, 1), (mesh2, 1)])
+
+    run = run_allocation(session, project.id)
+
+    assert run.status == "ok"
+    assert run.split_categories == ["Mesh"]
+
+
 def test_run_allocation_marks_infeasible_when_no_solvable_materials(
     db_session, make_supplier, make_material, make_price, make_project
 ):

@@ -163,12 +163,13 @@ def make_material(db_session):
     session, _project_ids, material_ids, _supplier_ids, _user_ids = db_session
     counter = {"n": 0}
 
-    def _make(sku=None, unit="ft"):
+    def _make(sku=None, unit="ft", category=None):
         counter["n"] += 1
         sku = sku or f"TEST-SKU-{uuid.uuid4().hex[:12]}"
         material = Material(
             internal_sku=sku,
             canonical_name=sku,
+            category=category,
             unit=unit,
             attributes={},
         )

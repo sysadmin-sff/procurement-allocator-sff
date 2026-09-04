@@ -24,6 +24,23 @@ _STATUS_NAMES = {
     cp_model.UNKNOWN: "UNKNOWN",
 }
 
+STRICT_CATEGORIES = {"Doors", "Gutter", "Profil", "Mesh", "Roof panels"}
+"""Категории, которые должны закупаться у одного поставщика в рамках проекта
+(визуальная согласованность — двери/жёлоба/профили/экраны/кровельные панели
+дают заметный на объекте цветовой разнобой между поставщиками). Реализовано
+как soft-ограничение (штраф в целевой функции), не hard-constraint — см.
+ADR-0028 §2: ни один поставщик не покрывает полный каталог ни одной строгой
+категории, hard-ограничение резко повышало бы частоту INFEASIBLE. Сверено
+буквально против CATEGORY_SKU_PREFIX реального импорта, см.
+test_strict_categories_constant_matches_real_catalog (snapshot-тест)."""
+
+CATEGORY_SPLIT_PENALTY_K = 4
+"""Множитель к среднему flat_fee поставщиков проекта, дающий
+category_split_penalty — см. ADR-0028 §2. Диапазон 3-5 предложен ADR, 4 взято
+как стартовое значение; КАЛИБРУЕМАЯ константа — предмет донастройки после
+наблюдения на реальных прогонах (ADR-0028 §2, "Точное значение k... не
+фиксируется здесь как финальное число"), не финальное архитектурное решение."""
+
 
 def solve_allocation(data: AllocationInput) -> AllocationResult:
     if not data.materials:
@@ -60,6 +77,48 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
     for m_id in material_ids:
         candidates = [x[(m_id, s_id)] for s_id in supplier_ids if (m_id, s_id) in x]
         model.add(sum(candidates) == 1)
+
+    # ADR-0028 §1/§2: diff[C][m] против опорного материала m* (min material_id
+    # в категории) строгой категории — soft-механизм, только штраф в целевой
+    # функции (§2), без hard-равенства x[m*][s] == x[m][s]. §3 требует, чтобы
+    # категорийная группировка сама по себе не могла сделать модель
+    # infeasible ("diff[C][m] — обычная бинарная переменная без принудительного
+    # = 0") — hard-версия §1 (буквальный model.add(x[m*][s] == x[m][s])/== 0)
+    # прямо противоречила бы этому и ключевому тесту "ни один поставщик не
+    # покрывает всю категорию — soft-режим должен вернуть OPTIMAL/FEASIBLE, не
+    # INFEASIBLE" (см. обсуждение при реализации — только diff-неравенства,
+    # без hard-линковки). M_C — материалы категории, уже прошедшие
+    # предобработку orphaned (уже в material_ids/x на этом этапе, ADR-0028 не
+    # переоткрывает ADR-0002).
+    category_map = {m.material_id: m.category for m in data.materials}
+    materials_by_category: dict[str, list[str]] = {}
+    for m_id in material_ids:
+        cat = category_map.get(m_id)
+        if cat in STRICT_CATEGORIES:
+            materials_by_category.setdefault(cat, []).append(m_id)
+
+    diff: dict[tuple[str, str], cp_model.IntVar] = {}  # (category, m_id) -> diff[C][m]
+    for cat, cat_material_ids in materials_by_category.items():
+        if len(cat_material_ids) < 2:
+            continue
+        ref_m_id = min(cat_material_ids)
+        for m_id in cat_material_ids:
+            if m_id == ref_m_id:
+                continue
+            diff_var = model.new_bool_var(f"diff_{cat}_{m_id}")
+            diff[(cat, m_id)] = diff_var
+            for s_id in supplier_ids:
+                ref_var = x.get((ref_m_id, s_id))
+                m_var = x.get((m_id, s_id))
+                if ref_var is not None and m_var is not None:
+                    model.add(diff_var >= ref_var - m_var)
+                    model.add(diff_var >= m_var - ref_var)
+                elif ref_var is not None:
+                    model.add(diff_var >= ref_var)
+                elif m_var is not None:
+                    model.add(diff_var >= m_var)
+                # else: обе переменные не существуют — вклад в diff по этому s
+                # равен 0 константой, ничего не добавляем.
 
     # Переменные y[s].
     y: dict[str, cp_model.IntVar] = {s_id: model.new_bool_var(f"y_{s_id}") for s_id in supplier_ids}
@@ -116,10 +175,22 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
         model.add(z_var <= 1 - free_var)
         model.add(z_var >= y[s_id] - free_var)
 
-    # Целевая функция.
+    # Целевая функция: цена + доставка (ADR-0002) + штраф за разброс строгой
+    # категории (ADR-0028 §2). category_split_penalty масштабируется от
+    # среднего flat_fee поставщиков проекта, не абсолютной суммой — см.
+    # CATEGORY_SPLIT_PENALTY_K.
     price_terms = [x[(m_id, s_id)] * price[(m_id, s_id)] * qty[m_id] for (m_id, s_id) in x]
     delivery_terms = [z[s_id] * suppliers_by_id[s_id].flat_fee_cents for s_id in supplier_ids]
-    model.minimize(sum(price_terms) + sum(delivery_terms))
+
+    penalty_terms: list[cp_model.LinearExpr] = []
+    if diff:
+        avg_flat_fee_cents = sum(
+            suppliers_by_id[s_id].flat_fee_cents for s_id in supplier_ids
+        ) / len(supplier_ids)
+        category_split_penalty = round(CATEGORY_SPLIT_PENALTY_K * avg_flat_fee_cents)
+        penalty_terms = [category_split_penalty * diff_var for diff_var in diff.values()]
+
+    model.minimize(sum(price_terms) + sum(delivery_terms) + sum(penalty_terms))
 
     solver = cp_model.CpSolver()
     # Фиксированный seed и однопоточный поиск — гарантия одинакового

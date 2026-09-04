@@ -12,16 +12,25 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.allocation.preprocess import split_orphaned_materials
-from app.allocation.solver import solve_allocation
+from app.allocation.solver import STRICT_CATEGORIES, solve_allocation
 from app.allocation.types import AllocationInput, MaterialInput, PriceInput, SupplierInput
-from app.models import AllocationLine, AllocationRun, Price, Project, ProjectItem, Supplier
+from app.models import (
+    AllocationLine,
+    AllocationRun,
+    Material,
+    Price,
+    Project,
+    ProjectItem,
+    Supplier,
+)
 
-ALGORITHM_VERSION = "adr-0005-v1"
-"""Правило допустимости пары (material, supplier) изменилось под ADR-0005:
-availability=NULL больше не исключает пару из модели (раньше — исключало,
-как явная нехватка). Это меняет, какие материалы вообще участвуют в
-оптимизации solve_allocation, не только детали реализации — поэтому версия
-бампнута, а не оставлена как деталь ADR-0002."""
+ALGORITHM_VERSION = "adr-0028-v1"
+"""Модель ограничений изменилась под ADR-0028: новые diff[C][m]-переменные и
+штраф за разброс поставщика внутри строгой категории (Doors/Gutter/Profil/
+Mesh/Roof panels) добавлены в целевую функцию solve_allocation. Это меняет
+саму постановку задачи, не только детали реализации — версия бампнута, как
+и предвидела ADR-0002 "Последствия" ("если модель ограничений изменится...
+это будет новый ADR и новая версия алгоритма"). Была "adr-0005-v1"."""
 
 _CENTS_PER_UNIT = 100
 
@@ -86,7 +95,11 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
         raise EmptyProjectError(project_id)
 
     materials = [
-        MaterialInput(material_id=str(item.material_id), quantity=item.quantity)
+        MaterialInput(
+            material_id=str(item.material_id),
+            quantity=item.quantity,
+            category=item.material.category,
+        )
         for item in project_items
     ]
     material_ids = {item.material_id for item in project_items}
@@ -179,10 +192,37 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
                     line_total=_from_cents(line.line_total_cents),
                 )
             )
+        db.flush()
+        run.split_categories = _compute_split_categories(db, run.id)
 
     db.commit()
     db.refresh(run)
     return run
+
+
+def _compute_split_categories(db: Session, run_id: uuid.UUID) -> list[str]:
+    """ADR-0028 §4: a strict category is "split" for this run if the project's
+    current AllocationLine rows for that category (joined to Material.category)
+    are assigned to more than one distinct supplier. Recomputed from scratch
+    from the current line state -- same recompute point/style as
+    _rebuild_supplier_summary (ADR-0006 §4), not an incremental patch."""
+    rows = db.execute(
+        select(Material.category, AllocationLine.supplier_id)
+        .join(Material, Material.id == AllocationLine.material_id)
+        .where(AllocationLine.allocation_run_id == run_id)
+    ).all()
+
+    suppliers_by_category: dict[str, set[uuid.UUID]] = {}
+    for category, supplier_id in rows:
+        if category not in STRICT_CATEGORIES:
+            continue
+        suppliers_by_category.setdefault(category, set()).add(supplier_id)
+
+    return sorted(
+        category
+        for category, supplier_ids in suppliers_by_category.items()
+        if len(supplier_ids) > 1
+    )
 
 
 def _rebuild_supplier_summary(
@@ -294,6 +334,7 @@ def override_allocation_line_supplier(
         if summary is not None:
             updated_summaries.append(summary)
     run.supplier_summaries = updated_summaries
+    run.split_categories = _compute_split_categories(db, run_id)
 
     db.commit()
     db.refresh(line)

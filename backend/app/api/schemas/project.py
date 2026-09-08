@@ -9,7 +9,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.services.material_naming import KNOWN_COLORS
 
 
 class ProjectCreate(BaseModel):
@@ -18,6 +20,19 @@ class ProjectCreate(BaseModel):
 
 class ProjectUpdate(BaseModel):
     title: str
+    color_choice: str | None = Field(default=None)
+    """Единый цвет проекта для материалов с color_options — редактируемо в
+    любой момент до генерации ордеров, не поле создания проекта. См.
+    ADR-0031 п.2. Independently optional from title via model_fields_set in
+    the endpoint: omitting this field leaves color_choice untouched, an
+    explicit null clears it."""
+
+    @field_validator("color_choice")
+    @classmethod
+    def _validate_color_choice(cls, value: str | None) -> str | None:
+        if value is not None and value.upper() not in KNOWN_COLORS:
+            raise ValueError(f"Unknown color: {value!r}")
+        return value
 
 
 class ProjectOut(BaseModel):
@@ -28,6 +43,7 @@ class ProjectOut(BaseModel):
     created_by_user_id: uuid.UUID | None
     status: str
     created_at: datetime
+    color_choice: str | None = None
 
 
 class ProjectItemCreate(BaseModel):

@@ -59,6 +59,8 @@ def update_project(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     project.title = payload.title
+    if "color_choice" in payload.model_fields_set:
+        project.color_choice = payload.color_choice
     db.commit()
     db.refresh(project)
     return project

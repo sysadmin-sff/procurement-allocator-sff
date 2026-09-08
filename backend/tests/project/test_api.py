@@ -88,6 +88,73 @@ def test_update_project_returns_404_for_missing_project(make_user, make_session)
     assert response.status_code == 404
 
 
+def test_patch_project_sets_color_choice(make_project, make_user, make_session):
+    project = make_project(title="Color Test")
+    client = _employee_client(make_user, make_session)
+
+    response = client.patch(
+        f"/projects/{project.id}",
+        json={"title": project.title, "color_choice": "White"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["color_choice"] == "White"
+
+
+def test_patch_project_rejects_unknown_color(make_project, make_user, make_session):
+    project = make_project(title="Color Test 2")
+    client = _employee_client(make_user, make_session)
+
+    response = client.patch(
+        f"/projects/{project.id}",
+        json={"title": project.title, "color_choice": "Green"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 422
+
+
+def test_patch_project_can_clear_color_choice(make_project, make_user, make_session):
+    project = make_project(title="Color Test 3")
+    client = _employee_client(make_user, make_session)
+    client.patch(
+        f"/projects/{project.id}",
+        json={"title": project.title, "color_choice": "Bronze"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.patch(
+        f"/projects/{project.id}",
+        json={"title": project.title, "color_choice": None},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["color_choice"] is None
+
+
+def test_patch_project_omitting_color_choice_leaves_it_untouched(
+    make_project, make_user, make_session
+):
+    project = make_project(title="Color Test 4")
+    client = _employee_client(make_user, make_session)
+    client.patch(
+        f"/projects/{project.id}",
+        json={"title": project.title, "color_choice": "White"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.patch(
+        f"/projects/{project.id}",
+        json={"title": "Renamed, color untouched"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["color_choice"] == "White"
+
+
 def test_get_project_returns_created_project_with_items(
     db_session, make_project, make_material, make_user, make_session
 ):

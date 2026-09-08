@@ -1,0 +1,1919 @@
+{
+  "colors_tested": [
+    "Bronze",
+    "White"
+  ],
+  "materials": [
+    {
+      "internal_sku": "DOOR-001",
+      "canonical_name": "36'' x 80\" Door Blank with 8” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "36'' x 80\" Door Blank with 8” Kick Plate (Bronze)",
+        "White": "36'' x 80\" Door Blank with 8” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-002",
+      "canonical_name": "36'' x 80\" Door Blank with 14” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "36'' x 80\" Door Blank with 14” Kick Plate (Bronze)",
+        "White": "36'' x 80\" Door Blank with 14” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-003",
+      "canonical_name": "36'' x 80\" Door Blank with 16” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "36'' x 80\" Door Blank with 16” Kick Plate (Bronze)",
+        "White": "36'' x 80\" Door Blank with 16” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-004",
+      "canonical_name": "36'' x 80\" Door Blank with 24” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "36'' x 80\" Door Blank with 24” Kick Plate (Bronze)",
+        "White": "36'' x 80\" Door Blank with 24” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-005",
+      "canonical_name": "36'' x 80\" Door Blank with 36” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "36'' x 80\" Door Blank with 36” Kick Plate (Bronze)",
+        "White": "36'' x 80\" Door Blank with 36” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-006",
+      "canonical_name": "36” x 96\" Door Blank with 8” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "36” x 96\" Door Blank with 8” Kick Plate (Bronze)",
+        "White": "36” x 96\" Door Blank with 8” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-007",
+      "canonical_name": "40” x 80\" Door Blank with 8” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "40” x 80\" Door Blank with 8” Kick Plate (Bronze)",
+        "White": "40” x 80\" Door Blank with 8” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-008",
+      "canonical_name": "40” x 96\" Door Blank with 8” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "40” x 96\" Door Blank with 8” Kick Plate (Bronze)",
+        "White": "40” x 96\" Door Blank with 8” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-009",
+      "canonical_name": "42” x 80\" Door Blank with 8” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "42” x 80\" Door Blank with 8” Kick Plate (Bronze)",
+        "White": "42” x 80\" Door Blank with 8” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-010",
+      "canonical_name": "42” x 80\" Door Blank with 14” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "42” x 80\" Door Blank with 14” Kick Plate (Bronze)",
+        "White": "42” x 80\" Door Blank with 14” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-011",
+      "canonical_name": "42” x 96” Door Blank with 8” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "42” x 96” Door Blank with 8” Kick Plate (Bronze)",
+        "White": "42” x 96” Door Blank with 8” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-012",
+      "canonical_name": "48” x 80\" Door Blank with 14” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "48” x 80\" Door Blank with 14” Kick Plate (Bronze)",
+        "White": "48” x 80\" Door Blank with 14” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-013",
+      "canonical_name": "48” x 96\" Door Blank with 14” Kick Plate (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "48” x 96\" Door Blank with 14” Kick Plate (Bronze)",
+        "White": "48” x 96\" Door Blank with 14” Kick Plate (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-014",
+      "canonical_name": "Z-Bar x 17' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Z-Bar x 17' (Bronze)",
+        "White": "Z-Bar x 17' (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-016",
+      "canonical_name": "Hinges (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Hinges (Bronze)",
+        "White": "Hinges (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-021",
+      "canonical_name": "Eliminator Door Hardware Kit (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Eliminator Door Hardware Kit (Bronze)",
+        "White": "Eliminator Door Hardware Kit (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-023",
+      "canonical_name": "Pet Door S (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Pet Door S (Bronze)",
+        "White": "Pet Door S (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-024",
+      "canonical_name": "Pet Door M (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Pet Door M (Bronze)",
+        "White": "Pet Door M (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-025",
+      "canonical_name": "Pet Door L (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Pet Door L (Bronze)",
+        "White": "Pet Door L (White)"
+      }
+    },
+    {
+      "internal_sku": "DOOR-026",
+      "canonical_name": "Pet Door XL (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Pet Door XL (Bronze)",
+        "White": "Pet Door XL (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-001",
+      "canonical_name": "5” Super Gutter x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "5” Super Gutter x 24' (Bronze)",
+        "White": "5” Super Gutter x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-002",
+      "canonical_name": "5” Super Gutter x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "5” Super Gutter x 30' (Bronze)",
+        "White": "5” Super Gutter x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-004",
+      "canonical_name": "5” Super Gutter x 38' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "5” Super Gutter x 38' (Bronze)",
+        "White": "5” Super Gutter x 38' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-005",
+      "canonical_name": "5” Super Gutter x 40' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "5” Super Gutter x 40' (Bronze)",
+        "White": "5” Super Gutter x 40' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-006",
+      "canonical_name": "7” Super Gutter x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "7” Super Gutter x 24' (Bronze)",
+        "White": "7” Super Gutter x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-007",
+      "canonical_name": "7” Super Gutter x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "7” Super Gutter x 30' (Bronze)",
+        "White": "7” Super Gutter x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-008",
+      "canonical_name": "7” Super Gutter x 36' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "7” Super Gutter x 36' (Bronze)",
+        "White": "7” Super Gutter x 36' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-009",
+      "canonical_name": "7” Super Gutter x 38' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "7” Super Gutter x 38' (Bronze)",
+        "White": "7” Super Gutter x 38' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-010",
+      "canonical_name": "7” Super Gutter x 39' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "7” Super Gutter x 39' (Bronze)",
+        "White": "7” Super Gutter x 39' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-011",
+      "canonical_name": "7” Super Gutter x 40' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "7” Super Gutter x 40' (Bronze)",
+        "White": "7” Super Gutter x 40' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-012",
+      "canonical_name": "Super Gutter End Cap 5\" (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Super Gutter End Cap 5\" (Bronze)",
+        "White": "Super Gutter End Cap 5\" (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-013",
+      "canonical_name": "Super Gutter End Cap 7\" (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Super Gutter End Cap 7\" (Bronze)",
+        "White": "Super Gutter End Cap 7\" (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-014",
+      "canonical_name": "3 x .045 Extruded Header x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "3 x .045 Extruded Header x 24' (Bronze)",
+        "White": "3 x .045 Extruded Header x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-015",
+      "canonical_name": "3 x .045 Extruded Header x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "3 x .045 Extruded Header x 30' (Bronze)",
+        "White": "3 x .045 Extruded Header x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-016",
+      "canonical_name": "Extruded T-Gutter x 24’  (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Extruded T-Gutter x 24’  (Bronze)",
+        "White": "Extruded T-Gutter x 24’  (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-017",
+      "canonical_name": "5-1/2” Extruded T-Fascia x 27’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "5-1/2” Extruded T-Fascia x 27’ (Bronze)",
+        "White": "5-1/2” Extruded T-Fascia x 27’ (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-020",
+      "canonical_name": "E-Fascia x 27’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "E-Fascia x 27’ (Bronze)",
+        "White": "E-Fascia x 27’ (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-022",
+      "canonical_name": "E-Gutter x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "E-Gutter x 24' (Bronze)",
+        "White": "E-Gutter x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-024",
+      "canonical_name": "E-Gutter x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "E-Gutter x 30' (Bronze)",
+        "White": "E-Gutter x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-025",
+      "canonical_name": "Rain Carrying Accessories 3” x 4” Downpipe x 8' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Rain Carrying Accessories 3” x 4” Downpipe x 8' (Bronze)",
+        "White": "Rain Carrying Accessories 3” x 4” Downpipe x 8' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-026",
+      "canonical_name": "Rain Carrying Accessories 3” x 4” Downpipe x 10' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Rain Carrying Accessories 3” x 4” Downpipe x 10' (Bronze)",
+        "White": "Rain Carrying Accessories 3” x 4” Downpipe x 10' (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-027",
+      "canonical_name": "Rain Carrying Accessories (3 x 4 B Elbow) (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Rain Carrying Accessories (3 x 4 B Elbow) (Bronze)",
+        "White": "Rain Carrying Accessories (3 x 4 B Elbow) (White)"
+      }
+    },
+    {
+      "internal_sku": "GUTR-028",
+      "canonical_name": "Rain Carrying Accessories (3 x 4 A Elbow) (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Rain Carrying Accessories (3 x 4 A Elbow) (Bronze)",
+        "White": "Rain Carrying Accessories (3 x 4 A Elbow) (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-002",
+      "canonical_name": "1 x 2 Open Back x .040 min. x 24’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "1 x 2 Open Back x .040 min. x 24’ (Bronze)",
+        "White": "1 x 2 Open Back x .040 min. x 24’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-003",
+      "canonical_name": "1 x 2 Open Back x .040 min. x 30’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "1 x 2 Open Back x .040 min. x 30’ (Bronze)",
+        "White": "1 x 2 Open Back x .040 min. x 30’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-004",
+      "canonical_name": "1 x 3 Open Back x .040 min. x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "1 x 3 Open Back x .040 min. x 24' (Bronze)",
+        "White": "1 x 3 Open Back x .040 min. x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-005",
+      "canonical_name": "1 x 3 Open Back x .040 min. x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "1 x 3 Open Back x .040 min. x 30' (Bronze)",
+        "White": "1 x 3 Open Back x .040 min. x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-006",
+      "canonical_name": "2 x 2 x .045 Patio x 24’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2 x 2 x .045 Patio x 24’ (Bronze)",
+        "White": "2 x 2 x .045 Patio x 24’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-007",
+      "canonical_name": "2 x 2 x .045 Patio x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2 x 2 x .045 Patio x 30' (Bronze)",
+        "White": "2 x 2 x .045 Patio x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-008",
+      "canonical_name": "2 x 3 x .045 Patio x 24’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2 x 3 x .045 Patio x 24’ (Bronze)",
+        "White": "2 x 3 x .045 Patio x 24’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-009",
+      "canonical_name": "2 x 3 x .045 Patio x 30’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2 x 3 x .045 Patio x 30’ (Bronze)",
+        "White": "2 x 3 x .045 Patio x 30’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-010",
+      "canonical_name": "2 x 4 x .050 Patio x 24’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2 x 4 x .050 Patio x 24’ (Bronze)",
+        "White": "2 x 4 x .050 Patio x 24’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-011",
+      "canonical_name": "2 x 4 x .050 Patio x 30’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2 x 4 x .050 Patio x 30’ (Bronze)",
+        "White": "2 x 4 x .050 Patio x 30’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-012",
+      "canonical_name": "2 x 5 x .050 Patio x 24’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2 x 5 x .050 Patio x 24’ (Bronze)",
+        "White": "2 x 5 x .050 Patio x 24’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-013",
+      "canonical_name": "2 x 5 x .050 Patio x 30’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2 x 5 x .050 Patio x 30’ (Bronze)",
+        "White": "2 x 5 x .050 Patio x 30’ (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-015",
+      "canonical_name": "2” x 4” SMB x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 4” SMB x 24' (Bronze)",
+        "White": "2” x 4” SMB x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-017",
+      "canonical_name": "2” x 4” SMB x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 4” SMB x 30' (Bronze)",
+        "White": "2” x 4” SMB x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-018",
+      "canonical_name": "2” x 5” SMB x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 5” SMB x 24' (Bronze)",
+        "White": "2” x 5” SMB x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-019",
+      "canonical_name": "2” x 5” SMB x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 5” SMB x 30' (Bronze)",
+        "White": "2” x 5” SMB x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-020",
+      "canonical_name": "2” x 6” SMB x 20' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 6” SMB x 20' (Bronze)",
+        "White": "2” x 6” SMB x 20' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-021",
+      "canonical_name": "2” x 6” SMB x 22' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 6” SMB x 22' (Bronze)",
+        "White": "2” x 6” SMB x 22' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-022",
+      "canonical_name": "2” x 6” SMB x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 6” SMB x 24' (Bronze)",
+        "White": "2” x 6” SMB x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-023",
+      "canonical_name": "2” x 6” SMB x 26' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 6” SMB x 26' (Bronze)",
+        "White": "2” x 6” SMB x 26' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-024",
+      "canonical_name": "2” x 6” SMB x 28' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 6” SMB x 28' (Bronze)",
+        "White": "2” x 6” SMB x 28' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-025",
+      "canonical_name": "2” x 6” SMB x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 6” SMB x 30' (Bronze)",
+        "White": "2” x 6” SMB x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-026",
+      "canonical_name": "2” x 7” SMB x 20' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 7” SMB x 20' (Bronze)",
+        "White": "2” x 7” SMB x 20' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-027",
+      "canonical_name": "2” x 7” SMB x 22' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 7” SMB x 22' (Bronze)",
+        "White": "2” x 7” SMB x 22' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-028",
+      "canonical_name": "2” x 7” SMB x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 7” SMB x 24' (Bronze)",
+        "White": "2” x 7” SMB x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-029",
+      "canonical_name": "2” x 7” SMB x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 7” SMB x 30' (Bronze)",
+        "White": "2” x 7” SMB x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-030",
+      "canonical_name": "2” x 7” SMB x 32' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 7” SMB x 32' (Bronze)",
+        "White": "2” x 7” SMB x 32' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-031",
+      "canonical_name": "2” x 8” SMB x 20' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 8” SMB x 20' (Bronze)",
+        "White": "2” x 8” SMB x 20' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-032",
+      "canonical_name": "2” x 8” SMB x 22' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 8” SMB x 22' (Bronze)",
+        "White": "2” x 8” SMB x 22' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-033",
+      "canonical_name": "2” x 8” SMB x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 8” SMB x 24' (Bronze)",
+        "White": "2” x 8” SMB x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-034",
+      "canonical_name": "2” x 8” SMB x 28' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 8” SMB x 28' (Bronze)",
+        "White": "2” x 8” SMB x 28' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-035",
+      "canonical_name": "2” x 8” SMB x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 8” SMB x 30' (Bronze)",
+        "White": "2” x 8” SMB x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-036",
+      "canonical_name": "2” x 8” SMB x 32' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 8” SMB x 32' (Bronze)",
+        "White": "2” x 8” SMB x 32' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-037",
+      "canonical_name": "2” x 8” SMB x 36' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 8” SMB x 36' (Bronze)",
+        "White": "2” x 8” SMB x 36' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-038",
+      "canonical_name": "2” x 8” SMB x 40' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 8” SMB x 40' (Bronze)",
+        "White": "2” x 8” SMB x 40' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-039",
+      "canonical_name": "2” x 9” SMB x 22' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 9” SMB x 22' (Bronze)",
+        "White": "2” x 9” SMB x 22' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-040",
+      "canonical_name": "2” x 9” SMB x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 9” SMB x 24' (Bronze)",
+        "White": "2” x 9” SMB x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-041",
+      "canonical_name": "2” x 9” SMB x 26' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 9” SMB x 26' (Bronze)",
+        "White": "2” x 9” SMB x 26' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-042",
+      "canonical_name": "2” x 9” SMB x 28' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 9” SMB x 28' (Bronze)",
+        "White": "2” x 9” SMB x 28' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-043",
+      "canonical_name": "2” x 9” SMB x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 9” SMB x 30' (Bronze)",
+        "White": "2” x 9” SMB x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-044",
+      "canonical_name": "2” x 9” SMB x 32' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 9” SMB x 32' (Bronze)",
+        "White": "2” x 9” SMB x 32' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-045",
+      "canonical_name": "2” x 9” SMB x 36' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 9” SMB x 36' (Bronze)",
+        "White": "2” x 9” SMB x 36' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-046",
+      "canonical_name": "2” x 9” SMB x 40' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 9” SMB x 40' (Bronze)",
+        "White": "2” x 9” SMB x 40' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-047",
+      "canonical_name": "2” x 10” SMB x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 10” SMB x 24' (Bronze)",
+        "White": "2” x 10” SMB x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-048",
+      "canonical_name": "2” x 10” SMB x 26' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 10” SMB x 26' (Bronze)",
+        "White": "2” x 10” SMB x 26' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-049",
+      "canonical_name": "2” x 10” SMB x 28' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 10” SMB x 28' (Bronze)",
+        "White": "2” x 10” SMB x 28' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-050",
+      "canonical_name": "2” x 10” SMB x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 10” SMB x 30' (Bronze)",
+        "White": "2” x 10” SMB x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-051",
+      "canonical_name": "2” x 10” SMB x 32' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 10” SMB x 32' (Bronze)",
+        "White": "2” x 10” SMB x 32' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-052",
+      "canonical_name": "2” x 10” SMB x 36' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 10” SMB x 36' (Bronze)",
+        "White": "2” x 10” SMB x 36' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-053",
+      "canonical_name": "2” x 10” SMB x 40' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "2” x 10” SMB x 40' (Bronze)",
+        "White": "2” x 10” SMB x 40' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-054",
+      "canonical_name": "3 x 3 Eve Rail  x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "3 x 3 Eve Rail  x 24' (Bronze)",
+        "White": "3 x 3 Eve Rail  x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-055",
+      "canonical_name": "3 x 3 Eve Rail  x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "3 x 3 Eve Rail  x 30' (Bronze)",
+        "White": "3 x 3 Eve Rail  x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-056",
+      "canonical_name": "4 x .125 Square Tube x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "4 x .125 Square Tube x 24' (Bronze)",
+        "White": "4 x .125 Square Tube x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-057",
+      "canonical_name": "4 x .125 Square Tube x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "4 x .125 Square Tube x 30' (Bronze)",
+        "White": "4 x .125 Square Tube x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-058",
+      "canonical_name": "4 x .125 Square Tube x 24' (White/Bronze) With Spline Groove",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "4 x .125 Square Tube x 24' (Bronze) With Spline Groove",
+        "White": "4 x .125 Square Tube x 24' (White) With Spline Groove"
+      }
+    },
+    {
+      "internal_sku": "PROF-059",
+      "canonical_name": "4 x .125 Square Tube x 30' (White/Bronze) With Spline Groove",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "4 x .125 Square Tube x 30' (Bronze) With Spline Groove",
+        "White": "4 x .125 Square Tube x 30' (White) With Spline Groove"
+      }
+    },
+    {
+      "internal_sku": "PROF-060",
+      "canonical_name": "6 x .125 Square Tube x 24' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "6 x .125 Square Tube x 24' (Bronze)",
+        "White": "6 x .125 Square Tube x 24' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-061",
+      "canonical_name": "6 x .125 Square Tube x 30' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "6 x .125 Square Tube x 30' (Bronze)",
+        "White": "6 x .125 Square Tube x 30' (White)"
+      }
+    },
+    {
+      "internal_sku": "PROF-062",
+      "canonical_name": "6 x .125 Square Tube x 24' (White/Bronze) With Spline Groove",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "6 x .125 Square Tube x 24' (Bronze) With Spline Groove",
+        "White": "6 x .125 Square Tube x 24' (White) With Spline Groove"
+      }
+    },
+    {
+      "internal_sku": "PROF-063",
+      "canonical_name": "6 x .125 Square Tube x 30' (White/Bronze) With Spline Groove",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "6 x .125 Square Tube x 30' (Bronze) With Spline Groove",
+        "White": "6 x .125 Square Tube x 30' (White) With Spline Groove"
+      }
+    },
+    {
+      "internal_sku": "CONN-001",
+      "canonical_name": "Cable with Triangle Bracket  x 12’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 12’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 12’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-002",
+      "canonical_name": "Cable with Triangle Bracket  x 13’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 13’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 13’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-003",
+      "canonical_name": "Cable with Triangle Bracket  x 14’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 14’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 14’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-004",
+      "canonical_name": "Cable with Triangle Bracket  x 15’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 15’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 15’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-005",
+      "canonical_name": "Cable with Triangle Bracket  x 16’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 16’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 16’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-006",
+      "canonical_name": "Cable with Triangle Bracket  x 18’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 18’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 18’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-007",
+      "canonical_name": "Cable with Triangle Bracket  x 20’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 20’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 20’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-008",
+      "canonical_name": "Cable with Triangle Bracket  x 22’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 22’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 22’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-009",
+      "canonical_name": "Cable with Triangle Bracket  x 26’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Cable with Triangle Bracket  x 26’ (Bronze)",
+        "White": "Cable with Triangle Bracket  x 26’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-011",
+      "canonical_name": "Touch Up Paint (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Touch Up Paint (Bronze)",
+        "White": "Touch Up Paint (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-029",
+      "canonical_name": ".024 x 16” Kick Plate Coil Rolls x 25' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 16” Kick Plate Coil Rolls x 25' (Bronze)",
+        "White": ".024 x 16” Kick Plate Coil Rolls x 25' (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-030",
+      "canonical_name": ".024 x 16” Kick Plate Coil Rolls x 50' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 16” Kick Plate Coil Rolls x 50' (Bronze)",
+        "White": ".024 x 16” Kick Plate Coil Rolls x 50' (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-031",
+      "canonical_name": ".024 x 16” Kick Plate Coil Rolls (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 16” Kick Plate Coil Rolls (Bronze)",
+        "White": ".024 x 16” Kick Plate Coil Rolls (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-032",
+      "canonical_name": ".024 x 24” Kick Plate Coil Rolls x 25' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 24” Kick Plate Coil Rolls x 25' (Bronze)",
+        "White": ".024 x 24” Kick Plate Coil Rolls x 25' (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-033",
+      "canonical_name": ".024 x 24” Kick Plate Coil Rolls x 50' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 24” Kick Plate Coil Rolls x 50' (Bronze)",
+        "White": ".024 x 24” Kick Plate Coil Rolls x 50' (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-034",
+      "canonical_name": ".024 x 24” Kick Plate Coil Rolls (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 24” Kick Plate Coil Rolls (Bronze)",
+        "White": ".024 x 24” Kick Plate Coil Rolls (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-035",
+      "canonical_name": ".024 x 36” Kick Plate Coil Rolls x 25' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 36” Kick Plate Coil Rolls x 25' (Bronze)",
+        "White": ".024 x 36” Kick Plate Coil Rolls x 25' (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-036",
+      "canonical_name": ".024 x 36” Kick Plate Coil Rolls x 50' (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 36” Kick Plate Coil Rolls x 50' (Bronze)",
+        "White": ".024 x 36” Kick Plate Coil Rolls x 50' (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-037",
+      "canonical_name": ".024 x 36” Kick Plate Coil Rolls (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": ".024 x 36” Kick Plate Coil Rolls (Bronze)",
+        "White": ".024 x 36” Kick Plate Coil Rolls (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-038",
+      "canonical_name": "Extruded Kick Plate Channel x 12’ (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "Extruded Kick Plate Channel x 12’ (Bronze)",
+        "White": "Extruded Kick Plate Channel x 12’ (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-039",
+      "canonical_name": "3” x 33’ Peel and Seal (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "3” x 33’ Peel and Seal (Bronze)",
+        "White": "3” x 33’ Peel and Seal (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-040",
+      "canonical_name": "4” x 33’ Peel and Seal (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "4” x 33’ Peel and Seal (Bronze)",
+        "White": "4” x 33’ Peel and Seal (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-041",
+      "canonical_name": "6\"x 33’ Peel and Seal (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "6\"x 33’ Peel and Seal (Bronze)",
+        "White": "6\"x 33’ Peel and Seal (White)"
+      }
+    },
+    {
+      "internal_sku": "CONN-042",
+      "canonical_name": "4” x 50’ Peel and Seal (White/Bronze)",
+      "color_options": [
+        "White",
+        "Bronze"
+      ],
+      "color_fragment": "(White/Bronze)",
+      "resolved": {
+        "Bronze": "4” x 50’ Peel and Seal (Bronze)",
+        "White": "4” x 50’ Peel and Seal (White)"
+      }
+    },
+    {
+      "internal_sku": "SCRW-001",
+      "canonical_name": "12 x 3/4\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "12 x 3/4\" Bronze Stainless steel",
+        "White": "12 x 3/4\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-002",
+      "canonical_name": "12 x 3/4\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "12 x 3/4\" Bronze Galvanized",
+        "White": "12 x 3/4\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-004",
+      "canonical_name": "10 x 3/4\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "10 x 3/4\" Bronze Stainless steel",
+        "White": "10 x 3/4\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-005",
+      "canonical_name": "10 x 3/4\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "10 x 3/4\" Bronze Galvanized",
+        "White": "10 x 3/4\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-007",
+      "canonical_name": "10 x 2\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "10 x 2\" Bronze Stainless steel",
+        "White": "10 x 2\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-008",
+      "canonical_name": "10 x 2\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "10 x 2\" Bronze Galvanized",
+        "White": "10 x 2\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-010",
+      "canonical_name": "14 x 1\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "14 x 1\" Bronze Stainless steel",
+        "White": "14 x 1\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-011",
+      "canonical_name": "14 x 1\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "14 x 1\" Bronze Galvanized",
+        "White": "14 x 1\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-012",
+      "canonical_name": "14 x 2\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "14 x 2\" Bronze Stainless steel",
+        "White": "14 x 2\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-013",
+      "canonical_name": "14 x 2\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "14 x 2\" Bronze Galvanized",
+        "White": "14 x 2\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-014",
+      "canonical_name": "14 x 3\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "14 x 3\" Bronze Stainless steel",
+        "White": "14 x 3\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-015",
+      "canonical_name": "14 x 3\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "14 x 3\" Bronze Galvanized",
+        "White": "14 x 3\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-018",
+      "canonical_name": "Anchor 1/4x3\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "Anchor 1/4x3\" Bronze Stainless steel",
+        "White": "Anchor 1/4x3\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-019",
+      "canonical_name": "Anchor 1/4x3\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "Anchor 1/4x3\" Bronze Galvanized",
+        "White": "Anchor 1/4x3\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-021",
+      "canonical_name": "Anchor 1/4x4\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "Anchor 1/4x4\" Bronze Stainless steel",
+        "White": "Anchor 1/4x4\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-022",
+      "canonical_name": "Anchor 1/4x4\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "Anchor 1/4x4\" Bronze Galvanized",
+        "White": "Anchor 1/4x4\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-024",
+      "canonical_name": "Anchor 1/4x5\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "Anchor 1/4x5\" Bronze Stainless steel",
+        "White": "Anchor 1/4x5\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-025",
+      "canonical_name": "Anchor 1/4x5\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "Anchor 1/4x5\" Bronze Galvanized",
+        "White": "Anchor 1/4x5\" White Galvanized"
+      }
+    },
+    {
+      "internal_sku": "SCRW-026",
+      "canonical_name": "Anchor 3/8x5\" Bronze/White Stainless steel",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "Anchor 3/8x5\" Bronze Stainless steel",
+        "White": "Anchor 3/8x5\" White Stainless steel"
+      }
+    },
+    {
+      "internal_sku": "SCRW-027",
+      "canonical_name": "Anchor 3/8x5\" Bronze/White Galvanized",
+      "color_options": [
+        "Bronze",
+        "White"
+      ],
+      "color_fragment": "Bronze/White",
+      "resolved": {
+        "Bronze": "Anchor 3/8x5\" Bronze Galvanized",
+        "White": "Anchor 3/8x5\" White Galvanized"
+      }
+    }
+  ]
+}

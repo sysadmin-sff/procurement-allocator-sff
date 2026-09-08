@@ -4,7 +4,14 @@ import type { Project, ProjectCreate, ProjectItem, ProjectItemCreate, ProjectWit
 export const projectsApi = {
   list: () => http.get<Project[]>('/projects'),
   create: (payload: ProjectCreate) => http.post<Project>('/projects', payload),
-  updateProject: (id: string, title: string) => http.patch<Project>(`/projects/${id}`, { title }),
+  /** color_choice omitted (not undefined) leaves it untouched server-side;
+   * pass null explicitly to clear it. title is always required by the
+   * backend's ProjectUpdate schema, even when only color_choice changed. */
+  updateProject: (id: string, title: string, colorChoice?: string | null) =>
+    http.patch<Project>(
+      `/projects/${id}`,
+      colorChoice === undefined ? { title } : { title, color_choice: colorChoice },
+    ),
   get: (id: string) => http.get<ProjectWithItems>(`/projects/${id}`),
   addItem: (projectId: string, payload: ProjectItemCreate) =>
     http.post<ProjectItem>(`/projects/${projectId}/items`, payload),

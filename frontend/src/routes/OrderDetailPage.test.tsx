@@ -6,8 +6,9 @@ import { OrderDetailPage } from './OrderDetailPage';
 import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
+import { projectsApi } from '../api/projects';
 import { suppliersApi } from '../api/suppliers';
-import type { Material, Order, OrderItem, Supplier } from '../api/types';
+import type { Material, Order, OrderItem, ProjectWithItems, Supplier } from '../api/types';
 
 vi.mock('../api/orders', () => ({
   ordersApi: {
@@ -27,6 +28,19 @@ vi.mock('../api/materials', () => ({
 vi.mock('../api/suppliers', () => ({
   suppliersApi: { list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
+vi.mock('../api/projects', () => ({
+  projectsApi: {
+    list: vi.fn(),
+    create: vi.fn(),
+    updateProject: vi.fn(),
+    get: vi.fn(),
+    addItem: vi.fn(),
+    updateItem: vi.fn(),
+    removeItem: vi.fn(),
+    remove: vi.fn(),
+    complete: vi.fn(),
+  },
+}));
 
 const getOrderMock = vi.mocked(ordersApi.get);
 const patchItemMock = vi.mocked(ordersApi.patchItem);
@@ -36,6 +50,21 @@ const parseResponseMock = vi.mocked(ordersApi.parseResponse);
 const confirmPriceUpdatesMock = vi.mocked(ordersApi.confirmPriceUpdates);
 const materialsListMock = vi.mocked(materialsApi.list);
 const suppliersListMock = vi.mocked(suppliersApi.list);
+const projectGetMock = vi.mocked(projectsApi.get);
+
+function projectFixture(overrides: Partial<ProjectWithItems> = {}): ProjectWithItems {
+  return {
+    id: 'proj-1',
+    title: 'Pool cage — Bayshore Rd',
+    created_by: null,
+    status: 'draft',
+    created_at: '2026-08-17T00:00:00Z',
+    color_choice: null,
+    items: [],
+    latest_allocation_run: null,
+    ...overrides,
+  };
+}
 
 const supplier: Supplier = {
   id: 'sup-a',
@@ -134,8 +163,10 @@ describe('OrderDetailPage', () => {
     confirmPriceUpdatesMock.mockReset();
     materialsListMock.mockReset();
     suppliersListMock.mockReset();
+    projectGetMock.mockReset();
     materialsListMock.mockResolvedValue([material]);
     suppliersListMock.mockResolvedValue([supplier]);
+    projectGetMock.mockResolvedValue(projectFixture());
   });
 
   it('renders quoted price and an empty confirmed-price cell when unconfirmed', async () => {
@@ -1340,6 +1371,115 @@ describe('OrderDetailPage', () => {
 
       expect(text).toContain('Goods total: $0.00');
       expect(text).not.toContain(material.canonical_name);
+    });
+  });
+
+  describe('color resolution in copyable lists (ADR-0031 §5)', () => {
+    const twoColorMaterial: Material = {
+      id: 'mat-color',
+      internal_sku: 'GTR-EC-5',
+      canonical_name: 'Super Gutter End Cap 5" (White/Bronze)',
+      category: 'Gutter',
+      unit: 'шт',
+      attributes: {},
+      color_options: ['White', 'Bronze'],
+      color_fragment: '(White/Bronze)',
+    };
+
+    it('resolves a two-color material to the project color_choice in buildOrderText, showing one color not both', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 100,
+        delivery_fee: 25,
+        items: [itemFixture({ material_id: 'mat-color', quantity: 2, quoted_price: 50 })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      materialsListMock.mockResolvedValue([twoColorMaterial]);
+      projectGetMock.mockResolvedValue(projectFixture({ color_choice: 'White' }));
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с ценами)');
+      const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
+      const withPricesText = textareas.find((t) => t.value.includes('Price:'))!.value;
+
+      expect(withPricesText).toContain('Super Gutter End Cap 5" (White)');
+      expect(withPricesText).not.toContain('(White/Bronze)');
+      expect(withPricesText).not.toContain('(Bronze)');
+    });
+
+    it('resolves the same material in buildTargetPriceOrderText using the same logic', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 100,
+        delivery_fee: 25,
+        items: [itemFixture({ material_id: 'mat-color', quantity: 2, target_price: 45 })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      materialsListMock.mockResolvedValue([twoColorMaterial]);
+      projectGetMock.mockResolvedValue(projectFixture({ color_choice: 'Bronze' }));
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с целевыми ценами)');
+      const heading = screen.getByText('Список материалов (с целевыми ценами)');
+      const block = heading.parentElement?.parentElement as HTMLElement;
+      const text = (within(block).getByRole('textbox') as HTMLTextAreaElement).value;
+
+      expect(text).toContain('Super Gutter End Cap 5" (Bronze)');
+      expect(text).not.toContain('(White/Bronze)');
+      expect(text).not.toContain('(White)');
+    });
+
+    it('leaves a material without color_options unchanged (regression)', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      projectGetMock.mockResolvedValue(projectFixture({ color_choice: 'White' }));
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с ценами)');
+      const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
+      const withPricesText = textareas.find((t) => t.value.includes('Price:'))!.value;
+
+      expect(withPricesText).toContain(material.canonical_name);
+    });
+
+    it('does not crash and falls back to canonical_name as-is when color_choice is not set', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 100,
+        delivery_fee: 25,
+        items: [itemFixture({ material_id: 'mat-color', quantity: 2, quoted_price: 50 })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      materialsListMock.mockResolvedValue([twoColorMaterial]);
+      projectGetMock.mockResolvedValue(projectFixture({ color_choice: null }));
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с ценами)');
+      const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
+      const withPricesText = textareas.find((t) => t.value.includes('Price:'))!.value;
+
+      expect(withPricesText).toContain('Super Gutter End Cap 5" (White/Bronze)');
     });
   });
 });

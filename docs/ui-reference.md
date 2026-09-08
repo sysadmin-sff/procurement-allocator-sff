@@ -147,6 +147,48 @@
     черновики") — в этом случае модалка обновляется новыми данными
     конфликта, а не откатывается к обычной странице ошибки.
 
+## 3а. Выбор цвета проекта и блокировка создания ордеров (ADR-0031)
+
+- **`ProjectDetailPage.tsx`** — `<select>` "Цвет проекта" в шапке экрана,
+  рядом с заголовком/кнопками "Рассчитать"/"Завершить проект" (не отдельный
+  экран, не шаг мастера создания). Опции — фиксированный словарь
+  (`frontend/src/lib/colors.ts` → `KNOWN_COLORS`, сейчас `White`/`Bronze`,
+  тот же словарь, что backend `KNOWN_COLORS`), плюс пустая опция "Не
+  выбран" для `color_choice === null`. Изменение сохраняется сразу через
+  `PATCH /projects/{id}` (`title` уходит вместе с `color_choice` — backend
+  требует `title` в каждом PATCH), редактируемо в любой момент до генерации
+  ордеров, без отдельного шага подтверждения. При ошибке PATCH — откат
+  select на предыдущее значение, ошибка через `ErrorBanner`.
+- **`AllocationResultPage.tsx`** — кнопка "Подтвердить и создать ордера"
+  неактивна (`disabled`) с `title="Выберите цвет проекта, чтобы
+  продолжить"`, если хотя бы один материал среди строк текущего плана
+  (`AllocationRun.lines`) имеет непустой `Material.color_options`, а
+  `Project.color_choice` не выбран. Проверка чисто клиентская, для UX
+  (`hasColorChoiceMaterial` в `frontend/src/lib/colors.ts`) — backend
+  всё равно валидирует то же условие при самом `POST .../orders`
+  (`ProjectColorChoiceRequiredError`, 409), это не единственная линия
+  обороны. Проекты без материалов с выбором цвета не затронуты — кнопка
+  ведёт себя как раньше.
+- **`OrderDetailPage.tsx` — `buildOrderText`/`buildTargetPriceOrderText`.**
+  Обе функции разрешают название материала через `resolveMaterialName`
+  (`frontend/src/lib/colors.ts`, зеркало backend
+  `app.services.material_naming.resolve_material_name`) вместо прямого
+  чтения `material.canonical_name` — единая функция для обеих, не две
+  раздельные реализации. `color_choice` берётся из `Project`, который эта
+  страница дополнительно загружает по `order.project_id` (страница раньше
+  не знала о проекте вообще, только о `materials`/`suppliers`). Материал
+  без `color_options` — текст не меняется. `color_choice` не выбран (не
+  должно происходить при исправной блокировке на экране распределения, но
+  функция не падает) — `canonical_name` уходит как есть, с обоими цветами.
+  Внутренние экраны/ячейки (`OrderDetailPage` таблица, `PriceDivergenceModal`,
+  `AllocationResultPage`, `PriceComparisonPage`) продолжают показывать
+  `canonical_name` без изменений — см. ADR-0031 §5, разрешение цвета только
+  для supplier-facing документов.
+- `docs/data-model.md` не обновлён этой сессией (только frontend в
+  задаче) — диаграмма уже отстаёт от кода в нескольких местах, не только
+  по ADR-0031 (`target_price`, `tax_amount` и др. тоже отсутствуют),
+  трогать частично было бы обманчиво. Отдельная задача на синхронизацию.
+
 ## 4. Список проектов (`ProjectsListPage.tsx`)
 
 - Удаление проекта — через `ConfirmButton` в отдельной ячейке каждой

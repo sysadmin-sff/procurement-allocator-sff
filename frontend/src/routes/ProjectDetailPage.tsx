@@ -9,6 +9,7 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { KNOWN_COLORS } from '../lib/colors';
 import { MaterialCombobox } from './project-builder/MaterialCombobox';
 import styles from '../components/CrudScreen.module.css';
 
@@ -141,6 +142,19 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
     }
   }
 
+  async function handleColorChoiceChange(colorChoice: string | null) {
+    if (!projectId || !project) return;
+    setActionError(null);
+    const previous = project.color_choice;
+    setProject({ ...project, color_choice: colorChoice });
+    try {
+      await projectsApi.updateProject(projectId, project.title, colorChoice);
+    } catch (err) {
+      setActionError(err);
+      setProject((prev) => (prev ? { ...prev, color_choice: previous } : prev));
+    }
+  }
+
   if (!projectId) {
     return <ErrorBanner error="Не указан проект." />;
   }
@@ -152,6 +166,21 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
           <h1 className={styles.title}>{project?.title ?? 'Проект'}</h1>
           {status === 'ready' && project && (
             <div className={styles.actionsCell}>
+              <label className={styles.actionsCell} style={{ gap: '6px' }}>
+                Цвет проекта:
+                <select
+                  className={styles.input}
+                  value={project.color_choice ?? ''}
+                  onChange={(e) => void handleColorChoiceChange(e.target.value === '' ? null : e.target.value)}
+                >
+                  <option value="">Не выбран</option>
+                  {KNOWN_COLORS.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {project.status === 'ordered' && (
                 <Button variant="secondary" onClick={() => void handleComplete()}>
                   Завершить проект

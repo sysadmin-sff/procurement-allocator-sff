@@ -103,6 +103,17 @@ const materialScreen: Material = {
   attributes: {},
 };
 
+const colorMaterial: Material = {
+  id: 'mat-color',
+  internal_sku: 'GTR-EC-5',
+  canonical_name: 'Super Gutter End Cap 5" (White/Bronze)',
+  category: 'Gutter',
+  unit: 'шт',
+  attributes: {},
+  color_options: ['White', 'Bronze'],
+  color_fragment: '(White/Bronze)',
+};
+
 const doorMaterial1: Material = {
   id: 'mat-door-1',
   internal_sku: 'DOOR-001',
@@ -1154,5 +1165,103 @@ describe('AllocationResultPage', () => {
 
     const warnings = await screen.findAllByText(/Категория Doors разбита между 2 поставщиками/);
     expect(warnings).toHaveLength(2);
+  });
+
+  describe('color_choice required before order creation (ADR-0031 §3)', () => {
+    function colorRun(overrides: Partial<AllocationRun> = {}): AllocationRun {
+      return {
+        id: 'run-color',
+        project_id: 'proj-1',
+        created_at: '2026-08-17T00:00:00Z',
+        algorithm_version: 'v1',
+        status: 'ok',
+        split_categories: [],
+        lines: [
+          {
+            id: 'line-1',
+            material_id: 'mat-color',
+            supplier_id: 'sup-a',
+            quantity: 2,
+            unit_price: 50,
+            line_total: 100,
+            overridden_at: null,
+            original_supplier_id: null,
+            original_unit_price: null,
+            ordered_at: null,
+          },
+        ],
+        orphaned_materials: [],
+        supplier_summaries: [
+          {
+            supplier_id: 'sup-a',
+            goods_total: 100,
+            delivery_fee: 0,
+            tax_amount: 7,
+            total_with_tax: 107,
+            free_shipping_achieved: true,
+            below_min_order: false,
+          },
+        ],
+        ...overrides,
+      };
+    }
+
+    it('disables the button with a tooltip when the BOM has a color-choice material and color_choice is unset', async () => {
+      runMock.mockResolvedValue(colorRun());
+      materialsListMock.mockResolvedValue([colorMaterial]);
+      pricesListMock.mockResolvedValue([
+        { id: 'p1', material_id: 'mat-color', supplier_id: 'sup-a', price: 50, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      ] satisfies Price[]);
+      projectGetMock.mockResolvedValue({ ...project, color_choice: null });
+
+      renderPage();
+
+      const button = await screen.findByRole('button', { name: /Подтвердить и создать ордера/ });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'Выберите цвет проекта, чтобы продолжить');
+    });
+
+    it('enables the button once color_choice is set', async () => {
+      runMock.mockResolvedValue(colorRun());
+      materialsListMock.mockResolvedValue([colorMaterial]);
+      pricesListMock.mockResolvedValue([
+        { id: 'p1', material_id: 'mat-color', supplier_id: 'sup-a', price: 50, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      ] satisfies Price[]);
+      projectGetMock.mockResolvedValue({ ...project, color_choice: 'White' });
+
+      renderPage();
+
+      const button = await screen.findByRole('button', { name: /Подтвердить и создать ордера/ });
+      expect(button).toBeEnabled();
+    });
+
+    it('leaves the button enabled for a project with no color-choice materials, color_choice unset (regression)', async () => {
+      runMock.mockResolvedValue(colorRun({
+        lines: [
+          {
+            id: 'line-1',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            quantity: 10,
+            unit_price: 12,
+            line_total: 120,
+            overridden_at: null,
+            original_supplier_id: null,
+            original_unit_price: null,
+            ordered_at: null,
+          },
+        ],
+      }));
+      materialsListMock.mockResolvedValue([materialScreen]);
+      pricesListMock.mockResolvedValue([
+        { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      ] satisfies Price[]);
+      projectGetMock.mockResolvedValue({ ...project, color_choice: null });
+
+      renderPage();
+
+      const button = await screen.findByRole('button', { name: /Подтвердить и создать ордера/ });
+      expect(button).toBeEnabled();
+    });
   });
 });

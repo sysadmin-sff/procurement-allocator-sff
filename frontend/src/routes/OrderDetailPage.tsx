@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import type { OrderItemPatch } from '../api/orders';
+import { projectsApi } from '../api/projects';
 import { purchaseRecordsApi } from '../api/purchaseRecords';
 import { suppliersApi } from '../api/suppliers';
 import type {
@@ -23,6 +24,7 @@ import { FileInput } from '../components/FileInput';
 import { PriceDivergenceModal } from '../components/PriceDivergenceModal';
 import type { PriceUpdateBatchRow } from '../components/PriceUpdateBatchScreen';
 import { PriceUpdateBatchScreen } from '../components/PriceUpdateBatchScreen';
+import { resolveMaterialName } from '../lib/colors';
 import styles from './order-detail/OrderDetail.module.css';
 
 const LOW_CONFIDENCE_LEVELS = new Set(['low', 'medium']);
@@ -48,6 +50,10 @@ interface LoadedData {
   order: Order;
   materials: Material[];
   suppliers: Supplier[];
+  /** color_choice source for resolveMaterialName in the two supplier-facing
+   * copy blocks (ADR-0031 п.5) — null both when not yet chosen and when the
+   * project fetch itself fails (best-effort fallback, see the load effect). */
+  projectColorChoice: string | null;
 }
 
 export function OrderDetailPage() {
@@ -70,10 +76,17 @@ export function OrderDetailPage() {
 
     setLoading(true);
     setLoadError(null);
-    Promise.all([ordersApi.get(orderId), materialsApi.list(), suppliersApi.list()])
-      .then(([order, materials, suppliers]) => {
+    ordersApi
+      .get(orderId)
+      .then(async (order) => {
         if (cancelled) return;
-        setData({ order, materials, suppliers });
+        const [materials, suppliers, project] = await Promise.all([
+          materialsApi.list(),
+          suppliersApi.list(),
+          projectsApi.get(order.project_id),
+        ]);
+        if (cancelled) return;
+        setData({ order, materials, suppliers, projectColorChoice: project.color_choice ?? null });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -177,7 +190,7 @@ export function OrderDetailPage() {
     );
   }
 
-  const { order, materials, suppliers } = data;
+  const { order, materials, suppliers, projectColorChoice } = data;
   const materialById = new Map(materials.map((m) => [m.id, m]));
   const supplier = suppliers.find((s) => s.id === order.supplier_id);
 
@@ -345,15 +358,32 @@ export function OrderDetailPage() {
         <div className={styles.copySection}>
           <CopyBlock
             title="Список материалов (с ценами)"
-            text={buildOrderText({ supplierName: supplier?.name ?? order.supplier_id, order, materialById, includePrices: true })}
+            text={buildOrderText({
+              supplierName: supplier?.name ?? order.supplier_id,
+              order,
+              materialById,
+              colorChoice: projectColorChoice,
+              includePrices: true,
+            })}
           />
           <CopyBlock
             title="Список материалов (без цен)"
-            text={buildOrderText({ supplierName: supplier?.name ?? order.supplier_id, order, materialById, includePrices: false })}
+            text={buildOrderText({
+              supplierName: supplier?.name ?? order.supplier_id,
+              order,
+              materialById,
+              colorChoice: projectColorChoice,
+              includePrices: false,
+            })}
           />
           <CopyBlock
             title="Список материалов (с целевыми ценами)"
-            text={buildTargetPriceOrderText({ supplierName: supplier?.name ?? order.supplier_id, order, materialById })}
+            text={buildTargetPriceOrderText({
+              supplierName: supplier?.name ?? order.supplier_id,
+              order,
+              materialById,
+              colorChoice: projectColorChoice,
+            })}
           />
         </div>
       </div>
@@ -407,11 +437,13 @@ function buildOrderText({
   supplierName,
   order,
   materialById,
+  colorChoice,
   includePrices,
 }: {
   supplierName: string;
   order: Order;
   materialById: Map<string, Material>;
+  colorChoice: string | null;
   includePrices: boolean;
 }): string {
   const lines: string[] = [`Order for ${supplierName}`, ''];
@@ -423,7 +455,11 @@ function buildOrderText({
 
   includedItems.forEach((item, index) => {
     const material = materialById.get(item.material_id);
-    const name = material?.canonical_name ?? item.material_id;
+    // ADR-0031 п.5: this is a supplier-facing document, so the color
+    // ambiguity ("(White/Bronze)") must be resolved to the project's single
+    // chosen color before it goes out. Falls back to canonical_name as-is
+    // via resolveMaterialName when the material isn't loaded yet.
+    const name = material ? resolveMaterialName(material, colorChoice) : item.material_id;
     const unit = material?.unit ?? '';
     lines.push(`${index + 1}. ${name}`);
     lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
@@ -468,10 +504,12 @@ function buildTargetPriceOrderText({
   supplierName,
   order,
   materialById,
+  colorChoice,
 }: {
   supplierName: string;
   order: Order;
   materialById: Map<string, Material>;
+  colorChoice: string | null;
 }): string {
   const lines: string[] = [`Order for ${supplierName}`, ''];
 
@@ -482,7 +520,9 @@ function buildTargetPriceOrderText({
   let goodsTotal = 0;
   includedItems.forEach((item, index) => {
     const material = materialById.get(item.material_id);
-    const name = material?.canonical_name ?? item.material_id;
+    // Same resolution as buildOrderText — one shared function, not a second
+    // ad hoc parse of canonical_name. See ADR-0031 п.4/п.5.
+    const name = material ? resolveMaterialName(material, colorChoice) : item.material_id;
     const unit = material?.unit ?? '';
     const targetPrice = item.target_price as number;
     const lineTotal = targetPrice * item.quantity;

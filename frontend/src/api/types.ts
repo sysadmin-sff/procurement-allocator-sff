@@ -132,6 +132,13 @@ export interface Material {
   category: string | null;
   unit: string;
   attributes: Record<string, unknown>;
+  /** Colors available for this material at the same price, extracted from
+   * canonical_name at import time — null/empty means no color choice
+   * applies. See ADR-0031 п.1. */
+  color_options?: string[] | null;
+  /** Exact substring in canonical_name to replace when resolving a color
+   * choice — see resolve_material_name in ../lib/materialNaming. ADR-0031 п.4. */
+  color_fragment?: string | null;
 }
 
 export interface MaterialCreate {
@@ -183,6 +190,10 @@ export interface Project {
   created_by: string | null;
   status: ProjectStatus;
   created_at: string;
+  /** Single color for the whole project's color-choice materials — null
+   * means not chosen yet. Editable any time before order generation. See
+   * ADR-0031 п.2. */
+  color_choice?: string | null;
 }
 
 export interface ProjectCreate {

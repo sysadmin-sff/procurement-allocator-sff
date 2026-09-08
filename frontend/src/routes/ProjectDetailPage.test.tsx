@@ -14,6 +14,7 @@ vi.mock('../api/projects', () => ({
     list: vi.fn(),
     create: vi.fn(),
     get: vi.fn(),
+    updateProject: vi.fn(),
     addItem: vi.fn(),
     updateItem: vi.fn(),
     removeItem: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('../api/orders', () => ({
 }));
 
 const getMock = vi.mocked(projectsApi.get);
+const updateProjectMock = vi.mocked(projectsApi.updateProject);
 const addItemMock = vi.mocked(projectsApi.addItem);
 const updateItemMock = vi.mocked(projectsApi.updateItem);
 const removeItemMock = vi.mocked(projectsApi.removeItem);
@@ -101,6 +103,7 @@ function renderPage() {
 describe('ProjectDetailPage', () => {
   beforeEach(() => {
     getMock.mockReset();
+    updateProjectMock.mockReset();
     addItemMock.mockReset();
     updateItemMock.mockReset();
     removeItemMock.mockReset();
@@ -535,5 +538,69 @@ describe('ProjectDetailPage', () => {
 
     const categoryHeaders = screen.getAllByText(/^(Сетка|Без категории)$/);
     expect(categoryHeaders.map((el) => el.textContent)).toEqual(['Сетка', 'Без категории']);
+  });
+
+  describe('color_choice selector (ADR-0031 §2)', () => {
+    it('shows "Не выбран" when color_choice is null', async () => {
+      const project: ProjectWithItems = {
+        id: 'proj-1',
+        title: 'Pool cage — Bayshore Rd',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-17T00:00:00Z',
+        color_choice: null,
+        items: [],
+        latest_allocation_run: null,
+      };
+      getMock.mockResolvedValue(project);
+
+      renderPage();
+
+      const select = await screen.findByRole('combobox', { name: /Цвет проекта/ });
+      expect((select as HTMLSelectElement).value).toBe('');
+    });
+
+    it('saves a color choice via PATCH and reflects it in the select immediately', async () => {
+      const project: ProjectWithItems = {
+        id: 'proj-1',
+        title: 'Pool cage — Bayshore Rd',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-17T00:00:00Z',
+        color_choice: null,
+        items: [],
+        latest_allocation_run: null,
+      };
+      getMock.mockResolvedValue(project);
+      updateProjectMock.mockResolvedValue({ ...project, color_choice: 'White' });
+
+      renderPage();
+
+      const select = await screen.findByRole('combobox', { name: /Цвет проекта/ });
+      const user = userEvent.setup();
+      await user.selectOptions(select, 'White');
+
+      expect(updateProjectMock).toHaveBeenCalledWith('proj-1', project.title, 'White');
+      expect((select as HTMLSelectElement).value).toBe('White');
+    });
+
+    it('shows the already-selected color after a reload (persisted state)', async () => {
+      const project: ProjectWithItems = {
+        id: 'proj-1',
+        title: 'Pool cage — Bayshore Rd',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-17T00:00:00Z',
+        color_choice: 'Bronze',
+        items: [],
+        latest_allocation_run: null,
+      };
+      getMock.mockResolvedValue(project);
+
+      renderPage();
+
+      const select = await screen.findByRole('combobox', { name: /Цвет проекта/ });
+      expect((select as HTMLSelectElement).value).toBe('Bronze');
+    });
   });
 });

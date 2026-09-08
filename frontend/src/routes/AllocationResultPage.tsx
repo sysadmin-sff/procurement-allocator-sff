@@ -21,6 +21,7 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { OrderDraftConflictModal } from '../components/OrderDraftConflictModal';
+import { hasColorChoiceMaterial } from '../lib/colors';
 import styles from './allocation-result/AllocationResult.module.css';
 
 function isOrderDraftConflict(err: unknown): err is ApiError & { body: OrderDraftConflict } {
@@ -165,6 +166,13 @@ function AllocationResultOk({
   const [creatingOrders, setCreatingOrders] = useState(false);
   const [createOrdersError, setCreateOrdersError] = useState<unknown>(null);
   const [draftConflict, setDraftConflict] = useState<OrderDraftConflict | null>(null);
+
+  // UX mirror of the backend's hard block (ADR-0031 п.3) — the backend still
+  // validates at order creation regardless, this is only so the employee
+  // sees why the button is disabled before clicking it.
+  const needsColorChoice =
+    hasColorChoiceMaterial(run.lines.map((l) => materialById.get(l.material_id))) &&
+    project.color_choice == null;
 
   async function handleOverride(lineId: string, supplierId: string) {
     setOverrideError(null);
@@ -381,7 +389,8 @@ function AllocationResultOk({
           </Button>
           <Button
             variant="primary"
-            disabled={creatingOrders}
+            disabled={creatingOrders || needsColorChoice}
+            title={needsColorChoice ? 'Выберите цвет проекта, чтобы продолжить' : undefined}
             onClick={() => void handleCreateOrders()}
           >
             {creatingOrders ? 'Создаём ордера…' : 'Подтвердить и создать ордера'}

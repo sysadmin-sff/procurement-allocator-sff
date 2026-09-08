@@ -22,12 +22,21 @@ class Material(UUIDPKMixin, Base):
     unit: Mapped[str] = mapped_column(String(20), nullable=False)
     attributes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     """диаметр, материал, класс и т.д. — для будущего фасетного поиска"""
-    color_options: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    color_options: Mapped[list[str] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
     """Цвета, доступные для этого материала без изменения цены — извлечены
     из canonical_name при импорте, не пересчитываются на чтении. NULL или
     пустой список = материал не имеет цветового выбора. Список из ровно
     одного элемента отличается от NULL семантически, хотя для текущего
-    каталога не встречается. См. ADR-0031."""
+    каталога не встречается. См. ADR-0031.
+
+    none_as_null=True: without it, SQLAlchemy's JSON type writes the JSON
+    literal null for an explicitly-assigned Python None (distinct from SQL
+    NULL at the storage level), which would silently break every
+    `color_options IS NULL` filter (backfill script, create_orders_for_run's
+    guard) for any material that ever had None assigned directly rather than
+    left untouched at its column default."""
     color_fragment: Mapped[str | None] = mapped_column(String(50), nullable=True)
     """Точная подстрока в canonical_name, подлежащая замене при разрешении
     цвета (см. resolve_material_name) — например "(White/Bronze)" или

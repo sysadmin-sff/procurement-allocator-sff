@@ -293,7 +293,7 @@ def test_set_order_item_fields_sets_received_price_independent_of_confirmed(
     orders = create_orders_for_run(session, project.id, run.id)
     item_id = orders[0].items[0].id
 
-    item = set_order_item_fields(session, orders[0].id, item_id, received_price=4.75)
+    item, _ = set_order_item_fields(session, orders[0].id, item_id, received_price=4.75)
 
     assert float(item.received_price) == 4.75
     assert item.confirmed_price is None
@@ -315,7 +315,7 @@ def test_set_order_item_fields_confirmed_price_allowed_without_received_price(
     orders = create_orders_for_run(session, project.id, run.id)
     item_id = orders[0].items[0].id
 
-    item = set_order_item_fields(session, orders[0].id, item_id, confirmed_price=5.00)
+    item, _ = set_order_item_fields(session, orders[0].id, item_id, confirmed_price=5.00)
 
     assert item.received_price is None
     assert float(item.confirmed_price) == 5.00
@@ -334,13 +334,13 @@ def test_set_order_item_fields_declined_stamps_and_clears_declined_at(
     orders = create_orders_for_run(session, project.id, run.id)
     item_id = orders[0].items[0].id
 
-    declined = set_order_item_fields(
+    declined, _ = set_order_item_fields(
         session, orders[0].id, item_id, declined=True, decline_reason="нет в наличии"
     )
     assert declined.declined_at is not None
     assert declined.decline_reason == "нет в наличии"
 
-    undeclined = set_order_item_fields(session, orders[0].id, item_id, declined=False)
+    undeclined, _ = set_order_item_fields(session, orders[0].id, item_id, declined=False)
     assert undeclined.declined_at is None
     assert undeclined.decline_reason is None
 
@@ -361,7 +361,7 @@ def test_set_order_item_fields_declined_coexists_with_received_and_confirmed_pri
     item_id = orders[0].items[0].id
 
     set_order_item_fields(session, orders[0].id, item_id, received_price=6.50)
-    item = set_order_item_fields(
+    item, _ = set_order_item_fields(
         session, orders[0].id, item_id, declined=True, decline_reason="снят с производства"
     )
 
@@ -383,7 +383,7 @@ def test_set_order_item_fields_omitted_field_leaves_existing_value_untouched(
 
     set_order_item_fields(session, orders[0].id, item_id, received_price=4.75)
     # Second call only touches confirmed_price; received_price must survive.
-    item = set_order_item_fields(session, orders[0].id, item_id, confirmed_price=5.00)
+    item, _ = set_order_item_fields(session, orders[0].id, item_id, confirmed_price=5.00)
 
     assert float(item.received_price) == 4.75
     assert float(item.confirmed_price) == 5.00
@@ -814,7 +814,7 @@ def test_patch_target_price_does_not_touch_other_fields(
     set_order_item_fields(
         session, orders[0].id, item_id, declined=True, decline_reason="торгуемся"
     )
-    item = set_order_item_fields(session, orders[0].id, item_id, target_price=4.60)
+    item, _ = set_order_item_fields(session, orders[0].id, item_id, target_price=4.60)
 
     assert float(item.target_price) == 4.60
     assert float(item.received_price) == 4.75
@@ -836,7 +836,7 @@ def test_patch_target_price_null_clears_field(
     item_id = orders[0].items[0].id
 
     set_order_item_fields(session, orders[0].id, item_id, target_price=4.60)
-    item = set_order_item_fields(session, orders[0].id, item_id, target_price=None)
+    item, _ = set_order_item_fields(session, orders[0].id, item_id, target_price=None)
 
     assert item.target_price is None
 

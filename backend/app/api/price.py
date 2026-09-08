@@ -21,6 +21,67 @@ def _active_price_query(db: Session, material_id: uuid.UUID, supplier_id: uuid.U
     )
 
 
+def version_price(
+    db: Session,
+    *,
+    material_id: uuid.UUID,
+    supplier_id: uuid.UUID,
+    price: float,
+    currency: str | None = None,
+    availability: int | None = None,
+    min_order_qty: int | None = None,
+    source_import_id: uuid.UUID | None = None,
+    created_by_user_id: uuid.UUID | None = None,
+    source_order_item_id: uuid.UUID | None = None,
+    valid_from: datetime.date | None = None,
+    valid_to: datetime.date | None = None,
+) -> Price:
+    """Versioned write for (material_id, supplier_id): closes the current
+    active row (valid_to = today) if one exists and creates a new active
+    row with valid_from = today, inheriting currency/availability/
+    min_order_qty/source_import_id from the closed row for any of those not
+    explicitly passed. If no active row exists, creates directly without
+    attempting to close anything — see ADR-0030 п.2/п.5.
+
+    Extracted from update_price (the PUT /prices/{id} route, which still
+    owns the price_id -> (material_id, supplier_id) resolution and HTTP
+    concerns) so order.py's confirmed-price-divergence flow can reuse the
+    same versioning logic without duplicating it. created_by_user_id/
+    source_order_item_id are the ADR-0030 §6 audit columns — update_price
+    never passes them (stays NULL for the admin flow, an explicit decision,
+    not an omission)."""
+    existing = _active_price_query(db, material_id, supplier_id).first()
+
+    if existing is not None:
+        existing.valid_to = datetime.date.today()
+        currency = existing.currency if currency is None else currency
+        availability = existing.availability if availability is None else availability
+        min_order_qty = existing.min_order_qty if min_order_qty is None else min_order_qty
+        source_import_id = (
+            existing.source_import_id if source_import_id is None else source_import_id
+        )
+    else:
+        currency = "USD" if currency is None else currency
+
+    new_price = Price(
+        material_id=material_id,
+        supplier_id=supplier_id,
+        price=price,
+        currency=currency,
+        availability=availability,
+        min_order_qty=min_order_qty,
+        valid_from=valid_from if valid_from is not None else datetime.date.today(),
+        valid_to=valid_to,
+        source_import_id=source_import_id,
+        created_by_user_id=created_by_user_id,
+        source_order_item_id=source_order_item_id,
+    )
+    db.add(new_price)
+    db.commit()
+    db.refresh(new_price)
+    return new_price
+
+
 @router.post("", response_model=PriceOut, status_code=201)
 def create_price(payload: PriceCreate, db: Session = Depends(get_db)) -> Price:
     if db.get(Material, payload.material_id) is None:
@@ -84,10 +145,13 @@ def get_price(price_id: uuid.UUID, db: Session = Depends(get_db)) -> Price:
 def update_price(
     price_id: uuid.UUID, payload: PriceUpdate, db: Session = Depends(get_db)
 ) -> Price:
-    """Версионированное обновление: закрывает текущую строку (valid_to = сегодня)
-    и создаёт новую с обновлёнными полями — Price неизменяем по докстрингу модели.
-    PATCH-семантика: поля, отсутствующие в payload, наследуются от закрываемой
-    строки, а не сбрасываются на дефолт/None."""
+    """Тонкая обёртка над version_price — резолвит price_id в
+    (material_id, supplier_id) и делегирует версионирование. HTTP-контракт
+    не меняется: PATCH-семантика (поля, отсутствующие в payload,
+    наследуются от закрываемой строки), 409 при конфликте активной записи,
+    404 при неизвестном price_id — см. ADR-0030 п.5. created_by_user_id/
+    source_order_item_id не передаются — остаются NULL для admin-флоу,
+    явное решение ADR-0030 §6, не пропуск."""
     existing = db.get(Price, price_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Price not found")
@@ -106,29 +170,28 @@ def update_price(
 
     if existing.valid_to is None:
         existing.valid_to = datetime.date.today()
+        db.flush()
 
     fields = payload.model_dump(exclude_unset=True, exclude={"valid_from", "valid_to"})
-    new_price = Price(
-        material_id=existing.material_id,
-        supplier_id=existing.supplier_id,
-        price=fields.get("price", existing.price),
-        currency=fields.get("currency", existing.currency),
-        availability=fields.get("availability", existing.availability),
-        min_order_qty=fields.get("min_order_qty", existing.min_order_qty),
-        valid_from=payload.valid_from,
-        valid_to=payload.valid_to,
-        source_import_id=existing.source_import_id,
-    )
-    db.add(new_price)
     try:
-        db.commit()
+        new_price = version_price(
+            db,
+            material_id=existing.material_id,
+            supplier_id=existing.supplier_id,
+            price=fields.get("price", existing.price),
+            currency=fields.get("currency", existing.currency),
+            availability=fields.get("availability", existing.availability),
+            min_order_qty=fields.get("min_order_qty", existing.min_order_qty),
+            source_import_id=existing.source_import_id,
+            valid_from=payload.valid_from,
+            valid_to=payload.valid_to,
+        )
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(
             status_code=409,
             detail="An active price already exists for this material/supplier pair",
         ) from exc
-    db.refresh(new_price)
     return new_price
 
 

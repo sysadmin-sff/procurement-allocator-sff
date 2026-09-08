@@ -23,6 +23,7 @@ from app.models import (
     Material,
     Order,
     OrderItem,
+    Price,
     Project,
     ProjectItem,
     PurchaseRecord,
@@ -204,6 +205,17 @@ def delete_project(db: Session, project_id: uuid.UUID) -> None:
         o.id for o in db.query(Order.id).filter(Order.project_id == project_id).all()
     ]
     if order_ids:
+        item_ids = [
+            i.id for i in db.query(OrderItem.id).filter(OrderItem.order_id.in_(order_ids)).all()
+        ]
+        if item_ids:
+            # Price.source_order_item_id (ADR-0030 §6) may point at one of
+            # these OrderItem rows — cleared first so the delete below
+            # doesn't violate that FK. Only the audit back-reference is
+            # dropped; the Price row and its created_by_user_id survive.
+            db.query(Price).filter(Price.source_order_item_id.in_(item_ids)).update(
+                {"source_order_item_id": None}, synchronize_session=False
+            )
         db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(
             synchronize_session=False
         )

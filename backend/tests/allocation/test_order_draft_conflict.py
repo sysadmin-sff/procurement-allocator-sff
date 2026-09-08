@@ -174,6 +174,49 @@ def test_replace_drafts_true_deletes_old_and_creates_new(
     assert len(all_orders) == 1
 
 
+def test_replace_drafts_true_deletes_old_draft_whose_item_is_a_price_source(
+    db_session, make_supplier, make_material, make_price, make_project, make_user
+):
+    """ADR-0030 §6: Price.source_order_item_id can point at an OrderItem on
+    a draft Order. If that draft is later superseded via replace_drafts=True,
+    deleting its OrderItem rows must not violate that FK — the Price row
+    (and its audit trail) survives, only the now-dangling back-reference to
+    the deleted OrderItem is cleared."""
+    from app.allocation.order_service import confirm_price_updates, set_order_item_fields
+    from app.models import Price
+
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+    first_orders = create_orders_for_run(session, project.id, run.id)
+    old_order_id = first_orders[0].id
+    old_item_id = first_orders[0].items[0].id
+    user = make_user(email="replace-drafts-price-source@screen-factory-florida.com")
+
+    set_order_item_fields(session, old_order_id, old_item_id, confirmed_price=6.00)
+    results = confirm_price_updates(
+        session,
+        order_id=old_order_id,
+        selections=[{"order_item_id": old_item_id, "apply": True}],
+        current_user_id=user.id,
+    )
+    assert results[0].applied is True
+    price_id = results[0].price_id
+    assert session.get(Price, price_id).source_order_item_id == old_item_id
+
+    run2 = run_allocation(session, project.id)
+    new_orders = create_orders_for_run(session, project.id, run2.id, replace_drafts=True)
+
+    assert len(new_orders) == 1
+    assert session.get(Order, old_order_id) is None
+    survived_price = session.get(Price, price_id)
+    assert survived_price is not None
+    assert float(survived_price.price) == 6.00
+    assert survived_price.source_order_item_id is None
+
+
 def test_replace_drafts_only_touches_conflicting_supplier(
     db_session, make_supplier, make_material, make_price, make_project
 ):

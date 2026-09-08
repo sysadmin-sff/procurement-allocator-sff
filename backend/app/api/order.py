@@ -10,7 +10,9 @@ from app.allocation.order_service import (
     MaterialNotInLatestRunError,
     MultipleDraftOrdersConflictError,
     OrderItemNotFoundError,
+    PriceDivergence,
     RunNotFoundError,
+    confirm_price_updates,
     create_orders_for_run,
     find_replacement_candidates,
     order_expected_totals,
@@ -21,12 +23,16 @@ from app.allocation.order_service import (
 )
 from app.allocation.service import InvalidOverrideSupplierError
 from app.api.schemas.order import (
+    ConfirmPriceUpdatesIn,
+    ConfirmPriceUpdatesOut,
     CreateOrdersIn,
     FindReplacementOut,
     OrderDraftConflictOut,
     OrderItemConfirmIn,
     OrderItemOut,
     OrderOut,
+    PriceDivergenceOut,
+    PriceUpdateResultOut,
     ReplaceAndOrderIn,
 )
 from app.api.schemas.order_response_parser import (
@@ -54,7 +60,9 @@ memory for the duration of the OpenAI call (ADR-0018 §7), never written to
 disk, so this bound also caps peak request memory."""
 
 
-def _to_order_item_out(db: Session, item) -> OrderItemOut:
+def _to_order_item_out(
+    db: Session, item, divergence: PriceDivergence | None = None
+) -> OrderItemOut:
     delta, delta_pct = price_delta(item.quoted_price, item.confirmed_price)
     received_delta, received_delta_pct = price_delta(item.quoted_price, item.received_price)
     replaced_supplier_id, replaced_supplier_name, replacement_draft_order_id = (
@@ -79,6 +87,17 @@ def _to_order_item_out(db: Session, item) -> OrderItemOut:
         replaced_by_supplier_id=replaced_supplier_id,
         replaced_by_supplier_name=replaced_supplier_name,
         replacement_draft_order_id=replacement_draft_order_id,
+        price_divergence=(
+            PriceDivergenceOut(
+                action=divergence.action,
+                material_id=divergence.material_id,
+                supplier_id=divergence.supplier_id,
+                current_price=divergence.current_price,
+                confirmed_price=divergence.confirmed_price,
+            )
+            if divergence is not None
+            else None
+        ),
     )
 
 
@@ -155,6 +174,7 @@ def patch_order_item(
     item_id: uuid.UUID,
     payload: OrderItemConfirmIn,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> OrderItemOut:
     if db.get(Order, order_id) is None:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -173,10 +193,48 @@ def patch_order_item(
     }
 
     try:
-        item = set_order_item_fields(db, order_id, item_id, **kwargs)
+        item, divergence = set_order_item_fields(db, order_id, item_id, **kwargs)
     except OrderItemNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Order item not found") from exc
-    return _to_order_item_out(db, item)
+    return _to_order_item_out(db, item, divergence)
+
+
+@router.post(
+    "/orders/{order_id}/confirm-price-updates",
+    response_model=ConfirmPriceUpdatesOut,
+)
+def confirm_price_updates_endpoint(
+    order_id: uuid.UUID,
+    payload: ConfirmPriceUpdatesIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ConfirmPriceUpdatesOut:
+    """Batch confirmation screen submit — see ADR-0030 п.4.3. Not a new
+    admin-only surface: this endpoint lives in order.py under the router's
+    existing get_current_user dependency (any role), the same narrow
+    exception documented in ADR-0030 §6 — price.py (/prices/**) stays
+    admin-only in full, untouched by this endpoint."""
+    if db.get(Order, order_id) is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    results = confirm_price_updates(
+        db,
+        order_id=order_id,
+        selections=[s.model_dump() for s in payload.selections],
+        current_user_id=current_user.id,
+    )
+    return ConfirmPriceUpdatesOut(
+        results=[
+            PriceUpdateResultOut(
+                order_item_id=r.order_item_id,
+                applied=r.applied,
+                price_id=r.price_id,
+                action=r.action,
+                error=r.error,
+            )
+            for r in results
+        ]
+    )
 
 
 @router.get("/materials/{material_id}/prices", response_model=list[PriceOut])

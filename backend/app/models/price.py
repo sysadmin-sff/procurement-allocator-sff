@@ -10,8 +10,10 @@ from app.models.base import Base, UUIDPKMixin
 
 if TYPE_CHECKING:
     from app.models.material import Material
+    from app.models.order import OrderItem
     from app.models.price_list import PriceListImport
     from app.models.supplier import Supplier
+    from app.models.user import User
 
 
 class Price(UUIDPKMixin, Base):
@@ -33,7 +35,24 @@ class Price(UUIDPKMixin, Base):
     source_import_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("price_list_imports.id")
     )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id")
+    )
+    """Кто создал эту версию записи через узкое исключение ADR-0030
+    (order.py -> version_price). NULL для версий, созданных через
+    admin-only /prices (update_price не передаёт этот параметр — явное
+    решение ADR-0030 §6, не пропуск)."""
+    source_order_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("order_items.id")
+    )
+    """OrderItem, чей confirmed_price породил эту версию — только для
+    версий, созданных через ADR-0030 confirm-price-updates. NULL для всех
+    версий, созданных вручную через /prices."""
 
     material: Mapped["Material"] = relationship(back_populates="prices")
     supplier: Mapped["Supplier"] = relationship(back_populates="prices")
     source_import: Mapped["PriceListImport | None"] = relationship(back_populates="prices")
+    created_by: Mapped["User | None"] = relationship(foreign_keys=[created_by_user_id])
+    source_order_item: Mapped["OrderItem | None"] = relationship(
+        foreign_keys=[source_order_item_id]
+    )

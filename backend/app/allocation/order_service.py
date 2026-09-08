@@ -10,13 +10,16 @@ does not block a later manual override (ADR-0006) — see ADR-0007 п.2.
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.allocation.service import InvalidOverrideSupplierError, override_allocation_line_supplier
 from app.allocation.tax import calculate_tax_dollars
+from app.api.price import version_price
 from app.models import (
     AllocationLine,
     AllocationRun,
@@ -402,10 +405,24 @@ def _delete_orders(db: Session, orders: list[Order]) -> None:
     """Explicit application-level cascade: order_items.order_id has no
     ON DELETE CASCADE (verified against the schema — see ADR-0009
     "Контекст"), so OrderItem rows must be deleted before their Order, same
-    pattern as delete_project() in app/api/project.py. See ADR-0012 п.2."""
+    pattern as delete_project() in app/api/project.py. See ADR-0012 п.2.
+
+    Price.source_order_item_id (ADR-0030 §6) can point at one of these
+    OrderItem rows if a confirmed-price update was ever confirmed from one
+    of them — nulled out first so the delete doesn't violate that FK. This
+    only strips the audit trail's back-reference to the (now-deleted)
+    OrderItem; the Price row itself, and its created_by_user_id, are
+    untouched."""
     order_ids = [order.id for order in orders]
     if not order_ids:
         return
+    item_ids = [
+        i.id for i in db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).all()
+    ]
+    if item_ids:
+        db.query(Price).filter(Price.source_order_item_id.in_(item_ids)).update(
+            {"source_order_item_id": None}, synchronize_session=False
+        )
     db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(
         synchronize_session=False
     )
@@ -585,6 +602,177 @@ field on this endpoint is independently optional, same semantics
 confirmed_price already had alone. See ADR-0013 п.3."""
 
 
+@dataclass(frozen=True)
+class PriceDivergence:
+    """Result of comparing a newly-written confirmed_price against the
+    active Price for (material_id, order.supplier_id) — see ADR-0030 п.1/
+    п.2. Returned by set_order_item_fields only when confirmed_price was
+    among the passed fields (_UNSET otherwise excludes it from comparison)
+    and lands in case (а) or (в); case (б) (match) and calls without
+    confirmed_price in the payload give None, not a PriceDivergence with
+    action=None — absence of a divergence does not need the shape of a
+    "result", that is what absence of a result already means."""
+
+    action: Literal["update", "create"]
+    """"update" — case (а), an active Price exists and differs.
+    "create" — case (в), no active Price exists for this pair at all."""
+    order_item_id: uuid.UUID
+    material_id: uuid.UUID
+    supplier_id: uuid.UUID
+    current_price: float | None
+    """The active Price's price at comparison time. None for action="create"
+    (no active row, nothing to compare against) — not 0, the same "no basis
+    for comparison" logic (ADR-0007 п.1) already applied to price_delta."""
+    confirmed_price: float
+    """The value just written to OrderItem.confirmed_price — the proposed
+    new Price value. Not Optional: a PriceDivergence is never created when
+    confirmed_price was not passed, or was explicitly cleared (None), by
+    this PATCH — clearing confirmed_price cannot "propose" updating
+    anything."""
+
+
+def _active_price_for_pair(
+    db: Session, material_id: uuid.UUID, supplier_id: uuid.UUID
+) -> Price | None:
+    return (
+        db.query(Price)
+        .filter(
+            Price.material_id == material_id,
+            Price.supplier_id == supplier_id,
+            Price.valid_to.is_(None),
+        )
+        .first()
+    )
+
+
+def _detect_price_divergence(
+    db: Session, item: OrderItem, order_supplier_id: uuid.UUID
+) -> PriceDivergence | None:
+    if item.confirmed_price is None:
+        return None
+
+    active_price = _active_price_for_pair(db, item.material_id, order_supplier_id)
+    confirmed = float(item.confirmed_price)
+
+    if active_price is None:
+        return PriceDivergence(
+            action="create",
+            order_item_id=item.id,
+            material_id=item.material_id,
+            supplier_id=order_supplier_id,
+            current_price=None,
+            confirmed_price=confirmed,
+        )
+
+    if float(active_price.price) == confirmed:
+        return None
+
+    return PriceDivergence(
+        action="update",
+        order_item_id=item.id,
+        material_id=item.material_id,
+        supplier_id=order_supplier_id,
+        current_price=float(active_price.price),
+        confirmed_price=confirmed,
+    )
+
+
+@dataclass(frozen=True)
+class PriceUpdateResult:
+    """Result of processing one row of POST .../confirm-price-updates — see
+    ADR-0030 п.4.3. Mirrors PriceUpdateResultOut (app/api/schemas/order.py)
+    one-to-one; kept as a separate service-layer dataclass rather than
+    constructing the Pydantic schema here, same separation as PriceDivergence
+    (service returns typed data, the API layer serializes it)."""
+
+    order_item_id: uuid.UUID
+    applied: bool
+    price_id: uuid.UUID | None = None
+    action: Literal["update", "create"] | None = None
+    error: str | None = None
+
+
+def confirm_price_updates(
+    db: Session,
+    *,
+    order_id: uuid.UUID,
+    selections: list[dict],
+    current_user_id: uuid.UUID | None,
+) -> list[PriceUpdateResult]:
+    """POST /orders/{order_id}/confirm-price-updates — see ADR-0030 п.4.3.
+
+    Each selection is {"order_item_id": UUID, "apply": bool}. For every
+    selection with apply=True: revalidates by re-reading the current
+    OrderItem.confirmed_price and the current active Price for
+    (material_id, order.supplier_id) — never trusting current_price the
+    client may have shown earlier — and only calls version_price if a
+    divergence still exists. If confirmed_price is now None (cleared by
+    another PATCH since detection) or the active Price now already matches
+    it (someone else already applied the same update), the row errors out
+    instead of being applied.
+
+    Rows with apply=False are echoed back with applied=False, action=None,
+    error=None — a deliberate skip, not a failure.
+
+    Row processing is independent, not one transaction for the whole batch:
+    each successful row is committed (via version_price, which commits
+    internally) on its own, and a failing row does not roll back or block
+    rows processed before or after it in the same call — same precedent as
+    ADR-0018 §4's batch-apply loop.
+    """
+    results: list[PriceUpdateResult] = []
+
+    for selection in selections:
+        order_item_id = selection["order_item_id"]
+        apply = selection["apply"]
+
+        if not apply:
+            results.append(PriceUpdateResult(order_item_id=order_item_id, applied=False))
+            continue
+
+        item = db.get(OrderItem, order_item_id)
+        if item is None or item.order_id != order_id:
+            results.append(
+                PriceUpdateResult(
+                    order_item_id=order_item_id,
+                    applied=False,
+                    error="Order item not found in this order",
+                )
+            )
+            continue
+
+        order = db.get(Order, order_id)
+        divergence = _detect_price_divergence(db, item, order.supplier_id)
+        if divergence is None:
+            results.append(
+                PriceUpdateResult(
+                    order_item_id=order_item_id,
+                    applied=False,
+                    error="stale: confirmed_price changed or price already matches",
+                )
+            )
+            continue
+
+        new_price = version_price(
+            db,
+            material_id=divergence.material_id,
+            supplier_id=divergence.supplier_id,
+            price=divergence.confirmed_price,
+            created_by_user_id=current_user_id,
+            source_order_item_id=order_item_id,
+        )
+        results.append(
+            PriceUpdateResult(
+                order_item_id=order_item_id,
+                applied=True,
+                price_id=new_price.id,
+                action=divergence.action,
+            )
+        )
+
+    return results
+
+
 def set_order_item_fields(
     db: Session,
     order_id: uuid.UUID,
@@ -595,15 +783,22 @@ def set_order_item_fields(
     target_price: float | None = _UNSET,
     declined: bool | None = _UNSET,
     decline_reason: str | None = _UNSET,
-) -> OrderItem:
-    """PATCH .../items/{item_id} — see ADR-0007 п.3 and ADR-0013 п.3. Each
-    keyword is independently optional: omit it (leave at the _UNSET
-    default) to leave that field untouched, or pass None explicitly to
-    clear it. declined=True stamps declined_at=now(); declined=False clears
-    declined_at and decline_reason together. No field here validates
+) -> tuple[OrderItem, PriceDivergence | None]:
+    """PATCH .../items/{item_id} — see ADR-0007 п.3, ADR-0013 п.3, ADR-0030
+    п.2. Each keyword is independently optional: omit it (leave at the
+    _UNSET default) to leave that field untouched, or pass None explicitly
+    to clear it. declined=True stamps declined_at=now(); declined=False
+    clears declined_at and decline_reason together. No field here validates
     against any other — declined_at may coexist with received_price/
     confirmed_price (ADR-0013 п.2), and confirmed_price may be set without
-    received_price ever being set (ADR-0013 п.1)."""
+    received_price ever being set (ADR-0013 п.1).
+
+    Returns (item, divergence): divergence is a PriceDivergence only when
+    confirmed_price was among the passed fields (not _UNSET) and the write
+    resulted in a non-None confirmed_price that differs from — or has no —
+    active Price for (material_id, order.supplier_id). received_price/
+    target_price never participate in this comparison (ADR-0030 п.1).
+    """
     item = db.get(OrderItem, item_id)
     if item is None or item.order_id != order_id:
         raise OrderItemNotFoundError(order_id, item_id)
@@ -630,4 +825,10 @@ def set_order_item_fields(
 
     db.commit()
     db.refresh(item)
-    return item
+
+    divergence = None
+    if confirmed_price is not _UNSET:
+        order = db.get(Order, order_id)
+        divergence = _detect_price_divergence(db, item, order.supplier_id)
+
+    return item, divergence

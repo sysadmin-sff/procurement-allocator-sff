@@ -13,8 +13,24 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class PriceDivergenceOut(BaseModel):
+    """Mirrors app.allocation.order_service.PriceDivergence — see ADR-0030
+    п.2/п.4.2. Present on OrderItemOut only when the PATCH that produced
+    this response set confirmed_price and the result diverged from (or had
+    no) active Price for (material_id, order.supplier_id); None otherwise.
+    Single-PATCH consumers (OrderDetailPage inline edit) use this to show
+    the one-row confirmation popup without a follow-up request."""
+
+    action: Literal["update", "create"]
+    material_id: uuid.UUID
+    supplier_id: uuid.UUID
+    current_price: float | None
+    confirmed_price: float
 
 
 class OrderItemOut(BaseModel):
@@ -49,6 +65,11 @@ class OrderItemOut(BaseModel):
     replacement_draft_order_id: uuid.UUID | None = None
     """Non-null if replaced_by_supplier_id has an existing draft Order in
     this project (reuses ADR-0012's conflict check) — see ADR-0014 п.3."""
+    price_divergence: PriceDivergenceOut | None = None
+    """Set only on the response to a PATCH that wrote confirmed_price and
+    triggered a divergence (ADR-0030 п.2) — never populated on a plain GET,
+    since a divergence is a one-shot signal about *this* write, not a
+    standing property of the row. See ADR-0030 п.4.2."""
 
 
 class OrderItemConfirmIn(BaseModel):
@@ -175,3 +196,50 @@ class ReplaceAndOrderIn(BaseModel):
     FindReplacementOut.candidates from the prior find-replacement call)."""
 
     supplier_id: uuid.UUID
+
+
+class PriceUpdateSelectionIn(BaseModel):
+    """One row selection on the batch confirmation screen — see ADR-0030
+    п.4. order_item_id is expected to be one that had a PriceDivergence
+    detected during this Order's batch confirmed_price application session;
+    the server does not accept an arbitrary order_item_id that never
+    diverged (see confirm_price_updates validation)."""
+
+    order_item_id: uuid.UUID
+    apply: bool
+
+
+class ConfirmPriceUpdatesIn(BaseModel):
+    """Body for POST /orders/{order_id}/confirm-price-updates. The full list
+    of rows shown on the batch confirmation screen (checked and unchecked) —
+    not only apply=True. The server only processes apply=True rows; the rest
+    are accepted for symmetry with what the user saw but not required (the
+    frontend may send only apply=True rows — both are valid, the server does
+    not verify completeness of the set)."""
+
+    selections: list[PriceUpdateSelectionIn]
+
+
+class PriceUpdateResultOut(BaseModel):
+    """Result of processing one row — both successful and declined
+    (apply=False) — so the frontend can render the full outcome without a
+    follow-up GET Order."""
+
+    order_item_id: uuid.UUID
+    applied: bool
+    """False for rows with apply=False in the request payload — not an
+    error, a deliberate skip."""
+    price_id: uuid.UUID | None = None
+    """id of the new Price version — set only when applied=True."""
+    action: Literal["update", "create"] | None = None
+    """Echoes PriceDivergence.action for this row — None when applied=False."""
+    error: str | None = None
+    """Set if order_item_id was not found in this Order, or the
+    confirmed_price/active Price changed since the divergence was detected
+    (staleness revalidation, ADR-0030 п.4.3) — applied stays False, the rest
+    of the request's rows are processed independently (partial success is
+    expected, not an all-or-nothing transaction over the whole list)."""
+
+
+class ConfirmPriceUpdatesOut(BaseModel):
+    results: list[PriceUpdateResultOut]

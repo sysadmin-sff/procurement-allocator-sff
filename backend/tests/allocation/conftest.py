@@ -46,6 +46,16 @@ def db_session():
                 o.id for o in session.query(Order).filter_by(project_id=project_id).all()
             ]
             if order_ids:
+                item_ids = [
+                    i.id
+                    for i in session.query(OrderItem)
+                    .filter(OrderItem.order_id.in_(order_ids))
+                    .all()
+                ]
+                if item_ids:
+                    session.query(Price).filter(
+                        Price.source_order_item_id.in_(item_ids)
+                    ).update({"source_order_item_id": None}, synchronize_session=False)
                 session.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(
                     synchronize_session=False
                 )

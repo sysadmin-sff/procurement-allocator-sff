@@ -9,7 +9,11 @@ import uuid
 
 from fastapi.testclient import TestClient
 
-from app.allocation.order_service import create_orders_for_run
+from app.allocation.order_service import (
+    confirm_price_updates,
+    create_orders_for_run,
+    set_order_item_fields,
+)
 from app.allocation.service import run_allocation
 from app.main import app
 from app.models import (
@@ -17,6 +21,7 @@ from app.models import (
     AllocationRun,
     Order,
     OrderItem,
+    Price,
     Project,
     ProjectItem,
     PurchaseRecord,
@@ -124,6 +129,50 @@ def test_delete_project_cascades_draft_orders(
     assert response.status_code == 204
     assert session.get(Order, order_id) is None
     assert session.get(OrderItem, item_id) is None
+
+
+def test_delete_project_cascades_draft_order_item_that_is_a_price_source(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0030 §6: Price.source_order_item_id can point at a draft Order's
+    OrderItem. Deleting the project (which cascades to that OrderItem) must
+    not violate that FK — the Price row survives with its
+    source_order_item_id cleared, same fix as _delete_orders (ADR-0012)."""
+    session, project_ids, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 10)])
+    project_id = project.id
+    project_ids.remove(project_id)
+
+    run = run_allocation(session, project_id)
+    orders = create_orders_for_run(session, project_id, run.id)
+    order_id = orders[0].id
+    item_id = orders[0].items[0].id
+    _employee_email_counter[0] += 1
+    user = make_user(
+        email=f"project-deletion-price-source{_employee_email_counter[0]}"
+        "@screen-factory-florida.com"
+    )
+    set_order_item_fields(session, order_id, item_id, confirmed_price=6.00)
+    results = confirm_price_updates(
+        session,
+        order_id=order_id,
+        selections=[{"order_item_id": item_id, "apply": True}],
+        current_user_id=user.id,
+    )
+    price_id = results[0].price_id
+    assert session.get(Price, price_id).source_order_item_id == item_id
+    client = _employee_client(make_user, make_session)
+
+    response = client.delete(f"/projects/{project_id}", headers={"X-CSRF-Token": CSRF})
+
+    assert response.status_code == 204
+    session.expire_all()
+    survived_price = session.get(Price, price_id)
+    assert survived_price is not None
+    assert survived_price.source_order_item_id is None
 
 
 def test_delete_project_cascades_purchase_records(

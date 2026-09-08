@@ -26,6 +26,8 @@ from pathlib import Path
 
 import openpyxl
 
+from app.services.material_naming import parse_color
+
 HEADER_ROW = 1
 FIRST_DATA_ROW = 2
 
@@ -125,6 +127,8 @@ class MaterialRow:
     unit: str
     used_fallback_unit: bool
     row_number: int  # 1-indexed sheet row, for diagnostics
+    color_options: list[str] | None = None
+    color_fragment: str | None = None
 
 
 @dataclass
@@ -189,6 +193,7 @@ def parse_price_matrix(path: Path) -> ParsedWorkbook:
             result.rows_with_fallback_unit.append(description)
 
         sku = _next_sku(current_category, sku_counters)
+        color_result = parse_color(description)
         result.materials.append(
             MaterialRow(
                 internal_sku=sku,
@@ -197,6 +202,8 @@ def parse_price_matrix(path: Path) -> ParsedWorkbook:
                 unit=unit,
                 used_fallback_unit=used_fallback,
                 row_number=row_number,
+                color_options=color_result.color_options if color_result else None,
+                color_fragment=color_result.color_fragment if color_result else None,
             )
         )
 

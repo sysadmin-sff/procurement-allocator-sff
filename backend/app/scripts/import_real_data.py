@@ -153,12 +153,23 @@ def create_suppliers(db) -> dict[str, Supplier]:
 def create_materials(db, materials_rows: list) -> dict[str, Material]:
     materials_by_description: dict[str, Material] = {}
     for row in materials_rows:
+        kwargs = {}
+        # Only pass color_options/color_fragment when actually set — an
+        # explicit None would write a JSON "null" literal instead of SQL
+        # NULL for most rows (see Material.color_options'
+        # none_as_null=True and ADR-0031 п.1), so materials without a color
+        # in their name are created exactly like before this ADR.
+        if row.color_options is not None:
+            kwargs["color_options"] = row.color_options
+        if row.color_fragment is not None:
+            kwargs["color_fragment"] = row.color_fragment
         material = Material(
             internal_sku=row.internal_sku,
             canonical_name=row.description,
             category=row.category,
             unit=row.unit,
             attributes={},
+            **kwargs,
         )
         db.add(material)
         materials_by_description[row.description] = material

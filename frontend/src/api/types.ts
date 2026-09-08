@@ -271,6 +271,10 @@ export interface SupplierAllocationSummary {
   supplier_id: string;
   goods_total: number;
   delivery_fee: number;
+  /** 7% (TAX_RATE) от goods_total, никогда от delivery_fee — см. ADR-0029 §5а. */
+  tax_amount: number;
+  /** goods_total + tax_amount + delivery_fee — см. ADR-0029 §5а. */
+  total_with_tax: number;
   free_shipping_achieved: boolean;
   below_min_order: boolean;
 }
@@ -343,8 +347,14 @@ export interface Order {
   status: string;
   total_amount: number;
   delivery_fee: number;
+  /** 7% (TAX_RATE) от total_amount, снимок на момент создания Order —
+   * nullable, NULL для Order, созданных до ADR-0029. См. ADR-0029 §5б. */
+  tax_amount: number | null;
   /** Derived, non-persistent — computed on GET, see ADR-0026 §1. */
   expected_goods_total: number;
+  /** Пересчитывается от expected_goods_total (после исключения отклонённых
+   * позиций), не читается как снимок tax_amount — см. ADR-0029 §5в. */
+  expected_tax_amount: number;
   expected_delivery_fee: number;
   expected_total: number;
   declined_amount: number;

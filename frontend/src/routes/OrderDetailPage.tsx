@@ -30,6 +30,15 @@ const SIGNIFICANT_PRICE_DELTA_PCT = 10;
  * server computes price_delta_pct, this only decides the highlight threshold
  * for display. See ADR-0007 п.4. */
 
+const TAX_RATE = 0.07;
+/** Mirrors backend/app/allocation/tax.py TAX_RATE — used only for the local,
+ * non-persisted "Ожидается" footer total (see expectedTaxAmountByConfirmed
+ * below), never to recompute any of the Order's own stored/derived money
+ * fields. See ADR-0029. */
+function calculateTax(goodsSubtotal: number): number {
+  return Math.round(goodsSubtotal * TAX_RATE * 100) / 100;
+}
+
 interface LoadedData {
   order: Order;
   materials: Material[];
@@ -159,7 +168,17 @@ export function OrderDetailPage() {
   const expectedGoodsTotalByConfirmed = order.items
     .filter((item) => item.declined_at == null)
     .reduce((sum, item) => sum + (item.confirmed_price ?? item.quoted_price) * item.quantity, 0);
-  const expectedTotalByConfirmed = expectedGoodsTotalByConfirmed + order.expected_delivery_fee;
+  // order.expected_tax_amount is recomputed server-side from
+  // expected_goods_total (quoted_price-based, ADR-0029 §5в) — it doesn't
+  // match this confirmed_price-based goods total, so it can't be reused
+  // here. Same local-recompute allowance already used for the target-price
+  // copy block (ADR-0027 §7г, buildTargetPriceOrderText) — TAX_RATE mirrors
+  // the same backend constant (backend/app/allocation/tax.py), applied only
+  // to this one footer line, not persisted or substituted for any of the
+  // Order's own money fields.
+  const expectedTaxAmountByConfirmed = calculateTax(expectedGoodsTotalByConfirmed);
+  const expectedTotalByConfirmed =
+    expectedGoodsTotalByConfirmed + expectedTaxAmountByConfirmed + order.expected_delivery_fee;
   // Declined items sort to the bottom, keeping their relative order (and the
   // relative order of everything else) intact — Array.prototype.sort is a
   // stable sort per spec, so a single boolean comparator is enough. Purely a
@@ -264,14 +283,17 @@ export function OrderDetailPage() {
             <div className={styles.footerLine}>
               <span className={styles.footerLabel}>Отправлено:</span>{' '}
               <span className={styles.footerTotal}>
-                Товары {formatMoney(order.total_amount)} + доставка {formatMoney(order.delivery_fee)} ={' '}
-                {formatMoney(order.total_amount + order.delivery_fee)}
+                Товары {formatMoney(order.total_amount)} + Налог (7%){' '}
+                {order.tax_amount != null ? formatMoney(order.tax_amount) : '—'} + Доставка{' '}
+                {formatMoney(order.delivery_fee)} ={' '}
+                {formatMoney(order.total_amount + (order.tax_amount ?? 0) + order.delivery_fee)}
               </span>
             </div>
             <div className={styles.footerLine}>
               <span className={styles.footerLabel}>Ожидается:</span>{' '}
               <span className={styles.footerTotal}>
-                Товары {formatMoney(expectedGoodsTotalByConfirmed)} + доставка{' '}
+                Товары {formatMoney(expectedGoodsTotalByConfirmed)} + Налог (7%){' '}
+                {formatMoney(expectedTaxAmountByConfirmed)} + Доставка{' '}
                 {formatMoney(order.expected_delivery_fee)} = {formatMoney(expectedTotalByConfirmed)}
               </span>
             </div>

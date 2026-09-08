@@ -212,6 +212,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -232,6 +234,75 @@ describe('AllocationResultPage', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /Назад к проекту/ }));
     expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
+  });
+
+  it('reads the card total from total_with_tax (not goods_total + delivery_fee) and shows tax as its own line, consistent with the KPI panel (ADR-0029)', async () => {
+    // 3 x $250 material, single supplier, free shipping achieved (delivery
+    // $0) — matches the worked example from the backend report: $750 goods,
+    // $52.50 tax (7%), $0 delivery, $802.50 total.
+    const okRun: AllocationRun = {
+      id: 'run-tax',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      split_categories: [],
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          quantity: 3,
+          unit_price: 250,
+          line_total: 750,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 750,
+          delivery_fee: 0,
+          tax_amount: 52.5,
+          total_with_tax: 802.5,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    pricesListMock.mockResolvedValue([
+      { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 250, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    await screen.findByText(supplierA.name);
+
+    // Tax shown as its own visible breakdown line, not folded silently into
+    // the total — same "не скрывать составляющие" principle already applied
+    // to Товары/Доставка/Итого. This also proves the card total ($802.50)
+    // equals total_with_tax, not the old goods_total + delivery_fee ($750,
+    // since delivery is free/$0).
+    expect(
+      screen.getByText(/Товары: \$750\.00 \+ Доставка: бесплатно \+ Налог \(7%\): \$52\.50 = Итого: \$802\.50/),
+    ).toBeInTheDocument();
+
+    // $802.50 appears exactly twice: the card header's own total figure, and
+    // the KPI panel's grand total — both read from the same backend field,
+    // so a single supplier necessarily keeps them numerically identical.
+    expect(screen.getAllByText('$802.50')).toHaveLength(2);
+
+    // KPI panel shows the tax figure too.
+    expect(screen.getByText('Налог (7%)')).toBeInTheDocument();
+    const kpiTaxLabel = screen.getByText('Налог (7%)');
+    const kpiTaxCell = kpiTaxLabel.parentElement as HTMLElement;
+    expect(within(kpiTaxCell).getByText('$52.50')).toBeInTheDocument();
+    expect(screen.getByText('Итого закупки').parentElement).toHaveTextContent('$802.50');
   });
 
   it('overrides the supplier on a line via the select, then refetches the run', async () => {
@@ -262,6 +333,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -288,6 +361,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-b',
           goods_total: 150,
           delivery_fee: 15,
+          tax_amount: 10.5,
+          total_with_tax: 175.5,
           free_shipping_achieved: false,
           below_min_order: false,
         },
@@ -344,6 +419,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 12,
           delivery_fee: 25,
+          tax_amount: 0.84,
+          total_with_tax: 37.84,
           free_shipping_achieved: false,
           below_min_order: true,
         },
@@ -387,6 +464,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -435,6 +514,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -485,6 +566,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -534,6 +617,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -581,6 +666,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -644,6 +731,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -704,6 +793,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -747,6 +838,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 120,
           delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -791,6 +884,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 200,
           delivery_fee: 0,
+          tax_amount: 14,
+          total_with_tax: 214,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -860,6 +955,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 205,
           delivery_fee: 0,
+          tax_amount: 14.35,
+          total_with_tax: 219.35,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -867,6 +964,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-b',
           goods_total: 210,
           delivery_fee: 15,
+          tax_amount: 14.7,
+          total_with_tax: 239.7,
           free_shipping_achieved: false,
           below_min_order: false,
         },
@@ -929,6 +1028,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 5,
           delivery_fee: 0,
+          tax_amount: 0.35,
+          total_with_tax: 5.35,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -986,6 +1087,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 420,
           delivery_fee: 0,
+          tax_amount: 29.4,
+          total_with_tax: 449.4,
           free_shipping_achieved: true,
           below_min_order: false,
         },
@@ -1011,6 +1114,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-a',
           goods_total: 200,
           delivery_fee: 0,
+          tax_amount: 14,
+          total_with_tax: 214,
           free_shipping_achieved: false,
           below_min_order: false,
         },
@@ -1018,6 +1123,8 @@ describe('AllocationResultPage', () => {
           supplier_id: 'sup-b',
           goods_total: 210,
           delivery_fee: 15,
+          tax_amount: 14.7,
+          total_with_tax: 239.7,
           free_shipping_achieved: false,
           below_min_order: false,
         },

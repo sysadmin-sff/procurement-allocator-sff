@@ -72,10 +72,12 @@ function orderFixture(base: {
   total_amount: number;
   delivery_fee: number;
   items: OrderItem[];
-}, overrides: Partial<Pick<Order, 'expected_goods_total' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined'>> = {}): Order {
+}, overrides: Partial<Pick<Order, 'tax_amount' | 'expected_goods_total' | 'expected_tax_amount' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined'>> = {}): Order {
   return {
     ...base,
+    tax_amount: null,
     expected_goods_total: base.total_amount,
+    expected_tax_amount: 0,
     expected_delivery_fee: base.delivery_fee,
     expected_total: base.total_amount + base.delivery_fee,
     declined_amount: 0,
@@ -432,8 +434,15 @@ describe('OrderDetailPage', () => {
       await screen.findByText(material.canonical_name);
       expect(screen.getByText('Ожидается:')).toBeInTheDocument();
       // No confirmed_price anywhere -> falls back to quoted_price per item,
-      // same total as the sent snapshot.
-      expect(screen.getAllByText(/Товары \$250\.00 \+ доставка \$25\.00 = \$275\.00/)).toHaveLength(2);
+      // same goods total as the sent snapshot. tax_amount is null (fixture
+      // default, ADR-0029 §4 "not tracked"), so "Отправлено" shows "—" for
+      // tax while "Ожидается" computes its own 7% locally (250 * 0.07 = 17.50).
+      expect(
+        screen.getByText(/Товары \$250\.00 \+ Налог \(7%\) — \+ Доставка \$25\.00 = \$275\.00/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Товары \$250\.00 \+ Налог \(7%\) \$17\.50 \+ Доставка \$25\.00 = \$292\.50/),
+      ).toBeInTheDocument();
     });
 
     it('uses confirmed_price where set and quoted_price as a fallback where not', async () => {
@@ -454,11 +463,17 @@ describe('OrderDetailPage', () => {
       renderPage();
 
       expect(await screen.findByText('Отправлено:')).toBeInTheDocument();
-      expect(screen.getByText(/Товары \$500\.00 \+ доставка \$50\.00 = \$550\.00/)).toBeInTheDocument();
+      // tax_amount is null on this fixture (ADR-0029 §4 default) -> "—".
+      expect(
+        screen.getByText(/Товары \$500\.00 \+ Налог \(7%\) — \+ Доставка \$50\.00 = \$550\.00/),
+      ).toBeInTheDocument();
       expect(screen.getByText('Ожидается:')).toBeInTheDocument();
       // item-1: confirmed_price 90, item-2: no confirmed_price -> falls back
-      // to quoted_price 400. 90 + 400 = 490, + delivery 50 = 540.
-      expect(screen.getByText(/Товары \$490\.00 \+ доставка \$50\.00 = \$540\.00/)).toBeInTheDocument();
+      // to quoted_price 400. 90 + 400 = 490, tax = 490 * 0.07 = 34.30,
+      // + delivery 50 = 574.30.
+      expect(
+        screen.getByText(/Товары \$490\.00 \+ Налог \(7%\) \$34\.30 \+ Доставка \$50\.00 = \$574\.30/),
+      ).toBeInTheDocument();
     });
 
     it('excludes declined items from the expected total, regardless of their confirmed_price', async () => {
@@ -484,7 +499,11 @@ describe('OrderDetailPage', () => {
 
       renderPage();
 
-      expect(await screen.findByText(/Товары \$380\.00 \+ доставка \$50\.00 = \$430\.00/)).toBeInTheDocument();
+      // tax on the expected (confirmed_price-based, non-declined-only) goods
+      // total: 380 * 0.07 = 26.60.
+      expect(
+        await screen.findByText(/Товары \$380\.00 \+ Налог \(7%\) \$26\.60 \+ Доставка \$50\.00 = \$456\.60/),
+      ).toBeInTheDocument();
     });
   });
 

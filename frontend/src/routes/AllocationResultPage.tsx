@@ -151,7 +151,10 @@ function AllocationResultOk({
 
   const goodsTotal = run.supplier_summaries.reduce((sum, s) => sum + s.goods_total, 0);
   const deliveryTotal = run.supplier_summaries.reduce((sum, s) => sum + s.delivery_fee, 0);
-  const grandTotal = goodsTotal + deliveryTotal;
+  const taxTotal = run.supplier_summaries.reduce((sum, s) => sum + s.tax_amount, 0);
+  // Sum of already-computed per-supplier total_with_tax — not a tax
+  // recalculation, just addition of ready backend values. See ADR-0029 §5а.
+  const grandTotal = run.supplier_summaries.reduce((sum, s) => sum + s.total_with_tax, 0);
 
   const cheapestByMaterial = buildCheapestPriceIndex(prices);
   const pricesByMaterial = buildPricesByMaterialIndex(prices);
@@ -223,6 +226,11 @@ function AllocationResultOk({
             </div>
             <div className={styles.kpiDivider} />
             <div className={styles.kpiCell}>
+              <div className={styles.kpiLabel}>Налог (7%)</div>
+              <div className={styles.kpiValue}>{formatMoney(taxTotal)}</div>
+            </div>
+            <div className={styles.kpiDivider} />
+            <div className={styles.kpiCell}>
               <div className={styles.kpiLabel}>Поставщиков</div>
               <div className={styles.kpiValue}>{run.supplier_summaries.length}</div>
             </div>
@@ -280,7 +288,9 @@ function AllocationResultOk({
         {run.supplier_summaries.map((summary) => {
           const supplier = supplierById.get(summary.supplier_id);
           const lines = run.lines.filter((l) => l.supplier_id === summary.supplier_id);
-          const cardTotal = summary.goods_total + summary.delivery_fee;
+          // Read the ready backend total, not a client recomputation —
+          // total_with_tax already includes tax_amount (ADR-0029 §5а).
+          const cardTotal = summary.total_with_tax;
           const touched = lines.some((l) => l.overridden_at != null);
 
           return (
@@ -302,6 +312,12 @@ function AllocationResultOk({
                   {summary.free_shipping_achieved ? 'бесплатно' : formatMoney(summary.delivery_fee)}
                 </span>
                 <span className={styles.supplierTotal}>{formatMoney(cardTotal)}</span>
+              </div>
+
+              <div className={styles.supplierBreakdown}>
+                Товары: {formatMoney(summary.goods_total)} + Доставка:{' '}
+                {summary.free_shipping_achieved ? 'бесплатно' : formatMoney(summary.delivery_fee)} + Налог
+                (7%): {formatMoney(summary.tax_amount)} = Итого: {formatMoney(cardTotal)}
               </div>
 
               {summary.below_min_order && (

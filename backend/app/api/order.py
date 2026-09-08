@@ -11,6 +11,7 @@ from app.allocation.order_service import (
     MultipleDraftOrdersConflictError,
     OrderItemNotFoundError,
     PriceDivergence,
+    ProjectColorChoiceRequiredError,
     RunNotFoundError,
     confirm_price_updates,
     create_orders_for_run,
@@ -138,6 +139,14 @@ def create_orders(
         )
     except RunNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Allocation run not found") from exc
+    except ProjectColorChoiceRequiredError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Выберите цвет проекта, чтобы продолжить — в плане есть "
+                "материалы с выбором цвета: " + ", ".join(exc.material_names)
+            ),
+        ) from exc
     except DraftOrderConflictError as exc:
         body = OrderDraftConflictOut(
             suppliers_with_existing_drafts=exc.suppliers_with_existing_drafts

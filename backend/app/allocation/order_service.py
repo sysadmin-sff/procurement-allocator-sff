@@ -49,6 +49,23 @@ class RunNotFoundError(Exception):
         super().__init__(f"AllocationRun {run_id} not found in project {project_id}")
 
 
+class ProjectColorChoiceRequiredError(Exception):
+    """At least one material in this run's plan has non-empty color_options
+    but Project.color_choice is NULL — the supplier-facing name would be
+    ambiguous ("(White/Bronze)") if generation proceeded. See ADR-0031 п.3:
+    this is a hard block, not a warning, because the missing information
+    (which color) does not yet exist anywhere, not because the system
+    disagrees with a decision the user already made."""
+
+    def __init__(self, project_id: uuid.UUID, material_names: list[str]):
+        self.project_id = project_id
+        self.material_names = material_names
+        super().__init__(
+            f"Project {project_id} has materials with color options "
+            f"({material_names}) but no color_choice set"
+        )
+
+
 class OrderItemNotFoundError(Exception):
     def __init__(self, order_id: uuid.UUID, item_id: uuid.UUID):
         self.order_id = order_id
@@ -475,6 +492,27 @@ def create_orders_for_run(
     run = db.get(AllocationRun, run_id)
     if run is None or run.project_id != project_id:
         raise RunNotFoundError(project_id, run_id)
+
+    plan_material_ids = {
+        line.material_id
+        for line in db.scalars(
+            select(AllocationLine).where(AllocationLine.allocation_run_id == run_id)
+        ).all()
+    }
+    if plan_material_ids:
+        materials_with_color_options = db.scalars(
+            select(Material).where(
+                Material.id.in_(plan_material_ids),
+                Material.color_options.is_not(None),
+            )
+        ).all()
+        if materials_with_color_options:
+            project = db.get(Project, project_id)
+            if project.color_choice is None:
+                raise ProjectColorChoiceRequiredError(
+                    project_id,
+                    [m.canonical_name for m in materials_with_color_options],
+                )
 
     supplier_ids = {uuid.UUID(summary["supplier_id"]) for summary in run.supplier_summaries}
     conflicts = _conflicting_draft_orders_by_supplier(db, project_id, supplier_ids)

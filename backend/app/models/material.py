@@ -22,6 +22,17 @@ class Material(UUIDPKMixin, Base):
     unit: Mapped[str] = mapped_column(String(20), nullable=False)
     attributes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     """диаметр, материал, класс и т.д. — для будущего фасетного поиска"""
+    color_options: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    """Цвета, доступные для этого материала без изменения цены — извлечены
+    из canonical_name при импорте, не пересчитываются на чтении. NULL или
+    пустой список = материал не имеет цветового выбора. Список из ровно
+    одного элемента отличается от NULL семантически, хотя для текущего
+    каталога не встречается. См. ADR-0031."""
+    color_fragment: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    """Точная подстрока в canonical_name, подлежащая замене при разрешении
+    цвета (см. resolve_material_name) — например "(White/Bronze)" или
+    "Bronze/White". Заполняется тем же проходом, что и color_options.
+    См. ADR-0031 п.4."""
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     """text-embedding-3-small эмбеддинг canonical_name + attributes — см.
     ADR-0019 §1. NULL до бэкафилла/при сбое embeddings API (graceful

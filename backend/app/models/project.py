@@ -26,6 +26,11 @@ class Project(UUIDPKMixin, TimestampMixin, Base):
     прежнюю String-колонку created_by, которую ни один вызывающий код
     никогда не заполнял. См. ADR-0024 §6."""
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    color_choice: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    """Единый цвет на весь проект для материалов с color_options. NULL =
+    цвет ещё не выбран. Значение — один из известных цветов
+    (app.services.material_naming.KNOWN_COLORS), не свободный текст.
+    См. ADR-0031 п.2."""
 
     items: Mapped[list["ProjectItem"]] = relationship(back_populates="project")
     allocation_runs: Mapped[list["AllocationRun"]] = relationship(back_populates="project")

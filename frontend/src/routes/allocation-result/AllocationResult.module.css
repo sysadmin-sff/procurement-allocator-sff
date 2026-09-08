@@ -235,9 +235,32 @@
   overflow-x: auto;
 }
 
+/* Explicit widths for every column, not just material — table-layout: fixed
+   otherwise splits the remaining space evenly across Кол-во/Цена за ед./
+   Поставщик/Сумма, giving the supplier <select> (which needs real room for
+   "Name — $price" text) the same narrow slice as the two-digit qty column.
+   That squeezed the select against "Цена за ед." and stranded "Сумма" with
+   leftover space instead of sizing to its own short numeric content. */
 .materialColHeader,
 .materialColCell {
-  width: 40%;
+  width: 38%;
+}
+
+.qtyCol {
+  width: 10%;
+}
+
+.unitPriceCol {
+  width: 13%;
+}
+
+.supplierCol {
+  width: 27%;
+  text-align: left;
+}
+
+.sumCol {
+  width: 12%;
 }
 
 .table th {
@@ -333,6 +356,8 @@
 
 .supplierSelect {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   font-size: var(--text-sm-alt2);
   font-weight: 600;
   color: var(--color-text);
@@ -340,8 +365,14 @@
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  max-width: 220px;
   cursor: pointer;
+  /* Option text can be long ("Florida Sales & Marketing — $18.00") — clip
+     the closed select's own display with an ellipsis instead of letting it
+     overflow/get cut off mid-character (the 220px max-width that used to
+     cause this is gone now that .supplierCol gives this a real 27% column). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .supplierSelectTouched {

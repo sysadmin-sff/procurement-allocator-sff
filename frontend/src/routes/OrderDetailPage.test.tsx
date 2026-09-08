@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +18,7 @@ vi.mock('../api/orders', () => ({
     findReplacement: vi.fn(),
     replaceAndOrder: vi.fn(),
     parseResponse: vi.fn(),
+    confirmPriceUpdates: vi.fn(),
   },
 }));
 vi.mock('../api/materials', () => ({
@@ -32,6 +33,7 @@ const patchItemMock = vi.mocked(ordersApi.patchItem);
 const findReplacementMock = vi.mocked(ordersApi.findReplacement);
 const replaceAndOrderMock = vi.mocked(ordersApi.replaceAndOrder);
 const parseResponseMock = vi.mocked(ordersApi.parseResponse);
+const confirmPriceUpdatesMock = vi.mocked(ordersApi.confirmPriceUpdates);
 const materialsListMock = vi.mocked(materialsApi.list);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 
@@ -106,6 +108,7 @@ function itemFixture(overrides: Partial<OrderItem> = {}): OrderItem {
     replaced_by_supplier_id: null,
     replaced_by_supplier_name: null,
     replacement_draft_order_id: null,
+    price_divergence: null,
     ...overrides,
   };
 }
@@ -128,6 +131,7 @@ describe('OrderDetailPage', () => {
     findReplacementMock.mockReset();
     replaceAndOrderMock.mockReset();
     parseResponseMock.mockReset();
+    confirmPriceUpdatesMock.mockReset();
     materialsListMock.mockReset();
     suppliersListMock.mockReset();
     materialsListMock.mockResolvedValue([material]);
@@ -727,6 +731,197 @@ describe('OrderDetailPage', () => {
     });
   });
 
+  describe('single-item price divergence popup (ADR-0030 п.4.2)', () => {
+    it('does not show a popup when the PATCH response has no price_divergence', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      patchItemMock.mockResolvedValue(itemFixture({ confirmed_price: 27.5 }));
+
+      renderPage();
+
+      const inputs = await screen.findAllByPlaceholderText('—');
+      const confirmedInput = inputs[2];
+      const user = userEvent.setup();
+      await user.type(confirmedInput, '27.50');
+      await user.tab();
+
+      await waitFor(() => expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { confirmed_price: 27.5 }));
+      expect(screen.queryByText(/Обновить цену в базе/)).not.toBeInTheDocument();
+    });
+
+    it('shows the popup with current/new price and action text when the PATCH response carries price_divergence', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      patchItemMock.mockResolvedValue(
+        itemFixture({
+          confirmed_price: 27.5,
+          price_divergence: {
+            action: 'update',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            current_price: 25,
+            confirmed_price: 27.5,
+          },
+        }),
+      );
+
+      renderPage();
+
+      const inputs = await screen.findAllByPlaceholderText('—');
+      const confirmedInput = inputs[2];
+      const user = userEvent.setup();
+      await user.type(confirmedInput, '27.50');
+      await user.tab();
+
+      const modalTitle = await screen.findByText('Обновить цену в справочнике?');
+      const modal = modalTitle.closest('[role="dialog"]') as HTMLElement;
+      expect(within(modal).getByText(material.canonical_name)).toBeInTheDocument();
+      expect(within(modal).getByText(supplier.name)).toBeInTheDocument();
+      expect(within(modal).getByText('$25.00')).toBeInTheDocument();
+      expect(within(modal).getByText('$27.50')).toBeInTheDocument();
+    });
+
+    it('shows "create" action text and no current price when action is create', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      patchItemMock.mockResolvedValue(
+        itemFixture({
+          confirmed_price: 9.99,
+          price_divergence: {
+            action: 'create',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            current_price: null,
+            confirmed_price: 9.99,
+          },
+        }),
+      );
+
+      renderPage();
+
+      const inputs = await screen.findAllByPlaceholderText('—');
+      const confirmedInput = inputs[2];
+      const user = userEvent.setup();
+      await user.type(confirmedInput, '9.99');
+      await user.tab();
+
+      expect(await screen.findByText('Добавить цену в справочник?')).toBeInTheDocument();
+      expect(screen.getByText(/нет активной цены/i)).toBeInTheDocument();
+    });
+
+    it('dismissing the popup does not roll back the already-saved confirmed_price', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      patchItemMock.mockResolvedValue(
+        itemFixture({
+          confirmed_price: 27.5,
+          price_divergence: {
+            action: 'update',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            current_price: 25,
+            confirmed_price: 27.5,
+          },
+        }),
+      );
+
+      renderPage();
+
+      const inputs = await screen.findAllByPlaceholderText('—');
+      const confirmedInput = inputs[2];
+      const user = userEvent.setup();
+      await user.type(confirmedInput, '27.50');
+      await user.tab();
+
+      await screen.findByText('Обновить цену в справочнике?');
+      // confirmed_price PATCH already resolved and applied to state before
+      // the popup rendered — this assertion is what proves it (ADR-0030 п.7).
+      expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { confirmed_price: 27.5 });
+
+      await user.click(screen.getByRole('button', { name: /Не обновлять/ }));
+
+      expect(screen.queryByText('Обновить цену в справочнике?')).not.toBeInTheDocument();
+      expect(confirmPriceUpdatesMock).not.toHaveBeenCalled();
+      // The saved value is already reflected in state (proven by the
+      // patchItemMock assertion above) — dismissing the popup issues no
+      // further PATCH that could roll it back.
+      expect(patchItemMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('confirming the popup calls confirm-price-updates with a single-row selection', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      patchItemMock.mockResolvedValue(
+        itemFixture({
+          confirmed_price: 27.5,
+          price_divergence: {
+            action: 'update',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            current_price: 25,
+            confirmed_price: 27.5,
+          },
+        }),
+      );
+      confirmPriceUpdatesMock.mockResolvedValue({
+        results: [{ order_item_id: 'item-1', applied: true, price_id: 'price-1', action: 'update', error: null }],
+      });
+
+      renderPage();
+
+      const inputs = await screen.findAllByPlaceholderText('—');
+      const confirmedInput = inputs[2];
+      const user = userEvent.setup();
+      await user.type(confirmedInput, '27.50');
+      await user.tab();
+
+      await screen.findByText('Обновить цену в справочнике?');
+      await user.click(screen.getByRole('button', { name: /Обновить цену в базе/ }));
+
+      expect(confirmPriceUpdatesMock).toHaveBeenCalledWith('order-1', [{ order_item_id: 'item-1', apply: true }]);
+    });
+  });
+
   describe('second parse-response round (ADR-0027 §2)', () => {
     it('renders both parse-response blocks at once', async () => {
       const order: Order = orderFixture({
@@ -817,6 +1012,174 @@ describe('OrderDetailPage', () => {
 
       expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { confirmed_price: 22.0 });
       expect(patchItemMock).not.toHaveBeenCalledWith('order-1', 'item-1', { received_price: 22.0 });
+    });
+
+    it('does not show the batch screen when the applied batch has no price divergences', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '' },
+        ],
+        missing: [],
+        extra: [],
+      });
+      patchItemMock.mockResolvedValue(itemFixture({ confirmed_price: 22.0, price_divergence: null }));
+
+      renderPage();
+
+      const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
+      const secondSection = secondBlockTitle.parentElement as HTMLElement;
+      const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
+      const user = userEvent.setup();
+      await user.upload(fileInput, file);
+      await user.click(within(secondSection).getByText('Распознать цены из документа'));
+      const applyButton = await within(secondSection).findByText('Применить все совпадения');
+      await user.click(applyButton);
+
+      await screen.findByText(/Применено 1 из 1/);
+      expect(screen.queryByText(/Расхождения со справочником цен/)).not.toBeInTheDocument();
+    });
+
+    it('shows the batch screen with only divergent rows, unchecked by default, after batch application', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 500,
+        delivery_fee: 50,
+        items: [
+          itemFixture({ id: 'item-1', material_id: 'mat-1' }),
+          itemFixture({ id: 'item-2', material_id: 'mat-2' }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+      materialsListMock.mockResolvedValue([
+        material,
+        { id: 'mat-2', internal_sku: 'PRF-AL-1', canonical_name: 'Профиль алюминиевый', category: null, unit: 'шт', attributes: {} },
+      ]);
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '' },
+          { order_item_id: 'item-2', raw_description: 'Профиль', price: 9.99, quantity: 5, confidence: 'high', reasoning: '' },
+        ],
+        missing: [],
+        extra: [],
+      });
+      patchItemMock.mockImplementation((_orderId, itemId) => {
+        if (itemId === 'item-1') {
+          return Promise.resolve(
+            itemFixture({
+              id: 'item-1',
+              material_id: 'mat-1',
+              confirmed_price: 22.0,
+              price_divergence: {
+                action: 'update',
+                material_id: 'mat-1',
+                supplier_id: 'sup-a',
+                current_price: 25,
+                confirmed_price: 22.0,
+              },
+            }),
+          );
+        }
+        return Promise.resolve(
+          itemFixture({ id: 'item-2', material_id: 'mat-2', confirmed_price: 9.99, price_divergence: null }),
+        );
+      });
+
+      renderPage();
+
+      const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
+      const secondSection = secondBlockTitle.parentElement as HTMLElement;
+      const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
+      const user = userEvent.setup();
+      await user.upload(fileInput, file);
+      await user.click(within(secondSection).getByText('Распознать цены из документа'));
+      const applyButton = await within(secondSection).findByText('Применить все совпадения');
+      await user.click(applyButton);
+
+      const batchTitle = await screen.findByText(/Расхождения со справочником цен \(1\)/);
+      const batchSection = batchTitle.parentElement as HTMLElement;
+      expect(within(batchSection).getByText('Сетка Fiberglass 18x14')).toBeInTheDocument();
+      expect(within(batchSection).queryByText('Профиль алюминиевый')).not.toBeInTheDocument();
+      const checkbox = within(batchSection).getByRole('checkbox');
+      expect(checkbox).not.toBeChecked();
+    });
+
+    it('shows a per-row error when confirm-price-updates rejects a stale row', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '' },
+        ],
+        missing: [],
+        extra: [],
+      });
+      patchItemMock.mockResolvedValue(
+        itemFixture({
+          id: 'item-1',
+          material_id: 'mat-1',
+          confirmed_price: 22.0,
+          price_divergence: {
+            action: 'update',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            current_price: 25,
+            confirmed_price: 22.0,
+          },
+        }),
+      );
+      confirmPriceUpdatesMock.mockResolvedValue({
+        results: [
+          {
+            order_item_id: 'item-1',
+            applied: false,
+            price_id: null,
+            action: null,
+            error: 'stale: confirmed_price changed or price already matches',
+          },
+        ],
+      });
+
+      renderPage();
+
+      const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
+      const secondSection = secondBlockTitle.parentElement as HTMLElement;
+      const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
+      const user = userEvent.setup();
+      await user.upload(fileInput, file);
+      await user.click(within(secondSection).getByText('Распознать цены из документа'));
+      const applyButton = await within(secondSection).findByText('Применить все совпадения');
+      await user.click(applyButton);
+
+      const batchTitle = await screen.findByText(/Расхождения со справочником цен \(1\)/);
+      const batchSection = batchTitle.parentElement as HTMLElement;
+      await user.click(within(batchSection).getByRole('checkbox'));
+      await user.click(within(batchSection).getByRole('button', { name: /Обновить выбранные цены в базе/ }));
+
+      expect(await screen.findByText(/stale: confirmed_price changed or price already matches/)).toBeInTheDocument();
     });
   });
 

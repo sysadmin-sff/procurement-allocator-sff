@@ -14,10 +14,15 @@ import type {
   ParsedExtraLine,
   ParsedMatchedLine,
   ParseOrderResponseResult,
+  PriceUpdateResult,
+  PriceUpdateSelection,
   Supplier,
 } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { FileInput } from '../components/FileInput';
+import { PriceDivergenceModal } from '../components/PriceDivergenceModal';
+import type { PriceUpdateBatchRow } from '../components/PriceUpdateBatchScreen';
+import { PriceUpdateBatchScreen } from '../components/PriceUpdateBatchScreen';
 import styles from './order-detail/OrderDetail.module.css';
 
 const LOW_CONFIDENCE_LEVELS = new Set(['low', 'medium']);
@@ -52,6 +57,12 @@ export function OrderDetailPage() {
   const [loadError, setLoadError] = useState<unknown>(null);
   const [savingItemId, setSavingItemId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<unknown>(null);
+  // Single-row price divergence popup (ADR-0030 п.4.2) — set only when the
+  // inline PATCH response carried price_divergence. confirmed_price is
+  // already saved on the OrderItem by the time this is set; the popup only
+  // decides whether to also write the Price catalog (ADR-0030 п.7).
+  const [divergentItem, setDivergentItem] = useState<OrderItem | null>(null);
+  const [divergencePopupSubmitting, setDivergencePopupSubmitting] = useState(false);
 
   useEffect(() => {
     if (!orderId) return;
@@ -94,10 +105,29 @@ export function OrderDetailPage() {
             }
           : prev,
       );
+      // confirmed_price is already saved above — the popup only offers to
+      // also update the Price catalog, never gates the save itself
+      // (ADR-0030 п.7).
+      if (updated.price_divergence != null) {
+        setDivergentItem(updated);
+      }
     } catch (err) {
       setSaveError(err);
     } finally {
       setSavingItemId(null);
+    }
+  }
+
+  async function handleDivergencePopupConfirm() {
+    if (!data || !divergentItem) return;
+    setDivergencePopupSubmitting(true);
+    try {
+      await ordersApi.confirmPriceUpdates(data.order.id, [{ order_item_id: divergentItem.id, apply: true }]);
+    } catch (err) {
+      setSaveError(err);
+    } finally {
+      setDivergencePopupSubmitting(false);
+      setDivergentItem(null);
     }
   }
 
@@ -189,6 +219,16 @@ export function OrderDetailPage() {
 
   return (
     <div className={styles.page}>
+      {divergentItem?.price_divergence != null && (
+        <PriceDivergenceModal
+          divergence={divergentItem.price_divergence}
+          materialName={materialById.get(divergentItem.material_id)?.canonical_name ?? divergentItem.material_id}
+          supplierName={supplier?.name ?? order.supplier_id}
+          onConfirm={() => void handleDivergencePopupConfirm()}
+          onDismiss={() => setDivergentItem(null)}
+          submitting={divergencePopupSubmitting}
+        />
+      )}
       <div className={styles.inner}>
         <Link to={`/projects/${order.project_id}`} className={styles.backLink}>
           « Назад к проекту
@@ -220,6 +260,7 @@ export function OrderDetailPage() {
         <ParseResponseSection
           order={order}
           materialById={materialById}
+          supplierName={supplier?.name ?? order.supplier_id}
           onApplied={handleParseApplied}
           targetField="received_price"
           title="Распознавание ответа поставщика"
@@ -227,6 +268,7 @@ export function OrderDetailPage() {
         <ParseResponseSection
           order={order}
           materialById={materialById}
+          supplierName={supplier?.name ?? order.supplier_id}
           onApplied={handleParseApplied}
           targetField="confirmed_price"
           title="Распознавание финального ответа (после торга)"
@@ -757,12 +799,14 @@ function ReplacementTrigger({
 function ParseResponseSection({
   order,
   materialById,
+  supplierName,
   onApplied,
   targetField,
   title,
 }: {
   order: Order;
   materialById: Map<string, Material>;
+  supplierName: string;
   onApplied: () => void;
   /** Which OrderItem field "Применить все совпадения" writes — the first
    * block writes received_price (first supplier answer), the second writes
@@ -784,6 +828,17 @@ function ParseResponseSection({
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<unknown>(null);
   const [applySummary, setApplySummary] = useState<string | null>(null);
+
+  // Batch price-divergence confirmation screen (ADR-0030 п.4.3) — rows
+  // accumulated during handleApplyAllMatched's loop (case а/в per position),
+  // shown as a separate step after the whole batch has been applied. Only
+  // relevant for the confirmed_price block (only confirmed_price PATCHes can
+  // ever carry price_divergence, ADR-0030 п.1), but this section component
+  // is shared with the received_price block, so the state simply never
+  // populates there.
+  const [divergentRows, setDivergentRows] = useState<PriceUpdateBatchRow[] | null>(null);
+  const [batchResults, setBatchResults] = useState<PriceUpdateResult[] | null>(null);
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
 
   async function handleParse() {
     const file = fileInputRef.current?.files?.[0];
@@ -821,19 +876,45 @@ function ParseResponseSection({
     setApplying(true);
     setApplyError(null);
     setApplySummary(null);
+    setBatchResults(null);
     let succeeded = 0;
+    // Accumulated across the loop instead of popping a modal per iteration
+    // (10-30 positions would mean 10-30 modals) — shown as one batch screen
+    // after the whole loop finishes. See ADR-0030 п.4.3.
+    const divergences: PriceUpdateBatchRow[] = [];
     try {
       for (const line of toApply) {
         const price = matchedPrices[line.order_item_id];
-        await ordersApi.patchItem(order.id, line.order_item_id, { [targetField]: price });
+        const updated = await ordersApi.patchItem(order.id, line.order_item_id, { [targetField]: price });
         succeeded += 1;
+        if (updated.price_divergence != null) {
+          divergences.push({
+            order_item_id: updated.id,
+            divergence: updated.price_divergence,
+            materialName: materialById.get(updated.material_id)?.canonical_name ?? updated.material_id,
+            supplierName,
+          });
+        }
       }
       onApplied();
+      setDivergentRows(divergences.length > 0 ? divergences : null);
     } catch (err) {
       setApplyError(err);
     } finally {
       setApplying(false);
       setApplySummary(`Применено ${succeeded} из ${toApply.length}`);
+    }
+  }
+
+  async function handleBatchSubmit(selections: PriceUpdateSelection[]) {
+    setBatchSubmitting(true);
+    try {
+      const { results } = await ordersApi.confirmPriceUpdates(order.id, selections);
+      setBatchResults(results);
+    } catch (err) {
+      setApplyError(err);
+    } finally {
+      setBatchSubmitting(false);
     }
   }
 
@@ -945,6 +1026,15 @@ function ParseResponseSection({
             )}
           </div>
         </>
+      )}
+
+      {divergentRows != null && (
+        <PriceUpdateBatchScreen
+          rows={divergentRows}
+          results={batchResults}
+          onSubmit={(selections) => void handleBatchSubmit(selections)}
+          submitting={batchSubmitting}
+        />
       )}
     </div>
   );

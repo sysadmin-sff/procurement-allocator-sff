@@ -322,6 +322,48 @@ export interface OrderItem {
   /** Non-null if replaced_by_supplier_id has an existing draft Order in
    * this project — see ADR-0014 п.3. */
   replacement_draft_order_id: string | null;
+  /** Set only on the response to a PATCH that wrote confirmed_price and it
+   * diverged from (or had no) active Price for (material_id, supplier_id) —
+   * never populated on a plain GET. See ADR-0030 п.2/п.4.2. */
+  price_divergence: PriceDivergence | null;
+}
+
+/** Mirrors backend PriceDivergenceOut — see ADR-0030 п.2. */
+export interface PriceDivergence {
+  action: 'update' | 'create';
+  material_id: string;
+  supplier_id: string;
+  /** Active Price.price at comparison time. null when action="create" (no
+   * active Price for this pair to compare against). */
+  current_price: number | null;
+  confirmed_price: number;
+}
+
+/** One row selection on the batch confirmation screen — see ADR-0030 п.4. */
+export interface PriceUpdateSelection {
+  order_item_id: string;
+  apply: boolean;
+}
+
+/** Body for POST /orders/{order_id}/confirm-price-updates — see ADR-0030 п.4.3. */
+export interface ConfirmPriceUpdatesIn {
+  selections: PriceUpdateSelection[];
+}
+
+/** Result of processing one row — both applied and skipped/errored, so the
+ * frontend can render the full outcome without a follow-up GET Order. */
+export interface PriceUpdateResult {
+  order_item_id: string;
+  applied: boolean;
+  price_id: string | null;
+  action: 'update' | 'create' | null;
+  /** Set if the row was stale (confirmed_price/active Price changed since
+   * detection) or order_item_id wasn't recognized — applied stays false. */
+  error: string | null;
+}
+
+export interface ConfirmPriceUpdatesOut {
+  results: PriceUpdateResult[];
 }
 
 /** One supplier candidate from POST .../find-replacement — see ADR-0014 п.1. */

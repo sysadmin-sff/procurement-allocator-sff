@@ -29,6 +29,14 @@ function resolveMessage(error: unknown, conflictMessage?: string): string {
     }
     return error.message;
   }
+  // A raw fetch() rejection never reached the backend at all (offline,
+  // backend down, CORS) — the browser's own TypeError message ("Failed to
+  // fetch" in Chrome, "NetworkError when attempting to fetch resource." in
+  // Firefox) is not something an employee can act on, unlike ApiError's
+  // server-authored detail text.
+  if (error instanceof TypeError) {
+    return 'Не удалось связаться с сервером. Проверьте соединение и попробуйте ещё раз.';
+  }
   if (error instanceof Error) {
     return error.message;
   }

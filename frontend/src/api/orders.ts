@@ -1,5 +1,12 @@
 import { http } from './client';
-import type { FindReplacementResult, Order, OrderItem, ParseOrderResponseResult } from './types';
+import type {
+  ConfirmPriceUpdatesOut,
+  FindReplacementResult,
+  Order,
+  OrderItem,
+  ParseOrderResponseResult,
+  PriceUpdateSelection,
+} from './types';
 
 export interface OrderItemPatch {
   confirmed_price?: number | null;
@@ -35,4 +42,9 @@ export const ordersApi = {
     formData.append('file', file);
     return http.postMultipart<ParseOrderResponseResult>(`/orders/${orderId}/parse-response`, formData);
   },
+  /** POST .../confirm-price-updates — see ADR-0030 п.4.3. Used both by the
+   * single-row popup (one selection) and the batch screen (one per divergent
+   * row) — same endpoint, not two API paths. */
+  confirmPriceUpdates: (orderId: string, selections: PriceUpdateSelection[]) =>
+    http.post<ConfirmPriceUpdatesOut>(`/orders/${orderId}/confirm-price-updates`, { selections }),
 };

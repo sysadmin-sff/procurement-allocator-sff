@@ -335,10 +335,10 @@ function AllocationResultOk({
                   <thead>
                     <tr>
                       <th className={styles.materialColHeader}>Материал</th>
-                      <th className={styles.numCell}>Кол-во</th>
-                      <th className={styles.numCell}>Цена за ед.</th>
-                      <th className={styles.numCell}>Поставщик</th>
-                      <th className={styles.numCell}>Сумма</th>
+                      <th className={`${styles.numCell} ${styles.qtyCol}`}>Кол-во</th>
+                      <th className={`${styles.numCell} ${styles.unitPriceCol}`}>Цена за ед.</th>
+                      <th className={`${styles.numCell} ${styles.supplierCol}`}>Поставщик</th>
+                      <th className={`${styles.numCell} ${styles.sumCol}`}>Сумма</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -480,11 +480,11 @@ function LineRow({
           </span>
         )}
       </td>
-      <td className={styles.numCell}>
+      <td className={`${styles.numCell} ${styles.qtyCol}`}>
         {line.quantity} {material?.unit ?? ''}
       </td>
-      <td className={styles.numCell}>{formatMoney(line.unit_price)}</td>
-      <td className={styles.numCell}>
+      <td className={`${styles.numCell} ${styles.unitPriceCol}`}>{formatMoney(line.unit_price)}</td>
+      <td className={`${styles.numCell} ${styles.supplierCol}`}>
         <select
           className={
             isOverridden
@@ -503,7 +503,7 @@ function LineRow({
           ))}
         </select>
       </td>
-      <td className={styles.numCell}>{formatMoney(line.line_total)}</td>
+      <td className={`${styles.numCell} ${styles.sumCol}`}>{formatMoney(line.line_total)}</td>
     </tr>
   );
 

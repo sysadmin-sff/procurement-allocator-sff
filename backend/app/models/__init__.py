@@ -6,6 +6,7 @@ from app.models.order import Order, OrderItem
 from app.models.price import Price
 from app.models.price_list import PriceListEntry, PriceListImport
 from app.models.project import Project, ProjectItem
+from app.models.project_template import ProjectTemplate, ProjectTemplateItem
 from app.models.purchase_record import PurchaseRecord
 from app.models.supplier import Supplier
 from app.models.supplier_contact import SupplierContact
@@ -22,6 +23,8 @@ __all__ = [
     "Price",
     "Project",
     "ProjectItem",
+    "ProjectTemplate",
+    "ProjectTemplateItem",
     "AllocationRun",
     "AllocationLine",
     "Order",

@@ -12,6 +12,7 @@ from app.api.price_ingestion import router as price_ingestion_router
 from app.api.project import router as project_router
 from app.api.purchase_record import router as purchase_record_router
 from app.api.supplier import router as supplier_router
+from app.api.template import router as template_router
 from app.api.user import router as user_router
 from app.auth.service import bootstrap_admin
 from app.core.config import settings
@@ -46,6 +47,7 @@ app.include_router(project_router)
 app.include_router(allocation_router)
 app.include_router(order_router)
 app.include_router(purchase_record_router)
+app.include_router(template_router)
 app.include_router(supplier_router)
 app.include_router(material_router)
 app.include_router(price_router)

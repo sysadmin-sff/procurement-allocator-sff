@@ -26,6 +26,7 @@ from app.models import (
     Price,
     Project,
     ProjectItem,
+    ProjectTemplate,
     PurchaseRecord,
     User,
 )
@@ -44,8 +45,26 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> Project:
+    template = None
+    if payload.template_id is not None:
+        template = db.get(ProjectTemplate, payload.template_id)
+        if template is None:
+            raise HTTPException(status_code=404, detail="Project template not found")
+
     project = Project(title=payload.title, created_by_user_id=current_user.id)
     db.add(project)
+    db.flush()
+
+    if template is not None:
+        for template_item in template.items:
+            db.add(
+                ProjectItem(
+                    project_id=project.id,
+                    material_id=template_item.material_id,
+                    quantity=1,
+                )
+            )
+
     db.commit()
     db.refresh(project)
     return project

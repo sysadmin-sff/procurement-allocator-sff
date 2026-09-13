@@ -16,6 +16,8 @@ from app.models import (
     Price,
     Project,
     ProjectItem,
+    ProjectTemplate,
+    ProjectTemplateItem,
     Supplier,
     User,
     UserSession,
@@ -29,6 +31,7 @@ def db_session():
     material_ids: list = []
     supplier_ids: list = []
     user_ids: list = []
+    template_ids: list = []
 
     def _override_get_db():
         yield session
@@ -36,10 +39,17 @@ def db_session():
     app.dependency_overrides[get_db] = _override_get_db
 
     try:
-        yield session, project_ids, material_ids, supplier_ids, user_ids
+        yield session, project_ids, material_ids, supplier_ids, user_ids, template_ids
     finally:
         app.dependency_overrides.pop(get_db, None)
         session.rollback()
+        if template_ids:
+            session.query(ProjectTemplateItem).filter(
+                ProjectTemplateItem.template_id.in_(template_ids)
+            ).delete(synchronize_session=False)
+            session.query(ProjectTemplate).filter(
+                ProjectTemplate.id.in_(template_ids)
+            ).delete(synchronize_session=False)
         for project_id in project_ids:
             order_ids = [
                 o.id for o in session.query(Order).filter_by(project_id=project_id).all()
@@ -91,7 +101,7 @@ def db_session():
 
 @pytest.fixture
 def make_user(db_session):
-    session, *_rest, user_ids = db_session
+    session, _project_ids, _material_ids, _supplier_ids, user_ids, _template_ids = db_session
 
     def _make(
         email="employee@screen-factory-florida.com",
@@ -132,7 +142,7 @@ def make_session(db_session):
 
 @pytest.fixture
 def make_project(db_session):
-    session, project_ids, _material_ids, _supplier_ids, _user_ids = db_session
+    session, project_ids, _material_ids, _supplier_ids, _user_ids, _template_ids = db_session
 
     def _make(items=None, title="Test Project", created_by_user_id=None, status="draft"):
         """items: optional list of (material, quantity) tuples, added as
@@ -154,7 +164,7 @@ def make_project(db_session):
 
 @pytest.fixture
 def make_material(db_session):
-    session, _project_ids, material_ids, _supplier_ids, _user_ids = db_session
+    session, _project_ids, material_ids, _supplier_ids, _user_ids, _template_ids = db_session
 
     def _make(sku=None, canonical_name=None, category=None, unit="ft"):
         sku = sku or f"TEST-SKU-{uuid.uuid4().hex[:12]}"
@@ -171,7 +181,7 @@ def make_material(db_session):
 
 @pytest.fixture
 def make_supplier(db_session):
-    session, _project_ids, _material_ids, supplier_ids, _user_ids = db_session
+    session, _project_ids, _material_ids, supplier_ids, _user_ids, _template_ids = db_session
 
     def _make(name="Test Supplier"):
         supplier = Supplier(name=name, currency="USD", delivery_policy={})
@@ -179,6 +189,26 @@ def make_supplier(db_session):
         session.flush()
         supplier_ids.append(supplier.id)
         return supplier
+
+    return _make
+
+
+@pytest.fixture
+def make_template(db_session):
+    session, _project_ids, _material_ids, _supplier_ids, _user_ids, template_ids = db_session
+
+    def _make(name=None, materials=None):
+        """materials: optional list of Material added as ProjectTemplateItem rows."""
+        name = name or f"Test Template {uuid.uuid4().hex[:8]}"
+        template = ProjectTemplate(name=name)
+        session.add(template)
+        session.flush()
+        template_ids.append(template.id)
+        for material in materials or []:
+            session.add(ProjectTemplateItem(template_id=template.id, material_id=material.id))
+        session.flush()
+        session.refresh(template)
+        return template
 
     return _make
 

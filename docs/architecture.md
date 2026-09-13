@@ -17,9 +17,15 @@ flowchart LR
         Review -->|approve| PriceDB[(Price / PriceListEntry)]
     end
 
+    subgraph Templates["2а. Шаблоны проектов (admin)"]
+        AdminUI[UI: admin CRUD шаблонов] --> TemplateDB[(ProjectTemplate / ProjectTemplateItem)]
+    end
+
     subgraph Project["2. Проект"]
         UI_Project[UI: материалы + кол-во] --> ProjectDB[(Project / ProjectItem)]
     end
+
+    TemplateDB -.->|опциональный template_id при создании| ProjectDB
 
     subgraph Allocation["3. Подбор поставщика"]
         ProjectDB --> Engine[ILP solver: OR-Tools]
@@ -34,6 +40,7 @@ flowchart LR
     end
 
     SessionDB -.->|get_current_user / require_role| Ingestion
+    SessionDB -.->|require_role admin| Templates
     SessionDB -.->|get_current_user / require_role| Project
     SessionDB -.->|get_current_user / require_role| Allocation
     SessionDB -.->|get_current_user / require_role| OrderGen
@@ -46,15 +53,20 @@ flowchart LR
   Единственный источник identity/роли для всех остальных модулей.
 - **Ingestion** — единственное место, где решения принимает LLM без гарантии
   правильности; поэтому всегда с человеческим ревью перед записью в `Price`.
+- **Templates** — справочные данные (кто может создавать/редактировать шаблоны —
+  `admin`, как `Supplier`/`Material`), применяются только опционально в момент
+  создания `Project`, не архитектурная часть модуля 2. См.
+  `docs/decisions/0032-project-templates.md`.
 - **Allocation** — детерминированный сервис, без вызовов LLM. См. ADR по алгоритму.
 - **Order generation** — чистая шаблонизация, без бизнес-логики.
 
-Все 9 бизнес-роутеров (`supplier`/`material`/`price`/`price_ingestion`/
-`project`/`allocation`/`order`/`purchase_record` + `/users`) защищены на
-уровне `APIRouter(dependencies=[...])` — `require_role("admin")` для
-справочных данных (`supplier`/`material`/`price`/`price_ingestion`/`users`),
-`get_current_user` (любая роль) для операционной работы
-(`project`/`allocation`/`order`/`purchase_record`) — см. ADR-0024 §4/§5.
+Все 10 бизнес-роутеров (`supplier`/`material`/`price`/`price_ingestion`/
+`template`/`project`/`allocation`/`order`/`purchase_record` + `/users`)
+защищены на уровне `APIRouter(dependencies=[...])` — `require_role("admin")`
+для справочных данных (`supplier`/`material`/`price`/`price_ingestion`/
+`template`/`users`), `get_current_user` (любая роль) для операционной работы
+(`project`/`allocation`/`order`/`purchase_record`) — см. ADR-0024 §4/§5,
+ADR-0032 §2.
 `health.py` остаётся публичным; `auth.py` смешанный (публичные `/login`,
 `/callback`, защищённые `/me`, `/logout`).
 

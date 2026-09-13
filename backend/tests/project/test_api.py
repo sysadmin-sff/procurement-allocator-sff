@@ -40,7 +40,7 @@ def test_list_projects_returns_projects_ordered_by_created_at_desc(
 
 
 def test_create_project_returns_201_with_body(db_session, make_user, make_session):
-    session, project_ids, _material_ids, _supplier_ids, _user_ids = db_session
+    session, project_ids, _material_ids, _supplier_ids, _user_ids, _template_ids = db_session
     employee_email = "employee-project-create@screen-factory-florida.com"
     employee = make_user(email=employee_email, role="employee")
     employee_session = make_session(employee, csrf_token=CSRF)
@@ -160,7 +160,7 @@ def test_get_project_returns_created_project_with_items(
 ):
     project = make_project(title="Get Me")
     material = make_material()
-    session, _project_ids, _material_ids, _supplier_ids, _user_ids = db_session
+    session, _project_ids, _material_ids, _supplier_ids, _user_ids, _template_ids = db_session
     client = _employee_client(make_user, make_session)
 
     response = client.post(
@@ -363,7 +363,7 @@ def test_list_projects_no_session_returns_401():
 
 
 def test_create_project_as_employee_succeeds(db_session, make_user, make_session):
-    session, project_ids, _material_ids, _supplier_ids, _user_ids = db_session
+    session, project_ids, _material_ids, _supplier_ids, _user_ids, _template_ids = db_session
     employee = make_user(role="employee", email="employee-proj-create2@screen-factory-florida.com")
     employee_session = make_session(employee, csrf_token=CSRF)
     client = _client_as(employee_session)
@@ -376,3 +376,70 @@ def test_create_project_as_employee_succeeds(db_session, make_user, make_session
     body = response.json()
     project_ids.append(uuid.UUID(body["id"]))
     assert body["created_by_user_id"] == str(employee.id)
+
+
+def test_create_project_with_template_id_creates_matching_items(
+    db_session, make_material, make_template, make_user, make_session
+):
+    session, project_ids, _material_ids, _supplier_ids, _user_ids, _template_ids = db_session
+    material_a = make_material(canonical_name="Door Panel")
+    material_b = make_material(canonical_name="Door Hinge")
+    template = make_template(name="Standard Door", materials=[material_a, material_b])
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        "/projects",
+        json={"title": "From Template", "template_id": str(template.id)},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    project_ids.append(uuid.UUID(body["id"]))
+
+    get_response = client.get(f"/projects/{body['id']}")
+    items = get_response.json()["items"]
+    assert len(items) == 2
+    material_ids_in_items = {item["material_id"] for item in items}
+    assert material_ids_in_items == {str(material_a.id), str(material_b.id)}
+    assert all(item["quantity"] == 1 for item in items)
+
+
+def test_create_project_with_unknown_template_id_returns_404_and_creates_nothing(
+    db_session, make_user, make_session
+):
+    session, project_ids, _material_ids, _supplier_ids, _user_ids, _template_ids = db_session
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        "/projects",
+        json={"title": "Should Not Exist", "template_id": str(uuid.uuid4())},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 404
+
+    from app.models import Project
+
+    remaining = session.query(Project).filter_by(title="Should Not Exist").count()
+    assert remaining == 0
+
+
+def test_create_project_without_template_id_behaves_as_before(
+    db_session, make_user, make_session
+):
+    session, project_ids, _material_ids, _supplier_ids, _user_ids, _template_ids = db_session
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        "/projects",
+        json={"title": "No Template Project"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    project_ids.append(uuid.UUID(body["id"]))
+
+    get_response = client.get(f"/projects/{body['id']}")
+    assert get_response.json()["items"] == []

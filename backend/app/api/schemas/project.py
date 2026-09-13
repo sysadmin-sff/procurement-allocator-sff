@@ -16,6 +16,9 @@ from app.services.material_naming import KNOWN_COLORS
 
 class ProjectCreate(BaseModel):
     title: str
+    template_id: uuid.UUID | None = None
+    """Опциональный шаблон, чьи позиции подставляются как ProjectItem(quantity=1)
+    в той же транзакции создания. См. ADR-0032 §3."""
 
 
 class ProjectUpdate(BaseModel):

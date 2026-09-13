@@ -28,6 +28,8 @@ erDiagram
     User ||--o{ Order : "создал"
     User ||--o{ PurchaseRecord : "внёс"
     User ||--o{ AllocationLine : "переопределил"
+    ProjectTemplate ||--o{ ProjectTemplateItem : "содержит"
+    Material ||--o{ ProjectTemplateItem : "используется в шаблоне"
 
     Supplier {
         uuid id
@@ -185,6 +187,16 @@ erDiagram
         datetime expires_at
         datetime last_seen_at
     }
+    ProjectTemplate {
+        uuid id
+        string name "уникальное, ориентир выбора в UI"
+        datetime created_at
+    }
+    ProjectTemplateItem {
+        uuid id
+        uuid template_id "FK -> ProjectTemplate, ON DELETE CASCADE"
+        uuid material_id "FK -> Material, ON DELETE CASCADE; уникально вместе с template_id"
+    }
 ```
 
 Правило, которое нельзя нарушать без ADR: `Material.internal_sku` — единственный источник истины
@@ -321,3 +333,20 @@ ordered → completed`. Первые три перехода — автомат�
 напрямую (обычный ручной override) или из `replace_and_sync_order()`
 (find-replacement-флоу, ADR-0014) — оба пути делегируют в одну и ту же
 функцию, поэтому одно место присвоения покрывает оба сценария.
+
+`ProjectTemplate`/`ProjectTemplateItem` добавлены сверх исходной
+диаграммы — см. `docs/decisions/0032-project-templates.md`. Именованный
+набор материалов, который админ готовит заранее, чтобы сотрудник мог
+подставить его целиком при создании проекта (`POST /projects`,
+опциональный `template_id`) — все позиции подставляются с `quantity=1`,
+сотрудник правит количество вручную после применения.
+`ProjectTemplateItem` намеренно без поля `quantity` — единственное
+осмысленное значение всегда `1`, хранение константы не несёт информации
+(см. ADR-0032 §1). Уникальный индекс `(template_id, material_id)` — один
+материал не может входить в шаблон дважды. `ProjectTemplateItem.material_id`
+— `ON DELETE CASCADE`, не блокирующая связь: удаление `Material` тихо
+убирает соответствующую позицию из шаблона, сам `ProjectTemplate`
+остаётся (шаблон — UX-удобство, не исторический документ вроде `Price`/
+`ProjectItem`). `ProjectItem`, созданные из шаблона, ничем не отличаются
+от добавленных вручную — нет обратной ссылки на `ProjectTemplate`
+(`ProjectItem.source_template_id` сознательно отложено, см. ADR-0032 §5).

@@ -1,11 +1,33 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import Fuse from 'fuse.js';
 import { materialsApi } from '../../api/materials';
 import type { Material } from '../../api/types';
 import styles from './ProjectBuilder.module.css';
 
 const MIN_QUERY_LENGTH = 2;
-const SEARCH_DEBOUNCE_MS = 200;
+const MAX_RESULTS = 20;
+
+/**
+ * canonical_name weighted above internal_sku: employees search by product
+ * name far more often than by SKU (SKU is a fallback for when they happen
+ * to remember it). useExtendedSearch splits the query on whitespace into
+ * separate fuzzy terms that must ALL match (in any order) — plain Fuse
+ * treats a multi-word query as one fuzzy pattern, which fails on reordered
+ * words like "white gutter" against "...Super Gutter... (White/Bronze)".
+ * threshold 0.35 tuned against the real catalog (see
+ * MaterialCombobox.fuzzy.test.tsx) — catches word-order swaps and single-typo
+ * queries (e.g. "guttter") without matching unrelated materials.
+ */
+const FUSE_OPTIONS: ConstructorParameters<typeof Fuse<Material>>[1] = {
+  keys: [
+    { name: 'canonical_name', weight: 0.7 },
+    { name: 'internal_sku', weight: 0.3 },
+  ],
+  threshold: 0.35,
+  ignoreLocation: true,
+  useExtendedSearch: true,
+};
 
 interface MaterialComboboxProps {
   query: string;
@@ -30,31 +52,26 @@ export function MaterialCombobox({
   onQuantityFocus,
 }: MaterialComboboxProps) {
   const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState<Material[]>([]);
+  const [catalog, setCatalog] = useState<Material[]>([]);
   const [highlighted, setHighlighted] = useState(0);
   const [openUpward, setOpenUpward] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (query.trim().length < MIN_QUERY_LENGTH) {
-      setOptions([]);
-      return;
-    }
+    materialsApi.list().then(setCatalog).catch(() => setCatalog([]));
+  }, []);
 
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      materialsApi
-        .search(query.trim())
-        .then((results) => {
-          setOptions(results);
-          setHighlighted(0);
-        })
-        .catch(() => setOptions([]));
-    }, SEARCH_DEBOUNCE_MS);
+  const fuse = useMemo(() => new Fuse(catalog, FUSE_OPTIONS), [catalog]);
 
-    return () => clearTimeout(debounceRef.current);
-  }, [query]);
+  const options = useMemo(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < MIN_QUERY_LENGTH) return [];
+    return fuse.search(trimmed, { limit: MAX_RESULTS }).map((r) => r.item);
+  }, [fuse, query]);
+
+  useEffect(() => {
+    setHighlighted(0);
+  }, [options]);
 
   function openList() {
     const wrap = wrapRef.current;

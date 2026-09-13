@@ -9,7 +9,6 @@ import { projectsApi } from '../api/projects';
 
 vi.mock('../api/materials', () => ({
   materialsApi: {
-    search: vi.fn(),
     list: vi.fn(),
   },
 }));
@@ -30,7 +29,6 @@ vi.mock('../api/allocation', () => ({
   },
 }));
 
-const searchMock = vi.mocked(materialsApi.search);
 const materialsListMock = vi.mocked(materialsApi.list);
 const createMock = vi.mocked(projectsApi.create);
 const updateProjectMock = vi.mocked(projectsApi.updateProject);
@@ -58,7 +56,6 @@ const material = {
 
 describe('ProjectBuilderPage', () => {
   beforeEach(() => {
-    searchMock.mockReset();
     materialsListMock.mockReset();
     createMock.mockReset();
     updateProjectMock.mockReset();
@@ -71,7 +68,7 @@ describe('ProjectBuilderPage', () => {
 
   it('disables "Рассчитать закупку" until a row has both material and quantity', async () => {
     const user = userEvent.setup();
-    searchMock.mockResolvedValue([material]);
+    materialsListMock.mockResolvedValue([material]);
 
     renderPage();
 
@@ -79,9 +76,8 @@ describe('ProjectBuilderPage', () => {
     expect(calcButton).toBeDisabled();
 
     const [materialInput] = screen.getAllByPlaceholderText('Название или артикул…');
+    await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
     await user.type(materialInput, 'сетка');
-
-    await waitFor(() => expect(searchMock).toHaveBeenCalledWith('сетка'));
 
     const option = await screen.findByText('Сетка Fiberglass 18x14');
     await user.click(option);
@@ -103,9 +99,10 @@ describe('ProjectBuilderPage', () => {
 
   it('adds a new row on Enter in the quantity field', async () => {
     const user = userEvent.setup();
-    searchMock.mockResolvedValue([{ ...material, id: 'mat-1', canonical_name: 'Material One' }]);
+    materialsListMock.mockResolvedValue([{ ...material, id: 'mat-1', canonical_name: 'Material One' }]);
 
     renderPage();
+    await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
 
     const initialRows = screen.getAllByPlaceholderText('Название или артикул…');
     expect(initialRows).toHaveLength(2);
@@ -146,7 +143,7 @@ describe('ProjectBuilderPage', () => {
 
   it('creates a ProjectItem once a row becomes filled, then updates it instead of re-adding on further quantity changes', async () => {
     const user = userEvent.setup();
-    searchMock.mockResolvedValue([material]);
+    materialsListMock.mockResolvedValue([material]);
     createMock.mockResolvedValue({
       id: 'proj-1',
       title: 'Проект без названия',
@@ -168,10 +165,10 @@ describe('ProjectBuilderPage', () => {
     });
 
     renderPage();
+    await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
 
     const [materialInput] = screen.getAllByPlaceholderText('Название или артикул…');
     await user.type(materialInput, 'сетка');
-    await waitFor(() => expect(searchMock).toHaveBeenCalled());
     const option = await screen.findByText(material.canonical_name);
     await user.click(option);
 
@@ -191,7 +188,7 @@ describe('ProjectBuilderPage', () => {
 
   it('flushes a still-pending quantity edit immediately on "Рассчитать закупку", instead of only waiting for already-started saves', async () => {
     const user = userEvent.setup();
-    searchMock.mockResolvedValue([material]);
+    materialsListMock.mockResolvedValue([material]);
     createMock.mockResolvedValue({
       id: 'proj-1',
       title: 'Проект без названия',
@@ -224,10 +221,10 @@ describe('ProjectBuilderPage', () => {
     });
 
     renderPage();
+    await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
 
     const [materialInput] = screen.getAllByPlaceholderText('Название или артикул…');
     await user.type(materialInput, 'сетка');
-    await waitFor(() => expect(searchMock).toHaveBeenCalled());
     const option = await screen.findByText(material.canonical_name);
     await user.click(option);
 
@@ -251,11 +248,7 @@ describe('ProjectBuilderPage', () => {
   it('does not drop an earlier row\'s pending save when a second row is edited within the same debounce window', async () => {
     const user = userEvent.setup();
     const materialTwo = { ...material, id: 'mat-2', canonical_name: 'Rivet Box' };
-    searchMock.mockImplementation((q: string) =>
-      Promise.resolve(
-        q.toLowerCase().includes('rivet') ? [materialTwo] : [material],
-      ),
-    );
+    materialsListMock.mockResolvedValue([material, materialTwo]);
     createMock.mockResolvedValue({
       id: 'proj-1',
       title: 'Проект без названия',
@@ -273,6 +266,7 @@ describe('ProjectBuilderPage', () => {
     );
 
     renderPage();
+    await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
 
     const materialInputs = screen.getAllByPlaceholderText('Название или артикул…');
     const qtyInputs = screen.getAllByPlaceholderText('0');

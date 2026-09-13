@@ -8,10 +8,10 @@ import { materialsApi } from '../../api/materials';
 import type { Material } from '../../api/types';
 
 vi.mock('../../api/materials', () => ({
-  materialsApi: { search: vi.fn() },
+  materialsApi: { list: vi.fn() },
 }));
 
-const searchMock = vi.mocked(materialsApi.search);
+const listMock = vi.mocked(materialsApi.list);
 
 const material = {
   id: 'mat-1',
@@ -49,8 +49,8 @@ function renderCombobox() {
 
 describe('MaterialCombobox positioning', () => {
   beforeEach(() => {
-    searchMock.mockReset();
-    searchMock.mockResolvedValue([material]);
+    listMock.mockReset();
+    listMock.mockResolvedValue([material]);
   });
 
   it('opens the list downward when there is enough room below the input', async () => {
@@ -72,8 +72,8 @@ describe('MaterialCombobox positioning', () => {
     } as DOMRect);
     Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
 
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
     await user.type(input, 'сетка');
-    await waitFor(() => expect(searchMock).toHaveBeenCalled());
     await screen.findByText(material.canonical_name);
 
     const list = document.querySelector(`.${styles.comboboxList}`);
@@ -100,8 +100,8 @@ describe('MaterialCombobox positioning', () => {
     } as DOMRect);
     Object.defineProperty(window, 'innerHeight', { value: 800, configurable: true });
 
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
     await user.type(input, 'сетка');
-    await waitFor(() => expect(searchMock).toHaveBeenCalled());
     await screen.findByText(material.canonical_name);
 
     const list = document.querySelector(`.${styles.comboboxList}`);

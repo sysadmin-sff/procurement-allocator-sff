@@ -39,12 +39,12 @@ def list_projects(db: Session = Depends(get_db)) -> list[Project]:
     return list(db.query(Project).order_by(Project.created_at.desc()).all())
 
 
-@router.post("", response_model=ProjectOut, status_code=201)
+@router.post("", response_model=ProjectWithItemsOut, status_code=201)
 def create_project(
     payload: ProjectCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Project:
+) -> ProjectWithItemsOut:
     template = None
     if payload.template_id is not None:
         template = db.get(ProjectTemplate, payload.template_id)
@@ -67,7 +67,16 @@ def create_project(
 
     db.commit()
     db.refresh(project)
-    return project
+
+    return ProjectWithItemsOut(
+        id=project.id,
+        title=project.title,
+        created_by_user_id=project.created_by_user_id,
+        status=project.status,
+        created_at=project.created_at,
+        items=[ProjectItemOut.model_validate(item) for item in project.items],
+        latest_allocation_run=None,
+    )
 
 
 @router.patch("/{project_id}", response_model=ProjectOut)

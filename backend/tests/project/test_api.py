@@ -397,12 +397,17 @@ def test_create_project_with_template_id_creates_matching_items(
     body = response.json()
     project_ids.append(uuid.UUID(body["id"]))
 
-    get_response = client.get(f"/projects/{body['id']}")
-    items = get_response.json()["items"]
+    items = body["items"]
     assert len(items) == 2
     material_ids_in_items = {item["material_id"] for item in items}
     assert material_ids_in_items == {str(material_a.id), str(material_b.id)}
     assert all(item["quantity"] == 1 for item in items)
+
+    # Also verified via a follow-up GET — same items, confirming the POST
+    # response isn't just an in-memory echo that diverges from what's
+    # actually persisted.
+    get_response = client.get(f"/projects/{body['id']}")
+    assert get_response.json()["items"] == items
 
 
 def test_create_project_with_unknown_template_id_returns_404_and_creates_nothing(
@@ -440,6 +445,7 @@ def test_create_project_without_template_id_behaves_as_before(
     assert response.status_code == 201
     body = response.json()
     project_ids.append(uuid.UUID(body["id"]))
+    assert body["items"] == []
 
     get_response = client.get(f"/projects/{body['id']}")
     assert get_response.json()["items"] == []

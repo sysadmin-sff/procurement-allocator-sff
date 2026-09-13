@@ -6,6 +6,7 @@ import { ProjectBuilderPage } from './ProjectBuilderPage';
 import { allocationApi } from '../api/allocation';
 import { materialsApi } from '../api/materials';
 import { projectsApi } from '../api/projects';
+import { templatesApi } from '../api/templates';
 
 vi.mock('../api/materials', () => ({
   materialsApi: {
@@ -29,6 +30,12 @@ vi.mock('../api/allocation', () => ({
   },
 }));
 
+vi.mock('../api/templates', () => ({
+  templatesApi: {
+    list: vi.fn(),
+  },
+}));
+
 const materialsListMock = vi.mocked(materialsApi.list);
 const createMock = vi.mocked(projectsApi.create);
 const updateProjectMock = vi.mocked(projectsApi.updateProject);
@@ -36,6 +43,7 @@ const addItemMock = vi.mocked(projectsApi.addItem);
 const updateItemMock = vi.mocked(projectsApi.updateItem);
 const removeItemMock = vi.mocked(projectsApi.removeItem);
 const runAllocationMock = vi.mocked(allocationApi.run);
+const templatesListMock = vi.mocked(templatesApi.list);
 
 function renderPage() {
   return render(
@@ -63,7 +71,9 @@ describe('ProjectBuilderPage', () => {
     updateItemMock.mockReset();
     removeItemMock.mockReset();
     runAllocationMock.mockReset();
+    templatesListMock.mockReset();
     materialsListMock.mockResolvedValue([]);
+    templatesListMock.mockResolvedValue([]);
   });
 
   it('disables "Рассчитать закупку" until a row has both material and quantity', async () => {
@@ -128,6 +138,8 @@ describe('ProjectBuilderPage', () => {
       created_by: null,
       status: 'draft',
       created_at: '2026-08-18T00:00:00Z',
+      items: [],
+      latest_allocation_run: null,
     });
 
     renderPage();
@@ -138,7 +150,7 @@ describe('ProjectBuilderPage', () => {
     expect(createMock).not.toHaveBeenCalled();
 
     await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
-    expect(createMock).toHaveBeenCalledWith({ title: 'Pool cage' });
+    expect(createMock).toHaveBeenCalledWith({ title: 'Pool cage', template_id: null });
   });
 
   it('creates a ProjectItem once a row becomes filled, then updates it instead of re-adding on further quantity changes', async () => {
@@ -150,6 +162,8 @@ describe('ProjectBuilderPage', () => {
       created_by: null,
       status: 'draft',
       created_at: '2026-08-18T00:00:00Z',
+      items: [],
+      latest_allocation_run: null,
     });
     addItemMock.mockResolvedValue({
       id: 'item-1',
@@ -195,6 +209,8 @@ describe('ProjectBuilderPage', () => {
       created_by: null,
       status: 'draft',
       created_at: '2026-08-18T00:00:00Z',
+      items: [],
+      latest_allocation_run: null,
     });
     addItemMock.mockResolvedValue({
       id: 'item-1',
@@ -255,6 +271,8 @@ describe('ProjectBuilderPage', () => {
       created_by: null,
       status: 'draft',
       created_at: '2026-08-18T00:00:00Z',
+      items: [],
+      latest_allocation_run: null,
     });
     addItemMock.mockImplementation((_projectId, payload) =>
       Promise.resolve({
@@ -287,5 +305,142 @@ describe('ProjectBuilderPage', () => {
     await waitFor(() => expect(addItemMock).toHaveBeenCalledTimes(2), { timeout: 2000 });
     expect(addItemMock).toHaveBeenCalledWith('proj-1', { material_id: 'mat-1', quantity: 5 });
     expect(addItemMock).toHaveBeenCalledWith('proj-1', { material_id: 'mat-2', quantity: 3 });
+  });
+
+  describe('project templates (ADR-0032 §3)', () => {
+    const template = {
+      id: 'tmpl-1',
+      name: 'Стандартная дверь',
+      created_at: '2026-01-01T00:00:00Z',
+      items: [
+        { id: 'ti-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: material.unit, category: material.category },
+      ],
+    };
+
+    it('creates the project with the selected template_id and populates rows with quantity=1', async () => {
+      const user = userEvent.setup();
+      templatesListMock.mockResolvedValue([template]);
+      materialsListMock.mockResolvedValue([material]);
+      createMock.mockResolvedValue({
+        id: 'proj-1',
+        title: 'Проект без названия',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-18T00:00:00Z',
+        items: [{ id: 'item-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 1 }],
+        latest_allocation_run: null,
+      });
+
+      renderPage();
+      await screen.findByLabelText('Шаблон');
+
+      await user.selectOptions(screen.getByLabelText('Шаблон'), 'tmpl-1');
+
+      const titleInput = screen.getByLabelText('Название проекта');
+      await user.type(titleInput, 'Pool cage');
+
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+      expect(createMock).toHaveBeenCalledWith({ title: 'Pool cage', template_id: 'tmpl-1' });
+
+      const qtyInputs = await screen.findAllByPlaceholderText('0');
+      expect((qtyInputs[0] as HTMLInputElement).value).toBe('1');
+      const materialInputs = screen.getAllByPlaceholderText('Название или артикул…');
+      expect((materialInputs[0] as HTMLInputElement).value).toBe(material.canonical_name);
+    });
+
+    it('the template selector disappears once the project is created', async () => {
+      const user = userEvent.setup();
+      templatesListMock.mockResolvedValue([template]);
+      createMock.mockResolvedValue({
+        id: 'proj-1',
+        title: 'Pool cage',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-18T00:00:00Z',
+        items: [],
+        latest_allocation_run: null,
+      });
+
+      renderPage();
+      await screen.findByLabelText('Шаблон');
+
+      const titleInput = screen.getByLabelText('Название проекта');
+      await user.type(titleInput, 'Pool cage');
+
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+      await waitFor(() => expect(screen.queryByLabelText('Шаблон')).not.toBeInTheDocument());
+    });
+
+    it('"без шаблона" (no selection) behaves exactly like current empty-project behavior', async () => {
+      const user = userEvent.setup();
+      templatesListMock.mockResolvedValue([template]);
+      createMock.mockResolvedValue({
+        id: 'proj-1',
+        title: 'Pool cage',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-18T00:00:00Z',
+        items: [],
+        latest_allocation_run: null,
+      });
+
+      renderPage();
+      await screen.findByLabelText('Шаблон');
+
+      const titleInput = screen.getByLabelText('Название проекта');
+      await user.type(titleInput, 'Pool cage');
+
+      await waitFor(() => expect(createMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+      expect(createMock).toHaveBeenCalledWith({ title: 'Pool cage', template_id: null });
+      // Still just the two originally-empty rows — nothing was inserted from a template.
+      expect(screen.getAllByPlaceholderText('Название или артикул…')).toHaveLength(2);
+    });
+
+    it('rows populated from a template are fully editable and removable like manually added rows', async () => {
+      const user = userEvent.setup();
+      templatesListMock.mockResolvedValue([template]);
+      materialsListMock.mockResolvedValue([material]);
+      createMock.mockResolvedValue({
+        id: 'proj-1',
+        title: 'Проект без названия',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-18T00:00:00Z',
+        items: [{ id: 'item-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 1 }],
+        latest_allocation_run: null,
+      });
+      updateItemMock.mockResolvedValue({
+        id: 'item-1',
+        project_id: 'proj-1',
+        material_id: 'mat-1',
+        quantity: 4,
+      });
+      removeItemMock.mockResolvedValue(undefined);
+
+      renderPage();
+      await screen.findByLabelText('Шаблон');
+      await user.selectOptions(screen.getByLabelText('Шаблон'), 'tmpl-1');
+
+      const titleInput = screen.getByLabelText('Название проекта');
+      await user.type(titleInput, 'Pool cage');
+
+      // Wait for the template-derived row to actually appear (material populated)
+      // before touching its quantity — findAllByPlaceholderText('0') alone would
+      // resolve against the still-empty starter rows.
+      await waitFor(() => {
+        const materialInputs = screen.getAllByPlaceholderText('Название или артикул…') as HTMLInputElement[];
+        expect(materialInputs.some((el) => el.value === material.canonical_name)).toBe(true);
+      });
+
+      const qtyInputs = screen.getAllByPlaceholderText('0');
+      await user.type(qtyInputs[0], '{Backspace}4');
+      await waitFor(() => expect(updateItemMock).toHaveBeenCalledWith('proj-1', 'item-1', 4), {
+        timeout: 2000,
+      });
+
+      const removeButtons = screen.getAllByTitle('Удалить строку');
+      await user.click(removeButtons[0]);
+      await waitFor(() => expect(removeItemMock).toHaveBeenCalledWith('proj-1', 'item-1'));
+    });
   });
 });

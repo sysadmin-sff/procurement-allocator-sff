@@ -11,6 +11,7 @@ import {
   ProjectBuilderPage,
   ProjectRouterPage,
   ProjectsListPage,
+  ProjectTemplatesPage,
   PurchaseRecordsPage,
   SupplierDetailPage,
   SuppliersPage,
@@ -41,6 +42,7 @@ function App() {
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/suppliers/:supplierId" element={<SupplierDetailPage />} />
         <Route path="/users" element={<UsersPage />} />
+        <Route path="/project-templates" element={<ProjectTemplatesPage />} />
       </Route>
     </Routes>
   );

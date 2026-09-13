@@ -12,3 +12,4 @@ export { MaterialsPage } from './MaterialsPage';
 export { SuppliersPage } from './SuppliersPage';
 export { SupplierDetailPage } from './suppliers/SupplierDetailPage';
 export { UsersPage } from './UsersPage';
+export { ProjectTemplatesPage } from './ProjectTemplatesPage';

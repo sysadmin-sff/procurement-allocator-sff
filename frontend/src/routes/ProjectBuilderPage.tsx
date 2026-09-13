@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { allocationApi } from '../api/allocation';
 import { materialsApi } from '../api/materials';
 import { projectsApi } from '../api/projects';
-import type { Material, ProjectWithItems } from '../api/types';
+import { templatesApi } from '../api/templates';
+import type { Material, ProjectTemplate, ProjectWithItems } from '../api/types';
 import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
@@ -84,6 +85,8 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
   const qtyInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const projectIdRef = useRef<string | null>(projectId ?? initialProject?.id ?? null);
   const titleSavedRef = useRef(initialProject?.title ?? '');
+  const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!initialProject) return;
@@ -92,6 +95,13 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
       setRowsLoading(false);
     });
   }, [initialProject]);
+
+  useEffect(() => {
+    // Template selection only applies before the project exists (ADR-0032 §3)
+    // — no point loading the list on the edit-existing-draft path.
+    if (initialProject || projectId) return;
+    templatesApi.list().then(setTemplates).catch(() => setTemplates([]));
+  }, [initialProject, projectId]);
 
   const filledRows = rows.filter(isFilled);
   const incompleteCount = rows.length - filledRows.length;
@@ -148,11 +158,20 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
     if (creationInFlightRef.current) return creationInFlightRef.current;
 
     const creation = withSaveTracking(
-      projectsApi.create({ title: currentTitle.trim() || 'Проект без названия' })
-    ).then((project) => {
+      projectsApi.create({
+        title: currentTitle.trim() || 'Проект без названия',
+        template_id: selectedTemplateId,
+      })
+    ).then(async (project) => {
       projectIdRef.current = project.id;
       titleSavedRef.current = project.title;
       navigate(`/projects/${project.id}`, { replace: true });
+
+      if (project.items.length > 0) {
+        const materials = await materialsApi.list();
+        setRows((prev) => [...project.items.map((item) => rowFromItem(item, materials)), ...prev]);
+      }
+
       return project.id;
     });
 
@@ -313,6 +332,26 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
           )}
 
           <div className={`${styles.card} ${styles.detailsCard}`}>
+            {!initialProject && !projectId && projectIdRef.current == null && templates.length > 0 && (
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="project-template">
+                  Шаблон
+                </label>
+                <select
+                  id="project-template"
+                  className={styles.input}
+                  value={selectedTemplateId ?? ''}
+                  onChange={(e) => setSelectedTemplateId(e.target.value || null)}
+                >
+                  <option value="">Без шаблона</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className={styles.field}>
               <label className={styles.label} htmlFor="project-title">
                 Название проекта

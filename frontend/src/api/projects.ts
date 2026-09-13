@@ -3,7 +3,9 @@ import type { Project, ProjectCreate, ProjectItem, ProjectItemCreate, ProjectWit
 
 export const projectsApi = {
   list: () => http.get<Project[]>('/projects'),
-  create: (payload: ProjectCreate) => http.post<Project>('/projects', payload),
+  /** Returns the created Project's items too (empty unless a template_id was
+   * applied) — see ADR-0032 §3, avoids a separate GET just to read them back. */
+  create: (payload: ProjectCreate) => http.post<ProjectWithItems>('/projects', payload),
   /** color_choice omitted (not undefined) leaves it untouched server-side;
    * pass null explicitly to clear it. title is always required by the
    * backend's ProjectUpdate schema, even when only color_choice changed. */

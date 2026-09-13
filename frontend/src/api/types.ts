@@ -199,6 +199,29 @@ export interface Project {
 export interface ProjectCreate {
   title: string;
   created_by?: string | null;
+  /** Optional template applied at creation only — see ADR-0032 §3. */
+  template_id?: string | null;
+}
+
+/** One material entry of a ProjectTemplate — denormalized material fields
+ * for display, no quantity (always applied as 1, see ADR-0032 §1). */
+export interface ProjectTemplateItem {
+  id: string;
+  material_id: string;
+  canonical_name: string;
+  unit: string;
+  category: string | null;
+}
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  created_at: string;
+  items: ProjectTemplateItem[];
+}
+
+export interface ProjectTemplateCreate {
+  name: string;
 }
 
 export interface ProjectItem {

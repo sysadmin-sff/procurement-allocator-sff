@@ -493,7 +493,7 @@ describe('AllocationResultPage', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
 
-    expect(createOrdersMock).toHaveBeenCalledWith('proj-1', 'run-4', undefined);
+    expect(createOrdersMock).toHaveBeenCalledWith('proj-1', 'run-4', undefined, undefined);
     expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
   });
 
@@ -609,11 +609,11 @@ describe('AllocationResultPage', () => {
     await user.click(screen.getByRole('button', { name: /Заменить черновики/ }));
 
     expect(createOrdersMock).toHaveBeenCalledTimes(2);
-    expect(createOrdersMock).toHaveBeenNthCalledWith(2, 'proj-1', 'run-8', true);
+    expect(createOrdersMock).toHaveBeenNthCalledWith(2, 'proj-1', 'run-8', true, undefined);
     expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
   });
 
-  it('does not offer an "add additional" action on the page — the backend has no way to fulfill it', async () => {
+  it('creates an additional order without replacing existing drafts when "Создать дополнительно" is confirmed', async () => {
     const okRun: AllocationRun = {
       id: 'run-9',
       project_id: 'proj-1',
@@ -650,16 +650,18 @@ describe('AllocationResultPage', () => {
       ],
     };
     createOrdersMock.mockRejectedValueOnce(new ApiError(409, conflict));
+    createOrdersMock.mockResolvedValueOnce([]);
 
     renderPage();
 
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
     await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: /Создать дополнительно/ }));
 
-    expect(
-      screen.queryByRole('button', { name: /Создать дополнительно/ }),
-    ).not.toBeInTheDocument();
+    expect(createOrdersMock).toHaveBeenCalledTimes(2);
+    expect(createOrdersMock).toHaveBeenNthCalledWith(2, 'proj-1', 'run-9', false, true);
+    expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
   });
 
   it('re-shows the conflict modal with fresh data if replacing hits a new conflict', async () => {

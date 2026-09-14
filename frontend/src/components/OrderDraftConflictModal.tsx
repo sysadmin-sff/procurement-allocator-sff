@@ -6,6 +6,11 @@ import type { OrderDraftConflict, SupplierWithExistingDrafts } from '../api/type
 interface OrderDraftConflictModalProps {
   conflict: OrderDraftConflict;
   onReplace: () => void;
+  /** "Создать дополнительно" (ADR-0012 §1/§2) — sends acknowledge_conflict
+   * instead of replace_drafts, so the existing drafts stay untouched.
+   * Ungated by the confirmed-price checkbox below: that checkbox protects
+   * the destructive replace path, and this path deletes nothing. */
+  onAcknowledge: () => void;
   onCancel: () => void;
   submitting?: boolean;
 }
@@ -16,10 +21,15 @@ function hasConfirmedPrices(supplier: SupplierWithExistingDrafts): boolean {
 
 /** Shown when POST .../orders returns 409 — see ADR-0012. Never opened
  * preemptively from client-side state; the backend's response is the only
- * source of truth for whether a conflict exists (ADR-0012 п.3). */
+ * source of truth for whether a conflict exists (ADR-0012 п.3). Offers two
+ * ways forward: replace the conflicting drafts, or create an additional
+ * Order alongside them (ADR-0012 §1/§2 "создать дополнительно" — see
+ * docs/known-issues.md "Follow-up... дозаказ тому же поставщику" for why
+ * this needed its own acknowledge_conflict field on the backend). */
 export function OrderDraftConflictModal({
   conflict,
   onReplace,
+  onAcknowledge,
   onCancel,
   submitting,
 }: OrderDraftConflictModalProps) {
@@ -80,6 +90,9 @@ export function OrderDraftConflictModal({
         <div className={styles.actions}>
           <Button variant="ghost" disabled={submitting} onClick={onCancel}>
             Отмена
+          </Button>
+          <Button variant="secondary" disabled={submitting} onClick={onAcknowledge}>
+            Создать дополнительно
           </Button>
           <Button variant="danger" disabled={replaceDisabled} onClick={onReplace}>
             Заменить черновики

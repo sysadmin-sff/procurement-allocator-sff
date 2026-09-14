@@ -17,9 +17,16 @@ export interface OrderItemPatch {
 }
 
 export const ordersApi = {
-  createForRun: (projectId: string, runId: string, replaceDrafts = false) =>
+  /** acknowledgeConflict — "Создать дополнительно" (ADR-0012 §1/§2): caller
+   * already saw the 409 and wants the extra Order anyway, without deleting
+   * the existing drafts. Distinct from replaceDrafts=false — the endpoint
+   * is stateless and can't otherwise tell "not asked yet" from "asked and
+   * confirmed". See docs/known-issues.md "Follow-up... дозаказ тому же
+   * поставщику". replaceDrafts takes precedence if both are true. */
+  createForRun: (projectId: string, runId: string, replaceDrafts = false, acknowledgeConflict = false) =>
     http.post<Order[]>(`/projects/${projectId}/allocations/${runId}/orders`, {
       replace_drafts: replaceDrafts,
+      acknowledge_conflict: acknowledgeConflict,
     }),
   listForProject: (projectId: string) => http.get<Order[]>(`/projects/${projectId}/orders`),
   get: (orderId: string) => http.get<Order>(`/orders/${orderId}`),

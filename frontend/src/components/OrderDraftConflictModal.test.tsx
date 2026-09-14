@@ -51,6 +51,7 @@ describe('OrderDraftConflictModal', () => {
       <OrderDraftConflictModal
         conflict={conflictWithoutConfirmedPrices}
         onReplace={vi.fn()}
+        onAcknowledge={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -68,6 +69,7 @@ describe('OrderDraftConflictModal', () => {
       <OrderDraftConflictModal
         conflict={conflictWithoutConfirmedPrices}
         onReplace={onReplace}
+        onAcknowledge={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -78,18 +80,24 @@ describe('OrderDraftConflictModal', () => {
     expect(onReplace).toHaveBeenCalledTimes(1);
   });
 
-  it('does not offer an "add additional" action — the backend has no way to fulfill it without replace_drafts', () => {
+  it('calls onAcknowledge, ungated by the confirmed-price checkbox, when "Создать дополнительно" is clicked', async () => {
+    const onAcknowledge = vi.fn();
     render(
       <OrderDraftConflictModal
-        conflict={conflictWithoutConfirmedPrices}
+        conflict={conflictWithConfirmedPrices}
         onReplace={vi.fn()}
+        onAcknowledge={onAcknowledge}
         onCancel={vi.fn()}
       />,
     );
 
-    expect(
-      screen.queryByRole('button', { name: /Создать дополнительно/ }),
-    ).not.toBeInTheDocument();
+    // Even with a confirmed-price supplier in the conflict (which disables
+    // "Заменить черновики" until acknowledged), "Создать дополнительно"
+    // deletes nothing and stays enabled without the checkbox.
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /Создать дополнительно/ }));
+
+    expect(onAcknowledge).toHaveBeenCalledTimes(1);
   });
 
   it('shows a distinct warning for a supplier whose draft has confirmed prices', () => {
@@ -97,6 +105,7 @@ describe('OrderDraftConflictModal', () => {
       <OrderDraftConflictModal
         conflict={conflictWithConfirmedPrices}
         onReplace={vi.fn()}
+        onAcknowledge={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -112,6 +121,7 @@ describe('OrderDraftConflictModal', () => {
       <OrderDraftConflictModal
         conflict={conflictWithConfirmedPrices}
         onReplace={onReplace}
+        onAcknowledge={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -134,6 +144,7 @@ describe('OrderDraftConflictModal', () => {
       <OrderDraftConflictModal
         conflict={conflictWithoutConfirmedPrices}
         onReplace={vi.fn()}
+        onAcknowledge={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -147,6 +158,7 @@ describe('OrderDraftConflictModal', () => {
       <OrderDraftConflictModal
         conflict={conflictWithoutConfirmedPrices}
         onReplace={vi.fn()}
+        onAcknowledge={vi.fn()}
         onCancel={onCancel}
       />,
     );

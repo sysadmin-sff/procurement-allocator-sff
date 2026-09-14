@@ -59,51 +59,24 @@
   или «Отмена». См. ADR-0012, раздел «Отклонение реализации от принятого
   решения», за полным разбором.
 
-- **Follow-up (не отложено — подтверждено критично, 2026-08-20):
-  дозаказ тому же поставщику при уже существующем draft.**
-  **Backend-часть реализована 2026-08-31** (`acknowledge_conflict` в
+- **Закрыто (2026-09-14): дозаказ тому же поставщику при уже существующем
+  draft.** Backend реализован 2026-08-31 (`acknowledge_conflict` в
   `CreateOrdersIn`/`create_orders_for_run`, тесты в
-  `backend/tests/allocation/test_order_draft_conflict.py`); frontend-часть
-  (`OrderDraftConflictModal`, `AllocationResultPage.handleCreateOrders`,
-  кнопка «Создать дополнительно») — **ещё нет**, отдельная следующая
-  задача. Пункт закрывается целиком только после неё. Подтверждено
-  пользователем как реальный, недавний сценарий из практики отдела
-  закупок, не гипотетика — брать в работу скоро, не откладывать на
-  "когда понадобится" (в отличие от остальных пунктов этого файла).
-  Единственный сейчас доступный путь — «Заменить черновики», который
-  **удаляет** старый draft; если у него уже есть `confirmed_price`
-  (сверенные с поставщиком цены, ADR-0007 п.3), это необратимая потеря
-  ручного труда, не просто неудобство.
-
-  Маленькая точечная задача (не новый ADR — не меняет ни одного из
-  принципов ADR-0012 §1–§4, только достраивает API):
-  - ✅ Новое поле тела `POST .../orders`, например
-    `acknowledge_conflict: bool = false`, отдельное от `replace_drafts`
-    (не переиспользовать `replace_drafts: false` для этого — именно
-    неразличимость этих двух смыслов и есть причина текущего пробела).
-  - ✅ `create_orders_for_run()`
-    (`backend/app/allocation/order_service.py`): если конфликт есть,
-    `replace_drafts` не `true`, но `acknowledge_conflict: true` —
-    создание проходит как обычно (`201`), ничего не удаляется, старые
-    draft остаются нетронутыми рядом с новыми. Без
-    `acknowledge_conflict` — прежнее поведение (`409`).
-    Реализовано так, что `replace_drafts: true` имеет приоритет, если
-    переданы оба флага (более конкретная инструкция; любой из флагов уже
-    означает, что пользователь конфликт видел).
-  - ⬜ `OrderDraftConflictModal` (`frontend/src/components/
-    OrderDraftConflictModal.tsx`) и `AllocationResultPage.
-    handleCreateOrders`: возвращают кнопку «Создать дополнительно»,
-    повторный вызов отправляет `acknowledge_conflict: true` вместо
-    прежнего `replace_drafts: false`. **Не сделано** — сознательно
-    отложено до проверки backend-части на основной машине.
-  - ✅ Тесты (backend): конфликт + `acknowledge_conflict: true` → `201`,
-    старые draft целы (включая `confirmed_price` на них), новые созданы
-    рядом; конфликт + `acknowledge_conflict` не передан / `false` →
-    по-прежнему `409` (регресс на поведение этого ADR). Плюс: приоритет
-    `replace_drafts` при обоих флагах и сохранение гранулярности
-    по поставщику (ADR-0012 п.3) на новом пути.
-    ⬜ Frontend-тест (аналог удалённого в frontend-сессии сценария из
-    `AllocationResultPage.test.tsx`) — вместе с задачей по модалке.
+  `backend/tests/allocation/test_order_draft_conflict.py`). Frontend
+  реализован 2026-09-14: `OrderDraftConflictModal`
+  (`frontend/src/components/OrderDraftConflictModal.tsx`) снова показывает
+  кнопку «Создать дополнительно» (`onAcknowledge` prop), не гейтится
+  чекбоксом подтверждённых цен — тот чекбокс защищает только деструктивный
+  путь «Заменить черновики», а «Создать дополнительно» ничего не удаляет.
+  `AllocationResultPage.handleCreateOrders` принимает второй опциональный
+  флаг и передаёт его в `ordersApi.createForRun(projectId, runId,
+  replaceDrafts, acknowledgeConflict)`, который отправляет
+  `acknowledge_conflict: true` вместо повторного `replace_drafts: false`.
+  Тесты: `OrderDraftConflictModal.test.tsx` (клик по кнопке → `onAcknowledge`,
+  без чекбокса даже при `has_confirmed_prices: true`),
+  `AllocationResultPage.test.tsx` (клик в модалке → второй вызов
+  `createForRun` с `acknowledge_conflict: true`, навигация как у пути
+  «Заменить черновики», симметрично существующему replace-сценарию).
 
 - Нет `get_or_404` хелпера — дублирован в supplier/material/price/allocation роутах.
 - Нет пагинации на `GET /suppliers`, `GET /materials`, `GET /prices`.

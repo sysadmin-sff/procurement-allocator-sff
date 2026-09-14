@@ -188,12 +188,12 @@ function AllocationResultOk({
     }
   }
 
-  async function handleCreateOrders(replaceDrafts?: boolean) {
+  async function handleCreateOrders(replaceDrafts?: boolean, acknowledgeConflict?: boolean) {
     setCreateOrdersError(null);
     setDraftConflict(null);
     setCreatingOrders(true);
     try {
-      await ordersApi.createForRun(project.id, run.id, replaceDrafts);
+      await ordersApi.createForRun(project.id, run.id, replaceDrafts, acknowledgeConflict);
       onOrdersCreated();
     } catch (err) {
       // A conflict can resurface even on a retry (e.g. another draft was
@@ -403,6 +403,7 @@ function AllocationResultOk({
           conflict={draftConflict}
           submitting={creatingOrders}
           onReplace={() => void handleCreateOrders(true)}
+          onAcknowledge={() => void handleCreateOrders(false, true)}
           onCancel={() => setDraftConflict(null)}
         />
       )}

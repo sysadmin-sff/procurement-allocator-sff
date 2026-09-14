@@ -100,6 +100,63 @@ ALTER TABLE order_items
 обоими полями или ни одним, и ничего в схеме БД этого бы не поймало.
 Constraint — дешёвая гарантия на уровне, откуда её нельзя обойти.
 
+**Downgrade миграции — явный отказ, если в таблице уже есть лёгкие
+строки, не молчаливая порча данных.** `ALTER COLUMN material_id SET NOT
+NULL` физически не может выполниться, если существует хотя бы одна
+строка с `material_id IS NULL` — Postgres сам откажет с ошибкой
+constraint violation. Но `downgrade()` обязан сначала снять
+`ck_order_items_material_xor_raw_description` (иначе `DROP COLUMN
+raw_description` невозможен — constraint на неё ссылается), и вот в этот
+момент, между снятием constraint и восстановлением `NOT NULL`, ничего
+формально не мешает откату продолжиться и молча уронить
+`raw_description` вместе с данными в ней, если наивно писать
+`downgrade()` как зеркало `upgrade()` без проверки. Решение — explicit
+guard в начале `downgrade()`, тот же принцип "явный отказ лучше
+молчаливой порчи данных", что уже применён к остальным
+необратимым/условно необратимым операциям проекта (например,
+`ProjectHasSentOrdersError` в `delete_project`, ADR-0009 п.1 — отказ
+вместо тихого каскадного удаления истории):
+
+```python
+# from alembic import op
+# import sqlalchemy as sa
+def downgrade() -> None:
+    bind = op.get_bind()
+    orphaned = bind.execute(
+        sa.text("SELECT count(*) FROM order_items WHERE material_id IS NULL")
+    ).scalar()
+    if orphaned:
+        raise RuntimeError(
+            f"Cannot downgrade: {orphaned} order_items row(s) have "
+            "material_id IS NULL (raw_description-only rows from "
+            "ADR-0033). Resolve or delete them manually before "
+            "downgrading — this migration will not silently drop data."
+        )
+    op.drop_constraint(
+        "ck_order_items_material_xor_raw_description", "order_items", type_="check"
+    )
+    op.drop_column("order_items", "raw_description")
+    op.alter_column("order_items", "material_id", nullable=False)
+```
+
+Не в объёме реализации сейчас — фиксируется здесь как принятое решение
+для того момента, когда сама миграция будет писаться при реализации
+(п. "Последствия"), не откладывается молчаливо: без этой явной проверки
+откат на dev/staging-окружении, где уже накопились лёгкие строки, тихо
+стёр бы их `raw_description` вместе со всем содержательным смыслом этих
+записей, оставив после отката `OrderItem` со строками, у которых
+`material_id` снова `NOT NULL`, но фактически отсутствует — состояние,
+нарушающее собственный инвариант таблицы сразу после отката.
+
+**Отклонено: `downgrade()` как зеркало `upgrade()` без проверки
+(автоматически удалять лёгкие строки целиком перед восстановлением
+`NOT NULL`).** Рассмотрено и отклонено — удаление строк без явного
+подтверждения не менее разрушительно, чем оставить `NOT NULL`
+незаполненным: сотрудник мог видеть эти позиции в черновике ордера,
+собирался отправить их поставщику, откат молча стёр бы эту работу.
+Explicit-отказ с понятным сообщением — единственный вариант, не
+теряющий данные ни при каком сценарии.
+
 ### 2. Создание лёгкой строки — новый узкий эндпоинт, только для draft
 
 ```
@@ -182,6 +239,36 @@ quantity, unit_price})` вместо `purchaseRecordsApi.create(...)`. Посл�
   поставщиками) — уже естественно исключает такие строки без
   дополнительного кода: сравнение идёт от `ProjectItem.material_id`,
   `None == material_id` никогда не совпадает.
+
+**Backend — уже корректно работает без изменений, подтверждено явным
+разбором, не умолчанием.** Три места, которые агрегируют деньги по
+всем `order.items`, проверены построчно — ни одно не обращается к
+`material_id` прямо или косвенно, все три опираются только на
+`quantity`/`quoted_price`/`declined_at`/`confirmed_price`/
+`received_price`, которые лёгкая строка заполняет наравне с обычной:
+- `order_expected_totals()` (`order_service.py`, ADR-0026, расширено
+  ADR-0029 §5в) — суммирует `item.quoted_price * item.quantity` по
+  `item.declined_at is None`/`is not None` для `expected_goods_total`/
+  `declined_amount`; `expected_tax_amount` считается от уже готовой
+  суммы через `calculate_tax_dollars` (см. ниже); `fully_declined`
+  проверяет только `item.declined_at`. Ни одного обращения к
+  `material_id` в теле функции.
+- `received_price_delta`/`received_price_delta_pct`
+  (`_to_order_item_out`, `app/api/order.py`, ADR-0027 §3) — оба через
+  `price_delta(item.quoted_price, item.received_price)`;
+  `price_delta()` (`order_service.py`) принимает два `float`, не
+  `OrderItem`/`Material`, `material_id` не участвует ни в сигнатуре, ни
+  в теле.
+- `expected_tax_amount` (ADR-0029 §5в) — `calculate_tax_dollars()`
+  (`app/allocation/tax.py`) принимает готовую сумму
+  (`expected_goods_total`, число) и умножает на `TAX_RATE`; функция не
+  знает о существовании `OrderItem`/`Material` вообще, работает
+  одинаково независимо от того, из скольких лёгких строк состоит
+  входная сумма.
+
+Все три остаются без изменений в этой задаче — не потому что вопрос не
+задавался, а потому что ответ на него после проверки кода — "уже
+работает корректно".
 
 **Backend — fallback на `raw_description` вместо крэша:**
 - `app/order_response_parser/service.py::_order_items_context` —
@@ -268,7 +355,9 @@ explicitly избегает ADR-0031 п.4 ("одна функция вместо
   новая колонка `order_items.raw_description VARCHAR(500)`, новый
   CHECK-constraint `ck_order_items_material_xor_raw_description`. Не
   требует backfill — все существующие строки уже удовлетворяют
-  constraint.
+  constraint. `downgrade()` явно отказывает (`RuntimeError`), если в
+  таблице есть строки с `material_id IS NULL` — решение зафиксировано
+  здесь (см. §1), сама миграция пишется при реализации.
 - Новый endpoint `POST /orders/{order_id}/items/raw`
   (`backend/app/api/order.py`), доступен только для `order.status ==
   "draft"` (`409` иначе).
@@ -307,7 +396,13 @@ explicitly избегает ADR-0031 п.4 ("одна функция вместо
   строке → `200`, без `price_divergence` в ответе; повторный
   `parse-response` на ордере, уже содержащем лёгкую строку, не падает;
   CHECK-constraint отклоняет прямую попытку завести строку с обоими или
-  ни одним из полей (integration-тест на уровне БД, не только через API).
+  ни одним из полей (integration-тест на уровне БД, не только через API);
+  `order_expected_totals()`/`received_price_delta`/`expected_tax_amount`
+  считаются корректно для `Order` с примесью лёгких строк (сумма/налог
+  учитывают их `quoted_price`/`quantity`, как обычные строки); downgrade
+  миграции завершается ошибкой, если в таблице есть хотя бы одна строка
+  с `material_id IS NULL` (миграционный тест на уровне alembic, не
+  через API).
   Тесты (frontend): `ExtraLineRow` вызывает новый эндпоинт API-клиента,
   не `purchaseRecordsApi.create`; `buildOrderText` показывает
   `raw_description` для лёгкой строки, не сырой `material_id`;

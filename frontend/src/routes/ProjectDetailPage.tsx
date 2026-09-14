@@ -165,8 +165,11 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
         <div className={styles.header}>
           <h1 className={styles.title}>{project?.title ?? 'Проект'}</h1>
           {status === 'ready' && project && (
-            <div className={styles.actionsCell}>
-              <label className={styles.actionsCell} style={{ gap: '6px' }}>
+            <div className={styles.actionsCell} style={{ alignItems: 'center' }}>
+              <label
+                className={styles.actionsCell}
+                style={{ gap: '6px', alignItems: 'center' }}
+              >
                 Цвет проекта:
                 <select
                   className={styles.input}

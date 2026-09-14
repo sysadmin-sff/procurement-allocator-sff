@@ -25,8 +25,10 @@ class MatchedLineOut(BaseModel):
 
 class MissingItemOut(BaseModel):
     order_item_id: uuid.UUID
-    material_id: uuid.UUID
+    material_id: uuid.UUID | None
     canonical_name: str
+    """item.material.canonical_name, or item.raw_description for a
+    lightweight OrderItem without a catalog material — see ADR-0033 §3."""
     quantity: int
     quoted_price: float
 

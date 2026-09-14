@@ -995,7 +995,7 @@ describe('OrderDetailPage', () => {
       renderPage();
 
       const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
-      const firstSection = firstBlockTitle.parentElement as HTMLElement;
+      const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
       const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
       const user = userEvent.setup();
@@ -1006,6 +1006,48 @@ describe('OrderDetailPage', () => {
       await user.click(applyButton);
 
       expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { received_price: 23.75 });
+    });
+
+    it('shows a close button once a result is parsed, and clicking it hides the whole recognition result', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '' },
+        ],
+        missing: [],
+        extra: [],
+      });
+
+      renderPage();
+
+      const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+      const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+
+      // No result parsed yet — nothing to close.
+      expect(within(firstSection).queryByTitle('Закрыть результат распознавания')).not.toBeInTheDocument();
+
+      const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
+      const user = userEvent.setup();
+      await user.upload(fileInput, file);
+      await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+      expect(await within(firstSection).findByText('Совпало (1)')).toBeInTheDocument();
+
+      const closeButton = within(firstSection).getByTitle('Закрыть результат распознавания');
+      await user.click(closeButton);
+
+      expect(within(firstSection).queryByText('Совпало (1)')).not.toBeInTheDocument();
+      expect(within(firstSection).queryByTitle('Закрыть результат распознавания')).not.toBeInTheDocument();
     });
 
     it('applying matches from the second block PATCHes confirmed_price, not received_price', async () => {
@@ -1031,7 +1073,7 @@ describe('OrderDetailPage', () => {
       renderPage();
 
       const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
-      const secondSection = secondBlockTitle.parentElement as HTMLElement;
+      const secondSection = secondBlockTitle.parentElement?.parentElement as HTMLElement;
       const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
       const user = userEvent.setup();
@@ -1068,7 +1110,7 @@ describe('OrderDetailPage', () => {
       renderPage();
 
       const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
-      const secondSection = secondBlockTitle.parentElement as HTMLElement;
+      const secondSection = secondBlockTitle.parentElement?.parentElement as HTMLElement;
       const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
       const user = userEvent.setup();
@@ -1132,7 +1174,7 @@ describe('OrderDetailPage', () => {
       renderPage();
 
       const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
-      const secondSection = secondBlockTitle.parentElement as HTMLElement;
+      const secondSection = secondBlockTitle.parentElement?.parentElement as HTMLElement;
       const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
       const user = userEvent.setup();
@@ -1196,7 +1238,7 @@ describe('OrderDetailPage', () => {
       renderPage();
 
       const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
-      const secondSection = secondBlockTitle.parentElement as HTMLElement;
+      const secondSection = secondBlockTitle.parentElement?.parentElement as HTMLElement;
       const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
       const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
       const user = userEvent.setup();

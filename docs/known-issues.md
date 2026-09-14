@@ -85,17 +85,34 @@
 - `service.py` собирает `supplier_summaries` вручную по полям вместо `asdict()`
   (как для `orphaned_materials`) — новое поле в `SupplierSummary` не попадёт
   в JSON автоматически, придётся не забыть обновить руками.
-- Нет составного индекса `(material_id, supplier_id, valid_to)` на `prices`
-  для `list_prices`-фильтров (частичный уникальный индекс на активную цену
-  уже есть, этого достаточно для текущего масштаба).
-- `search_materials` не экранирует `%`/`_` в ILIKE-запросе.
-- Нет теста, что `supplier_summaries == []` (не null) на infeasible-пути.
 - `delete_material`/`delete_supplier` блокируют 409 даже когда остались
   только исторические (закрытые) цены — нет пути "депрецировать", только
   "нельзя удалить, пока есть любая связанная запись".
-- `AllocationResult` dataclass — `supplier_summaries` не последнее поле;
-  безопасно, пока конструируется только по keyword, но позиционный вызов
-  сломает типы молча.
+- **Закрыто (2026-09-14):**
+  - Составной индекс `(material_id, supplier_id, valid_to)` на `prices` —
+    добавлен миграцией (см. `alembic/versions/`), покрывает
+    `WHERE material_id=... AND supplier_id=... AND valid_to IS NULL`
+    lookups в `order_service.py`/`price_comparison.py`/`service.py`/
+    `order.py`/`price.py`/`apply.py`, отдельно от уже существующего
+    частичного уникального индекса на активную цену.
+  - `search_materials` теперь экранирует `%`/`_`/`\` в ILIKE-запросе
+    (`_escape_ilike` в `app/api/material.py`) — тест
+    `test_search_materials_escapes_ilike_wildcards_in_query`
+    (`tests/material/test_api.py`). Эндпоинт сейчас не вызывается из
+    реального UI (`MaterialCombobox` перешёл на клиентский Fuse.js-поиск,
+    ADR — см. коммит с матчингом материалов), но остаётся частью
+    публичного API-контракта, поэтому пофикшен независимо от текущего
+    UI-использования.
+  - `AllocationResult.supplier_summaries == []` (не `None`) на
+    infeasible-пути — уже было покрыто (не отсутствовало на самом деле):
+    `test_run_allocation_marks_infeasible_when_sole_supplier_misses_min_order_amount`
+    и `test_run_allocation_marks_infeasible_when_no_solvable_materials`
+    в `tests/allocation/test_service.py`, плюс HTTP JSON-уровень в
+    `tests/allocation/test_api.py:101,110`.
+  - `AllocationResult` dataclass — `supplier_summaries` переставлено
+    последним полем (`app/allocation/types.py`); все 3 места конструирования
+    (`solver.py`) уже использовали keyword-аргументы, позиционных вызовов
+    не найдено нигде в кодовой базе — правка защитная, не фикс живого бага.
 - **`Order.status` никогда не меняется с `draft`.** Поле объявлено как
   `"draft/approved/sent"` (докстринг в `backend/app/models/order.py:27`),
   но ни один эндпоинт/сервисный метод нигде не присваивает

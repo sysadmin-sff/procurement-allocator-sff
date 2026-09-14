@@ -215,7 +215,8 @@
 }
 
 .supplierBreakdown {
-  padding: 0 var(--space-8) var(--space-4);
+  padding: var(--space-4) var(--space-8);
+  line-height: 1.6;
   font-size: var(--text-sm-alt2);
   color: var(--color-text-secondary);
   background: var(--color-surface-subtle);

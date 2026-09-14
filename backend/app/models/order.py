@@ -52,9 +52,13 @@ class OrderItem(UUIDPKMixin, Base):
     order_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False
     )
-    material_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("materials.id"), nullable=False
+    material_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("materials.id")
     )
+    raw_description: Mapped[str | None] = mapped_column(String(500))
+    """Свободный текст для позиции без material_id из каталога — ровно одно
+    из material_id/raw_description всегда заполнено (CHECK
+    ck_order_items_material_xor_raw_description). См. ADR-0033 §1."""
     quantity: Mapped[int] = mapped_column(nullable=False)
     quoted_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     """Снимок AllocationLine.unit_price на момент создания Order — что мы

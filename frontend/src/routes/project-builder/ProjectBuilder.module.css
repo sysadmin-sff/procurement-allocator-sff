@@ -46,6 +46,9 @@
 }
 
 .detailsCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
   padding: var(--space-7) var(--space-8);
 }
 
@@ -80,6 +83,26 @@
 .input:focus {
   border-color: var(--color-accent);
   background: var(--color-surface);
+}
+
+/* Native <select> styled to match the app's own chevrons (see .chevron in
+   CrudScreen.module.css) instead of the OS-default arrow — appearance: none
+   strips the native affordance, the custom one is a background SVG so it
+   stays crisp at any zoom and needs no extra DOM. The stroke color
+   (%23002F79) is --color-brand's literal hex — inline SVG data URIs can't
+   reference CSS custom properties, so this must be updated by hand if
+   --color-brand (tokens.css) ever changes. */
+.templateSelect {
+  appearance: none;
+  cursor: pointer;
+  padding-right: calc(var(--space-5) + 24px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23002F79' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-5) center;
+}
+
+.templateSelect:disabled {
+  cursor: not-allowed;
 }
 
 .inputInvalid {
@@ -240,13 +263,16 @@
   display: none;
 }
 
-.comboboxList {
-  position: absolute;
+/* Portalled into document.body (see MaterialCombobox) — position: fixed and
+   left/top/bottom/width are set inline from the input's own
+   getBoundingClientRect(), so this rule only carries the visual styling.
+   Portalling (rather than position: absolute inside .comboboxWrap) is
+   deliberate: an absolutely-positioned descendant is clipped by any
+   scrollable ancestor's overflow (e.g. a table wrapper with
+   overflow-x: auto, which per the CSS spec also clips overflow-y) — a
+   portalled fixed-position element escapes that entirely. */
+.comboboxListPortal {
   z-index: 50;
-  top: 40px;
-  left: 0;
-  width: 430px;
-  max-width: 100%;
   max-height: 480px;
   overflow: auto;
   background: var(--color-surface);
@@ -256,14 +282,6 @@
   padding: var(--space-2);
   margin: 0;
   list-style: none;
-}
-
-/* Opens upward instead of downward when there isn't enough room below the
-   input (e.g. the last row of a long grid, near the bottom of the viewport)
-   — see MaterialCombobox's openList(). */
-.comboboxListUp {
-  top: auto;
-  bottom: 40px;
 }
 
 .comboboxOption {
@@ -299,13 +317,9 @@
   font-weight: 500;
 }
 
-.comboboxEmpty {
-  position: absolute;
+/* Portalled into document.body — see .comboboxListPortal above. */
+.comboboxEmptyPortal {
   z-index: 50;
-  top: 40px;
-  left: 0;
-  width: 430px;
-  max-width: 100%;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);

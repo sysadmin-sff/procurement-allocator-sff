@@ -155,6 +155,30 @@ def test_patch_project_omitting_color_choice_leaves_it_untouched(
     assert response.json()["color_choice"] == "White"
 
 
+def test_get_project_after_patch_reflects_saved_color_choice(
+    make_project, make_user, make_session
+):
+    """Regression: get_project builds ProjectWithItemsOut by hand (not via
+    model_validate) and had silently omitted color_choice, so the Pydantic
+    field's own default=None always won over whatever PATCH actually
+    persisted — PATCH's own response (built from the ORM object directly)
+    looked correct, masking the bug until a real GET (page reload, opening
+    an order) was made."""
+    project = make_project(title="Color Roundtrip")
+    client = _employee_client(make_user, make_session)
+
+    client.patch(
+        f"/projects/{project.id}",
+        json={"title": project.title, "color_choice": "Bronze"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.get(f"/projects/{project.id}")
+
+    assert response.status_code == 200
+    assert response.json()["color_choice"] == "Bronze"
+
+
 def test_get_project_returns_created_project_with_items(
     db_session, make_project, make_material, make_user, make_session
 ):

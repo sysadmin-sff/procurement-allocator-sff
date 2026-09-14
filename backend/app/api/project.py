@@ -74,6 +74,7 @@ def create_project(
         created_by_user_id=project.created_by_user_id,
         status=project.status,
         created_at=project.created_at,
+        color_choice=project.color_choice,
         items=[ProjectItemOut.model_validate(item) for item in project.items],
         latest_allocation_run=None,
     )
@@ -129,6 +130,7 @@ def get_project(project_id: uuid.UUID, db: Session = Depends(get_db)) -> Project
         created_by_user_id=project.created_by_user_id,
         status=project.status,
         created_at=project.created_at,
+        color_choice=project.color_choice,
         items=[ProjectItemOut.model_validate(item) for item in project.items],
         latest_allocation_run=(
             LatestAllocationRunOut.model_validate(latest_run) if latest_run else None

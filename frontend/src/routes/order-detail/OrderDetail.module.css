@@ -471,6 +471,13 @@
   padding: var(--space-8);
 }
 
+.parseSectionTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
 .parseSectionTitle {
   font-family: var(--font-heading);
   font-size: var(--text-xs);
@@ -478,6 +485,25 @@
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--color-text-tertiary-alt);
+}
+
+.parseCloseButton {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: none;
+  background: var(--color-control-fill);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  font-size: var(--text-md);
+  line-height: 1;
+  padding: 0;
+}
+
+.parseCloseButton:hover {
+  background: var(--color-danger-tint);
+  color: var(--color-danger);
 }
 
 .parseUploadRow {

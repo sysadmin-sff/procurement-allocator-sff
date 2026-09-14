@@ -958,6 +958,21 @@ function ParseResponseSection({
     }
   }
 
+  /** Closes the whole recognition result — the employee is done applying/
+   * declining what they needed and wants the panel out of the way. Clears
+   * every state derived from the parse, not just `result`, so a later
+   * re-upload of a file starts clean instead of showing stale prices/
+   * summaries from this run. */
+  function handleCloseResult() {
+    setResult(null);
+    setMatchedPrices({});
+    setMatchedIncluded({});
+    setApplyError(null);
+    setApplySummary(null);
+    setDivergentRows(null);
+    setBatchResults(null);
+  }
+
   // OrderItems with no matched line at all — see ADR-0018 §3b.
   const missing = result
     ? order.items.filter((item) => !result.matched.some((line) => line.order_item_id === item.id))
@@ -965,7 +980,19 @@ function ParseResponseSection({
 
   return (
     <div className={styles.parseSection}>
-      <div className={styles.parseSectionTitle}>{title}</div>
+      <div className={styles.parseSectionTitleRow}>
+        <div className={styles.parseSectionTitle}>{title}</div>
+        {result != null && (
+          <button
+            type="button"
+            className={styles.parseCloseButton}
+            title="Закрыть результат распознавания"
+            onClick={handleCloseResult}
+          >
+            ×
+          </button>
+        )}
+      </div>
 
       <div className={styles.parseUploadRow}>
         <FileInput ref={fileInputRef} accept=".pdf,image/*" disabled={parsing} />

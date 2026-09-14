@@ -39,7 +39,9 @@ def _order_items_context(order: Order) -> list[dict]:
     return [
         {
             "id": item.id,
-            "canonical_name": item.material.canonical_name,
+            "canonical_name": (
+                item.material.canonical_name if item.material_id else item.raw_description
+            ),
             "quantity": item.quantity,
             "quoted_price": float(item.quoted_price),
         }

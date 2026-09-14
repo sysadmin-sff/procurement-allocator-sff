@@ -38,7 +38,10 @@ class OrderItemOut(BaseModel):
 
     id: uuid.UUID
     order_id: uuid.UUID
-    material_id: uuid.UUID
+    material_id: uuid.UUID | None
+    raw_description: str | None = None
+    """Заполнено вместо material_id для лёгкой строки без материала из
+    каталога — ровно одно из двух всегда непусто. См. ADR-0033 §1."""
     quantity: int
     quoted_price: float
     received_price: float | None = None
@@ -188,6 +191,18 @@ class FindReplacementOut(BaseModel):
 
     line_id: uuid.UUID
     candidates: list[ReplacementCandidateOut]
+
+
+class OrderItemRawIn(BaseModel):
+    """Body for POST /orders/{order_id}/items/raw — see ADR-0033 §2.
+    Deliberately does not accept material_id — this endpoint only ever
+    creates a lightweight OrderItem (material_id=None, raw_description
+    filled); matching raw_description to a catalog material is out of scope
+    (ADR-0033 §4)."""
+
+    raw_description: str
+    quantity: int
+    quoted_price: float
 
 
 class ReplaceAndOrderIn(BaseModel):

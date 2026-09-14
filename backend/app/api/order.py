@@ -7,12 +7,15 @@ from sqlalchemy.orm import Session
 from app.allocation.order_service import (
     DraftOrderConflictError,
     DuplicateMaterialInDraftError,
+    LightweightOrderItemError,
     MaterialNotInLatestRunError,
     MultipleDraftOrdersConflictError,
     OrderItemNotFoundError,
+    OrderNotDraftError,
     PriceDivergence,
     ProjectColorChoiceRequiredError,
     RunNotFoundError,
+    add_raw_order_item,
     confirm_price_updates,
     create_orders_for_run,
     find_replacement_candidates,
@@ -31,6 +34,7 @@ from app.api.schemas.order import (
     OrderDraftConflictOut,
     OrderItemConfirmIn,
     OrderItemOut,
+    OrderItemRawIn,
     OrderOut,
     PriceDivergenceOut,
     PriceUpdateResultOut,
@@ -73,6 +77,7 @@ def _to_order_item_out(
         id=item.id,
         order_id=item.order_id,
         material_id=item.material_id,
+        raw_description=item.raw_description,
         quantity=item.quantity,
         quoted_price=item.quoted_price,
         received_price=item.received_price,
@@ -209,6 +214,37 @@ def patch_order_item(
 
 
 @router.post(
+    "/orders/{order_id}/items/raw",
+    response_model=OrderItemOut,
+    status_code=201,
+)
+def add_raw_item(
+    order_id: uuid.UUID,
+    payload: OrderItemRawIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> OrderItemOut:
+    """Draft-only — see ADR-0033 §2. Creates a lightweight OrderItem
+    (material_id=None, raw_description filled); does not accept material_id
+    in the request body at all."""
+    if db.get(Order, order_id) is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    try:
+        item = add_raw_order_item(
+            db,
+            order_id,
+            raw_description=payload.raw_description,
+            quantity=payload.quantity,
+            quoted_price=payload.quoted_price,
+        )
+    except OrderNotDraftError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return _to_order_item_out(db, item)
+
+
+@router.post(
     "/orders/{order_id}/confirm-price-updates",
     response_model=ConfirmPriceUpdatesOut,
 )
@@ -277,6 +313,8 @@ def find_replacement(
         raise HTTPException(status_code=404, detail="Order item not found") from exc
     except MaterialNotInLatestRunError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LightweightOrderItemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return FindReplacementOut(line_id=line_id, candidates=candidates)
 
@@ -303,6 +341,8 @@ def replace_and_order(
         raise HTTPException(status_code=404, detail="Order item not found") from exc
     except MaterialNotInLatestRunError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LightweightOrderItemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except InvalidOverrideSupplierError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except MultipleDraftOrdersConflictError as exc:
@@ -365,7 +405,9 @@ async def parse_order_response_endpoint(
             MissingItemOut(
                 order_item_id=item.id,
                 material_id=item.material_id,
-                canonical_name=item.material.canonical_name,
+                canonical_name=(
+                    item.material.canonical_name if item.material_id else item.raw_description
+                ),
                 quantity=item.quantity,
                 quoted_price=float(item.quoted_price),
             )

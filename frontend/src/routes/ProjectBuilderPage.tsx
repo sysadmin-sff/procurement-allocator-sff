@@ -339,7 +339,7 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
                 </label>
                 <select
                   id="project-template"
-                  className={styles.input}
+                  className={`${styles.input} ${styles.templateSelect}`}
                   value={selectedTemplateId ?? ''}
                   onChange={(e) => setSelectedTemplateId(e.target.value || null)}
                 >

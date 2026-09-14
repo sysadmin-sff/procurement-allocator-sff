@@ -79,6 +79,29 @@ def test_get_material_returns_created_material(
     assert response.json()["canonical_name"] == "Get Me Material"
 
 
+def test_get_material_includes_color_options_and_fragment(
+    db_session, make_material, make_user, make_session
+):
+    """Regression: MaterialOut omitted color_options/color_fragment entirely,
+    so every material endpoint silently dropped them from the response even
+    though the DB had them set — resolveMaterialName/resolve_material_name
+    on the frontend always saw color_options as absent and fell back to the
+    unresolved "(White/Bronze)" canonical_name. See ADR-0031."""
+    session, _material_ids, _user_ids = db_session
+    material = make_material(canonical_name="7 Super Gutter x 24' (White/Bronze)")
+    material.color_options = ["White", "Bronze"]
+    material.color_fragment = "(White/Bronze)"
+    session.commit()
+    client = _admin_client(make_user, make_session)
+
+    response = client.get(f"/materials/{material.id}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["color_options"] == ["White", "Bronze"]
+    assert body["color_fragment"] == "(White/Bronze)"
+
+
 def test_get_material_returns_404_for_unknown_id(make_user, make_session):
     client = _admin_client(make_user, make_session)
 

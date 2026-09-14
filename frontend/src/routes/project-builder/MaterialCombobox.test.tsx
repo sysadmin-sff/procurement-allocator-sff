@@ -76,9 +76,12 @@ describe('MaterialCombobox positioning', () => {
     await user.type(input, 'сетка');
     await screen.findByText(material.canonical_name);
 
-    const list = document.querySelector(`.${styles.comboboxList}`);
+    // Portalled into document.body — position: fixed, anchored to the
+    // input's bottom edge (top set, no bottom) when opening downward.
+    const list = document.querySelector(`.${styles.comboboxListPortal}`) as HTMLElement | null;
     expect(list).not.toBeNull();
-    expect(list?.className).not.toContain(styles.comboboxListUp);
+    expect(list?.style.top).toBe('100px');
+    expect(list?.style.bottom).toBe('');
   });
 
   it('opens the list upward when the input is near the bottom of the viewport', async () => {
@@ -104,8 +107,31 @@ describe('MaterialCombobox positioning', () => {
     await user.type(input, 'сетка');
     await screen.findByText(material.canonical_name);
 
-    const list = document.querySelector(`.${styles.comboboxList}`);
+    // Opening upward: bottom is set (anchored to the input's top edge,
+    // window.innerHeight(800) - anchorRect.top(740) = 60), top is unset.
+    const list = document.querySelector(`.${styles.comboboxListPortal}`) as HTMLElement | null;
     expect(list).not.toBeNull();
-    expect(list?.className).toContain(styles.comboboxListUp);
+    expect(list?.style.bottom).toBe('60px');
+    expect(list?.style.top).toBe('');
+  });
+
+  it('escapes a scrollable/clipping ancestor by portalling into document.body', async () => {
+    const user = userEvent.setup();
+    render(
+      <div style={{ overflow: 'hidden', height: '50px' }}>
+        <ControlledCombobox />
+      </div>,
+    );
+
+    const input = screen.getByPlaceholderText('Название или артикул…');
+    await waitFor(() => expect(listMock).toHaveBeenCalled());
+    await user.type(input, 'сетка');
+    await screen.findByText(material.canonical_name);
+
+    const clippingAncestor = input.closest('div[style*="overflow: hidden"]') as HTMLElement;
+    const list = document.querySelector(`.${styles.comboboxListPortal}`) as HTMLElement | null;
+    expect(list).not.toBeNull();
+    expect(clippingAncestor.contains(list)).toBe(false);
+    expect(document.body.contains(list)).toBe(true);
   });
 });

@@ -73,6 +73,30 @@ class OrderItemNotFoundError(Exception):
         super().__init__(f"OrderItem {item_id} not found in Order {order_id}")
 
 
+class OrderNotDraftError(Exception):
+    """Raised by add_raw_order_item() when the target Order is not a draft —
+    the composition of a non-draft Order is closed, same reasoning as
+    create_orders_for_run's draft-only mutation window. See ADR-0033 §2."""
+
+    def __init__(self, order_id: uuid.UUID, status: str):
+        self.order_id = order_id
+        self.status = status
+        super().__init__(f"Order {order_id} is not a draft (status={status})")
+
+
+class LightweightOrderItemError(Exception):
+    """Raised by find_replacement_candidates/replace_and_sync_order when the
+    OrderItem has no material_id — a lightweight row (ADR-0033) has nothing
+    to resolve in Material, so replacement lookup is not applicable. See
+    ADR-0033 §3."""
+
+    def __init__(self, item_id: uuid.UUID):
+        self.item_id = item_id
+        super().__init__(
+            "Материал не из каталога — подбор замены недоступен"
+        )
+
+
 class MaterialNotInLatestRunError(Exception):
     """The declined item's material has no AllocationLine in the project's
     latest AllocationRun — the BOM or plan changed since this Order was
@@ -214,6 +238,8 @@ def find_replacement_candidates(
     item = db.get(OrderItem, item_id)
     if item is None or item.order_id != order_id:
         raise OrderItemNotFoundError(order_id, item_id)
+    if item.material_id is None:
+        raise LightweightOrderItemError(item_id)
 
     order = db.get(Order, order_id)
     run = _latest_allocation_run(db, order.project_id)
@@ -576,6 +602,37 @@ def create_orders_for_run(
     return orders
 
 
+def add_raw_order_item(
+    db: Session,
+    order_id: uuid.UUID,
+    *,
+    raw_description: str,
+    quantity: int,
+    quoted_price: float,
+) -> OrderItem:
+    """POST /orders/{order_id}/items/raw — see ADR-0033 §2. Draft-only:
+    raises OrderNotDraftError otherwise. Creates a lightweight OrderItem
+    (material_id=None, raw_description filled) — confirmed_price/
+    received_price/target_price/declined_at/decline_reason stay NULL at
+    creation, edited later through the existing PATCH .../items/{item_id}
+    like any other row."""
+    order = db.get(Order, order_id)
+    if order.status != "draft":
+        raise OrderNotDraftError(order_id, order.status)
+
+    item = OrderItem(
+        order_id=order_id,
+        material_id=None,
+        raw_description=raw_description,
+        quantity=quantity,
+        quoted_price=quoted_price,
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 def order_expected_totals(order: Order) -> dict:
     """Derived (not persisted) fields for OrderOut — see ADR-0026, extended
     by ADR-0029 §5в. Computed from OrderItem.quoted_price (same scale as the
@@ -686,6 +743,8 @@ def _active_price_for_pair(
 def _detect_price_divergence(
     db: Session, item: OrderItem, order_supplier_id: uuid.UUID
 ) -> PriceDivergence | None:
+    if item.material_id is None:
+        return None
     if item.confirmed_price is None:
         return None
 

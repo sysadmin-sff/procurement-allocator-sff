@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { CSSProperties, KeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import Fuse from 'fuse.js';
 import { materialsApi } from '../../api/materials';
 import type { Material } from '../../api/types';
@@ -55,6 +56,11 @@ export function MaterialCombobox({
   const [catalog, setCatalog] = useState<Material[]>([]);
   const [highlighted, setHighlighted] = useState(0);
   const [openUpward, setOpenUpward] = useState(false);
+  /** Fixed-position coordinates for the portalled dropdown — computed fresh
+   * each time the list opens (see openList) so it escapes any scrollable/
+   * clipping ancestor (e.g. a table wrapper with overflow-x: auto, which per
+   * the CSS spec also clips overflow-y) instead of being cut off by one. */
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -76,8 +82,10 @@ export function MaterialCombobox({
   function openList() {
     const wrap = wrapRef.current;
     if (wrap) {
-      const spaceBelow = window.innerHeight - wrap.getBoundingClientRect().bottom;
+      const rect = wrap.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
       setOpenUpward(spaceBelow < MIN_SPACE_BELOW_PX);
+      setAnchorRect(rect);
     }
     setOpen(true);
   }
@@ -109,6 +117,22 @@ export function MaterialCombobox({
 
   const showEmpty = open && query.trim().length >= MIN_QUERY_LENGTH && options.length === 0;
 
+  /** Fixed-position coordinates anchored to the input, computed from
+   * anchorRect (captured on open — see openList). Portalled into
+   * document.body below so the dropdown escapes any scrollable/clipping
+   * ancestor between it and the viewport, rather than relying on being an
+   * absolutely-positioned descendant of one. */
+  const dropdownStyle: CSSProperties | undefined = anchorRect
+    ? {
+        position: 'fixed',
+        left: anchorRect.left,
+        width: anchorRect.width,
+        ...(openUpward
+          ? { bottom: window.innerHeight - anchorRect.top }
+          : { top: anchorRect.bottom }),
+      }
+    : undefined;
+
   return (
     <div className={styles.comboboxWrap} ref={wrapRef}>
       <input
@@ -126,37 +150,39 @@ export function MaterialCombobox({
       />
       {selected && <div className={styles.comboboxUnit}>{selected.unit}</div>}
 
-      {open && options.length > 0 && (
-        <ul
-          className={`${styles.comboboxList} ${openUpward ? styles.comboboxListUp : ''}`}
-          role="listbox"
-        >
-          {options.map((material, index) => (
-            <li key={material.id} role="option" aria-selected={index === highlighted}>
-              <button
-                type="button"
-                className={`${styles.comboboxOption} ${index === highlighted ? styles.comboboxOptionActive : ''}`}
-                onMouseDown={(e) => e.preventDefault()}
-                onMouseEnter={() => setHighlighted(index)}
-                onClick={() => pick(material)}
-              >
-                <span className={styles.comboboxOptionName}>{material.canonical_name}</span>
-                <span className={styles.comboboxOptionMeta}>
-                  {material.category ?? '—'} · {material.internal_sku}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {open &&
+        options.length > 0 &&
+        dropdownStyle &&
+        createPortal(
+          <ul className={styles.comboboxListPortal} style={dropdownStyle} role="listbox">
+            {options.map((material, index) => (
+              <li key={material.id} role="option" aria-selected={index === highlighted}>
+                <button
+                  type="button"
+                  className={`${styles.comboboxOption} ${index === highlighted ? styles.comboboxOptionActive : ''}`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setHighlighted(index)}
+                  onClick={() => pick(material)}
+                >
+                  <span className={styles.comboboxOptionName}>{material.canonical_name}</span>
+                  <span className={styles.comboboxOptionMeta}>
+                    {material.category ?? '—'} · {material.internal_sku}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>,
+          document.body,
+        )}
 
-      {showEmpty && (
-        <div
-          className={`${styles.comboboxEmpty} ${openUpward ? styles.comboboxListUp : ''}`}
-        >
-          Ничего не найдено. Проверьте артикул или добавьте материал в базу.
-        </div>
-      )}
+      {showEmpty &&
+        dropdownStyle &&
+        createPortal(
+          <div className={styles.comboboxEmptyPortal} style={dropdownStyle}>
+            Ничего не найдено. Проверьте артикул или добавьте материал в базу.
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

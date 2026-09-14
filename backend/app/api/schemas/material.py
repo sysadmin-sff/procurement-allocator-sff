@@ -33,3 +33,5 @@ class MaterialOut(BaseModel):
     category: str | None
     unit: str
     attributes: dict
+    color_options: list[str] | None = None
+    color_fragment: str | None = None

@@ -79,5 +79,9 @@ class AllocationResult:
     status: str  # "OPTIMAL" | "FEASIBLE" | "INFEASIBLE" | "NO_SOLVABLE_MATERIALS"
     lines: list[AllocationLineResult] = field(default_factory=list)
     orphaned_materials: list[OrphanedMaterial] = field(default_factory=list)
-    supplier_summaries: list[SupplierSummary] = field(default_factory=list)
     total_cents: int = 0
+    supplier_summaries: list[SupplierSummary] = field(default_factory=list)
+    """Kept as the last field deliberately — every construction site in this
+    codebase uses keyword args already (verified, no positional calls exist),
+    but a future positional call would silently mismatch types if this field
+    weren't last. See docs/known-issues.md."""

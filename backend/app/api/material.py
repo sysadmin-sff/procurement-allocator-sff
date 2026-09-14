@@ -13,13 +13,21 @@ from app.price_ingestion.embeddings import EmbeddingError, embed_text, material_
 router = APIRouter(prefix="/materials", dependencies=[Depends(require_role("admin"))])
 
 
+def _escape_ilike(value: str) -> str:
+    """Escapes ILIKE wildcard characters (%, _) and the escape character
+    itself (\\) in user-supplied search text, so a query containing a
+    literal '%' or '_' is matched as that literal character rather than as
+    a wildcard — see docs/known-issues.md."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @router.get("/search", response_model=list[MaterialOut])
 def search_materials(
     q: str = Query(..., min_length=2), db: Session = Depends(get_db)
 ) -> list[Material]:
     return list(
         db.query(Material)
-        .filter(Material.canonical_name.ilike(f"%{q}%"))
+        .filter(Material.canonical_name.ilike(f"%{_escape_ilike(q)}%", escape="\\"))
         .order_by(Material.canonical_name)
         .limit(20)
         .all()

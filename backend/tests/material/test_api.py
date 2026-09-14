@@ -241,6 +241,31 @@ def test_search_materials_matches_partial_canonical_name(
     assert "Aluminum Gate Hinge" not in names
 
 
+def test_search_materials_escapes_ilike_wildcards_in_query(
+    db_session, make_material, make_user, make_session
+):
+    """% and _ are ILIKE wildcards — a query containing them literally must
+    not be treated as a wildcard pattern. Regression for
+    docs/known-issues.md 'search_materials не экранирует %/_'."""
+    make_material(canonical_name="100% Cotton Mesh")
+    # would match unescaped "100%" (% = any chars)
+    make_material(canonical_name="10025 Cotton Mesh")
+    make_material(canonical_name="Foo_Bar Bracket")
+    # would match unescaped "Foo_Bar" (_ = any char)
+    make_material(canonical_name="FooXBar Bracket")
+    client = _admin_client(make_user, make_session)
+
+    percent_response = client.get("/materials/search", params={"q": "100%"})
+    assert percent_response.status_code == 200
+    percent_names = [row["canonical_name"] for row in percent_response.json()]
+    assert percent_names == ["100% Cotton Mesh"]
+
+    underscore_response = client.get("/materials/search", params={"q": "Foo_Bar"})
+    assert underscore_response.status_code == 200
+    underscore_names = [row["canonical_name"] for row in underscore_response.json()]
+    assert underscore_names == ["Foo_Bar Bracket"]
+
+
 def test_search_materials_requires_minimum_query_length(make_user, make_session):
     client = _admin_client(make_user, make_session)
 

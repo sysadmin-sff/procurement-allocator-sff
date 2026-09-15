@@ -302,20 +302,12 @@ def test_candidate_context_uses_category_name_not_repr(make_material, make_categ
     the human-readable Category.name in the LLM prompt, never repr() of the
     ORM object and never an AttributeError from the old String column being
     gone."""
-    doors = make_category(name="Doors", sku_prefix="DOOR")
+    doors = make_category(name="TestDoors", sku_prefix="TDOR")
     material = make_material(canonical_name="6ft Door Panel", category=doors)
 
     context = _candidate_context([material])
 
-    assert "категория='Doors'" in context
+    assert "категория='TestDoors'" in context
     assert "Category object at" not in context
 
 
-def test_candidate_context_handles_material_without_category(make_material):
-    """A material with no category at all (category_id None) must render
-    категория=None, not raise AttributeError on a missing relationship."""
-    material = make_material(canonical_name="Uncategorized Material")
-
-    context = _candidate_context([material])
-
-    assert "категория=None" in context

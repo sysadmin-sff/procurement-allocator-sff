@@ -9,6 +9,7 @@ from app.auth.dependencies import require_role
 from app.core.database import get_db
 from app.models import Material
 from app.price_ingestion.embeddings import EmbeddingError, embed_text, material_embedding_input
+from app.services.material_sku import generate_next_sku
 
 router = APIRouter(prefix="/materials", dependencies=[Depends(require_role("admin"))])
 
@@ -36,10 +37,12 @@ def search_materials(
 
 @router.post("", response_model=MaterialOut, status_code=201)
 def create_material(payload: MaterialCreate, db: Session = Depends(get_db)) -> Material:
+    internal_sku = generate_next_sku(db, payload.category_id)
+
     material = Material(
-        internal_sku=payload.internal_sku,
+        internal_sku=internal_sku,
         canonical_name=payload.canonical_name,
-        category=payload.category,
+        category_id=payload.category_id,
         unit=payload.unit,
         attributes=payload.attributes,
     )
@@ -82,7 +85,9 @@ def get_material(material_id: uuid.UUID, db: Session = Depends(get_db)) -> Mater
 def update_material(
     material_id: uuid.UUID, payload: MaterialUpdate, db: Session = Depends(get_db)
 ) -> Material:
-    """PATCH-семантика: поля, отсутствующие в payload, не трогаются."""
+    """PATCH-семантика: поля, отсутствующие в payload, не трогаются.
+    category_id может меняться (переклассификация) без пересчёта internal_sku
+    — см. ADR-0034 п.4."""
     material = db.get(Material, material_id)
     if material is None:
         raise HTTPException(status_code=404, detail="Material not found")

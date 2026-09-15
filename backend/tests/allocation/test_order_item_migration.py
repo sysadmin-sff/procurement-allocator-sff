@@ -3,47 +3,35 @@ becomes nullable, new raw_description column, CHECK constraint
 ck_order_items_material_xor_raw_description, and the explicit downgrade
 guard against silently dropping raw_description-only rows.
 
-These run the migration's DB-level guarantees directly (raw INSERT, real
-alembic downgrade/upgrade), not through the ORM or the API — the whole point
-of a CHECK constraint is that it holds even when application code is
-bypassed.
-"""
+These run the migration's DB-level guarantees directly (raw INSERT), not
+through the ORM or the API — the whole point of a CHECK constraint is that
+it holds even when application code is bypassed.
 
-import logging
+The two downgrade-guard tests invoke a7c3e9f21b04's downgrade()/upgrade()
+module functions directly (via a bound alembic Operations context on this
+test's own connection, inside a transaction rolled back at teardown) rather
+than running `alembic downgrade`/`upgrade` through the whole migration
+chain via `alembic.command`. See ADR-0034 discovery: once migrations exist
+above a7c3e9f21b04, a live `command.downgrade` to its parent revision walks
+DOWN THROUGH every newer migration first — including ADR-0034's two-phase
+Category migration, whose downgrade is deliberately lossy (documented in
+that migration itself) and cannot be un-done by a subsequent
+`command.upgrade(cfg, "head")` without re-running an external backfill
+script. A prior version of this test suite used `command.downgrade`/
+`command.upgrade` and, run against a live dev DB, silently destroyed real
+Category data this way. Invoking the migration's own functions in isolation
+tests exactly the guard this file is about, with no dependency on how many
+migrations exist above or below it, and no risk to any other migration's
+data."""
+
 import uuid
 
 import pytest
-from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from alembic import command
-from app.core.database import SessionLocal
+from app.core.database import SessionLocal, engine
 from app.models import Order, OrderItem, Project, Supplier
-
-
-@pytest.fixture(autouse=True)
-def _restore_logger_state():
-    """alembic/env.py calls logging.config.fileConfig(), which defaults to
-    disable_existing_loggers=True — every command.downgrade/upgrade call
-    below disables every logger not named in alembic.ini's [loggers]
-    section (root/sqlalchemy/alembic), process-wide, for the rest of the
-    pytest session. Left unguarded, this silently breaks caplog-based
-    assertions in unrelated test files that happen to run afterward (e.g.
-    tests/auth/test_oauth_flow.py) — found by comparing `git stash`
-    before/after test-name sets, not by reasoning about it in advance.
-    Snapshot/restore each logger's .disabled flag around this module's
-    tests so the leak doesn't escape this file."""
-    manager = logging.Logger.manager
-    before = {
-        name: logger.disabled
-        for name, logger in manager.loggerDict.items()
-        if hasattr(logger, "disabled")
-    }
-    yield
-    for name, logger in manager.loggerDict.items():
-        if hasattr(logger, "disabled"):
-            logger.disabled = before.get(name, False)
 
 
 @pytest.fixture
@@ -166,8 +154,26 @@ def test_check_constraint_rejects_neither_field_filled(db_session, make_order_sh
     session.rollback()
 
 
-def _alembic_config() -> Config:
-    return Config("alembic.ini")
+def _load_migration_module():
+    """Imports the a7c3e9f21b04 migration file as a plain Python module (by
+    file path, since alembic/versions/*.py aren't a normal package) so its
+    upgrade()/downgrade() functions can be called directly, without going
+    through `alembic.command` and the full revision chain. See module
+    docstring for why this replaced the previous command.downgrade/upgrade
+    approach."""
+    import importlib.util
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "alembic"
+        / "versions"
+        / "a7c3e9f21b04_lightweight_order_item_without_.py"
+    )
+    spec = importlib.util.spec_from_file_location("a7c3e9f21b04_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_downgrade_fails_when_light_row_exists(db_session, make_order_shell):
@@ -184,17 +190,43 @@ def test_downgrade_fails_when_light_row_exists(db_session, make_order_shell):
     )
     session.commit()
 
-    cfg = _alembic_config()
-    with pytest.raises(RuntimeError, match="material_id IS NULL"):
-        command.downgrade(cfg, "-1")
+    migration = _load_migration_module()
+    connection = engine.connect()
+    transaction = connection.begin()
+    try:
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
 
-    # Confirm we're still at head — the guard raised before any DDL ran.
-    command.upgrade(cfg, "head")
+        context = MigrationContext.configure(connection)
+        with Operations.context(context):
+            with pytest.raises(RuntimeError, match="material_id IS NULL"):
+                migration.downgrade()
+    finally:
+        # Roll back regardless of outcome -- this test only verifies the
+        # guard raises before any DDL runs, it never intends to leave the
+        # schema downgraded (real downgrades to this revision are covered
+        # by test_downgrade_succeeds_with_no_light_rows).
+        transaction.rollback()
+        connection.close()
 
 
 def test_downgrade_succeeds_with_no_light_rows(db_session):
-    """Regression: downgrade must still work cleanly when the table has no
-    raw_description-only rows at all."""
-    cfg = _alembic_config()
-    command.downgrade(cfg, "-1")
-    command.upgrade(cfg, "head")
+    """Regression: downgrade must still work cleanly (no RuntimeError) when
+    the table has no raw_description-only rows at all -- run against a
+    transaction rolled back at the end, so this never leaves the real schema
+    downgraded (that would desync it from the ORM models used by every other
+    test in the suite)."""
+    migration = _load_migration_module()
+    connection = engine.connect()
+    transaction = connection.begin()
+    try:
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
+
+        context = MigrationContext.configure(connection)
+        with Operations.context(context):
+            migration.downgrade()
+            migration.upgrade()
+    finally:
+        transaction.rollback()
+        connection.close()

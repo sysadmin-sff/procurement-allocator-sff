@@ -107,17 +107,9 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
         MaterialInput(
             material_id=str(item.material_id),
             quantity=item.quantity,
-            category_id=str(item.material.category_id) if item.material.category_id else None,
-            requires_single_supplier=(
-                item.material.category_ref.requires_single_supplier
-                if item.material.category_ref is not None
-                else False
-            ),
-            category_name=(
-                item.material.category_ref.name
-                if item.material.category_ref is not None
-                else None
-            ),
+            category_id=str(item.material.category_id),
+            requires_single_supplier=item.material.category.requires_single_supplier,
+            category_name=item.material.category.name,
         )
         for item in project_items
     ]

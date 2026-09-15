@@ -25,16 +25,16 @@ def _admin_client(make_user, make_session):
     return _client_as(admin_session)
 
 
-def test_create_material_returns_201_with_body(db_session, make_user, make_session):
+def test_create_material_returns_201_with_body(db_session, make_user, make_session, make_category):
     session, material_ids, _user_ids = db_session
     client = _admin_client(make_user, make_session)
+    category = make_category(name="Fencing", sku_prefix="FENC")
 
     response = client.post(
         "/materials",
         json={
-            "internal_sku": f"SKU-{uuid.uuid4().hex[:8]}",
             "canonical_name": "6ft Vinyl Fence Panel",
-            "category": "fencing",
+            "category_id": str(category.id),
             "unit": "panel",
         },
         headers={"X-CSRF-Token": CSRF},
@@ -44,27 +44,126 @@ def test_create_material_returns_201_with_body(db_session, make_user, make_sessi
     body = response.json()
     material_ids.append(uuid.UUID(body["id"]))
     assert body["canonical_name"] == "6ft Vinyl Fence Panel"
-    assert body["category"] == "fencing"
+    assert body["category_name"] == "Fencing"
+    assert body["internal_sku"] == "FENC-001"
     assert body["attributes"] == {}
 
 
-def test_create_material_returns_409_for_duplicate_sku(
-    db_session, make_material, make_user, make_session
+def test_create_material_without_category_id_returns_422(make_user, make_session):
+    client = _admin_client(make_user, make_session)
+
+    response = client.post(
+        "/materials",
+        json={"canonical_name": "No Category Material", "unit": "ft"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_material_ignores_internal_sku_in_payload_returns_422(
+    make_user, make_session, make_category
 ):
-    material = make_material()
+    """ADR-0034 п.7 explicit choice: internal_sku is not accepted at all --
+    Pydantic's default extra="ignore" would silently drop it, but this
+    project chooses to make the removal visible via strict rejection. See
+    MaterialCreate's model_config in schemas/material.py."""
+    client = _admin_client(make_user, make_session)
+    category = make_category()
+
+    response = client.post(
+        "/materials",
+        json={
+            "canonical_name": "Explicit SKU Attempt",
+            "category_id": str(category.id),
+            "unit": "ft",
+            "internal_sku": "HACKED-001",
+        },
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_material_generates_sku_from_category_prefix(
+    db_session, make_user, make_session, make_category
+):
+    session, material_ids, _user_ids = db_session
+    client = _admin_client(make_user, make_session)
+    category = make_category(name="TestDoors", sku_prefix="TDOR")
+
+    response = client.post(
+        "/materials",
+        json={"canonical_name": "Door One", "category_id": str(category.id), "unit": "ea"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    material_ids.append(uuid.UUID(body["id"]))
+    assert body["internal_sku"] == "TDOR-001"
+
+
+def test_create_material_after_backfill_continues_existing_sku_sequence(
+    db_session, make_user, make_session, make_category, make_material
+):
+    """ADR-0034 п.4, the exact numeric regression: a Category left at
+    next_sku_number=27 (as backfill would set for a 26-material Doors
+    category) must produce the next SKU number, not reuse the last
+    occupied number or skip one (off-by-one)."""
+    session, material_ids, _user_ids = db_session
+    category = make_category(name="TestDoors2", sku_prefix="TDR2", next_sku_number=27)
+    make_material(sku="TDR2-026", category=category)
     client = _admin_client(make_user, make_session)
 
     response = client.post(
         "/materials",
         json={
-            "internal_sku": material.internal_sku,
-            "canonical_name": "Different Name",
-            "unit": "ft",
+            "canonical_name": "Door Twenty Seven",
+            "category_id": str(category.id),
+            "unit": "ea",
         },
         headers={"X-CSRF-Token": CSRF},
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 201
+    body = response.json()
+    material_ids.append(uuid.UUID(body["id"]))
+    assert body["internal_sku"] == "TDR2-027"
+
+
+def test_create_material_sequential_calls_produce_distinct_skus_no_collision(
+    db_session, make_user, make_session, make_category
+):
+    """ADR-0034 п.4: concurrent creation must not collide. TestClient/SQLite-
+    style in-process testing can't easily exercise true DB-level concurrent
+    transactions, so this test uses two sequential creates against the same
+    Category row to prove the atomic UPDATE ... RETURNING counter advances
+    correctly and never repeats a number."""
+    session, material_ids, _user_ids = db_session
+    category = make_category(name="RaceCat", sku_prefix="RACE")
+    client = _admin_client(make_user, make_session)
+
+    first = client.post(
+        "/materials",
+        json={"canonical_name": "Race One", "category_id": str(category.id), "unit": "ea"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+    second = client.post(
+        "/materials",
+        json={"canonical_name": "Race Two", "category_id": str(category.id), "unit": "ea"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    material_ids.append(uuid.UUID(first.json()["id"]))
+    material_ids.append(uuid.UUID(second.json()["id"]))
+    assert first.json()["internal_sku"] != second.json()["internal_sku"]
+    assert {first.json()["internal_sku"], second.json()["internal_sku"]} == {
+        "RACE-001",
+        "RACE-002",
+    }
 
 
 def test_get_material_returns_created_material(
@@ -129,11 +228,7 @@ def test_update_material_changes_fields(db_session, make_material, make_user, ma
 
     response = client.put(
         f"/materials/{material.id}",
-        json={
-            "internal_sku": material.internal_sku,
-            "canonical_name": "New Name",
-            "unit": "ft",
-        },
+        json={"canonical_name": "New Name", "unit": "ft"},
         headers={"X-CSRF-Token": CSRF},
     )
 
@@ -141,31 +236,50 @@ def test_update_material_changes_fields(db_session, make_material, make_user, ma
     assert response.json()["canonical_name"] == "New Name"
 
 
-def test_update_material_returns_409_when_sku_collides(
+def test_update_material_cannot_set_internal_sku(
     db_session, make_material, make_user, make_session
 ):
-    material_a = make_material()
-    material_b = make_material()
+    material = make_material()
     client = _admin_client(make_user, make_session)
 
     response = client.put(
-        f"/materials/{material_b.id}",
-        json={
-            "internal_sku": material_a.internal_sku,
-            "canonical_name": material_b.canonical_name,
-            "unit": "ft",
-        },
+        f"/materials/{material.id}",
+        json={"canonical_name": "Renamed", "internal_sku": "SHOULD-NOT-APPLY"},
         headers={"X-CSRF-Token": CSRF},
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 422
+
+
+def test_update_material_can_reclassify_category_without_new_sku(
+    db_session, make_material, make_category, make_user, make_session
+):
+    """ADR-0034 п.4: PATCH may change category_id (reclassification) but
+    never touches internal_sku -- the SKU issued at creation persists
+    regardless of later recategorization."""
+    old_category = make_category(name="Old", sku_prefix="OLD")
+    new_category = make_category(name="New", sku_prefix="NEW")
+    material = make_material(sku="OLD-001", category=old_category)
+    client = _admin_client(make_user, make_session)
+
+    response = client.put(
+        f"/materials/{material.id}",
+        json={"category_id": str(new_category.id)},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["internal_sku"] == "OLD-001"
+    assert body["category_name"] == "New"
 
 
 def test_update_material_partial_payload_preserves_omitted_fields(
-    db_session, make_material, make_user, make_session
+    db_session, make_material, make_category, make_user, make_session
 ):
+    fencing = make_category(name="fencing")
     material = make_material(
-        canonical_name="Kept Name", category="fencing", unit="panel", attributes={"gauge": "6"}
+        canonical_name="Kept Name", category=fencing, unit="panel", attributes={"gauge": "6"}
     )
     client = _admin_client(make_user, make_session)
 
@@ -179,7 +293,7 @@ def test_update_material_partial_payload_preserves_omitted_fields(
     body = response.json()
     assert body["canonical_name"] == "Renamed Only"
     assert body["internal_sku"] == material.internal_sku
-    assert body["category"] == "fencing"
+    assert body["category_name"] == "fencing"
     assert body["unit"] == "panel"
     assert body["attributes"] == {"gauge": "6"}
 
@@ -189,7 +303,7 @@ def test_update_material_returns_404_for_unknown_id(make_user, make_session):
 
     response = client.put(
         f"/materials/{uuid.uuid4()}",
-        json={"internal_sku": "X", "canonical_name": "X", "unit": "ft"},
+        json={"canonical_name": "X", "unit": "ft"},
         headers={"X-CSRF-Token": CSRF},
     )
 
@@ -306,9 +420,10 @@ def test_search_materials_returns_empty_list_for_no_matches(db_session, make_use
     assert response.json() == []
 
 
-def test_create_material_embeds_synchronously(db_session, make_user, make_session):
+def test_create_material_embeds_synchronously(db_session, make_user, make_session, make_category):
     session, material_ids, _user_ids = db_session
     client = _admin_client(make_user, make_session)
+    category = make_category()
 
     with patch(
         "app.api.material.embed_text", return_value=[0.2] * 1536
@@ -316,8 +431,8 @@ def test_create_material_embeds_synchronously(db_session, make_user, make_sessio
         response = client.post(
             "/materials",
             json={
-                "internal_sku": f"SKU-{uuid.uuid4().hex[:8]}",
                 "canonical_name": "Embeddable Material",
+                "category_id": str(category.id),
                 "unit": "ft",
             },
             headers={"X-CSRF-Token": CSRF},
@@ -334,11 +449,14 @@ def test_create_material_embeds_synchronously(db_session, make_user, make_sessio
     assert len(material.embedding) == 1536
 
 
-def test_create_material_survives_embedding_api_failure(db_session, make_user, make_session):
+def test_create_material_survives_embedding_api_failure(
+    db_session, make_user, make_session, make_category
+):
     from app.price_ingestion.embeddings import EmbeddingError
 
     session, material_ids, _user_ids = db_session
     client = _admin_client(make_user, make_session)
+    category = make_category()
 
     with patch(
         "app.api.material.embed_text", side_effect=EmbeddingError("boom")
@@ -346,8 +464,8 @@ def test_create_material_survives_embedding_api_failure(db_session, make_user, m
         response = client.post(
             "/materials",
             json={
-                "internal_sku": f"SKU-{uuid.uuid4().hex[:8]}",
                 "canonical_name": "Should Still Be Created",
+                "category_id": str(category.id),
                 "unit": "ft",
             },
             headers={"X-CSRF-Token": CSRF},
@@ -402,15 +520,16 @@ def test_update_material_reembeds_when_attributes_change(
 
 
 def test_update_material_does_not_reembed_when_only_category_changes(
-    db_session, make_material, make_user, make_session
+    db_session, make_material, make_category, make_user, make_session
 ):
     material = make_material(canonical_name="Stable Name")
+    other_category = make_category(name="new-category")
     client = _admin_client(make_user, make_session)
 
     with patch("app.api.material.embed_text") as mock_embed:
         response = client.put(
             f"/materials/{material.id}",
-            json={"category": "new-category"},
+            json={"category_id": str(other_category.id)},
             headers={"X-CSRF-Token": CSRF},
         )
 

@@ -213,7 +213,7 @@ def test_run_allocation_leaves_split_categories_empty_when_category_unified(
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
-    doors = make_category(name="Doors", requires_single_supplier=True)
+    doors = make_category(name="TestDoors", requires_single_supplier=True)
     door1 = make_material(category=doors)
     door2 = make_material(category=doors)
     make_price(door1, supplier, price=5.00, availability=10)
@@ -235,7 +235,7 @@ def test_run_allocation_reports_split_categories_when_category_actually_split(
     session, *_ = db_session
     s1 = make_supplier(name="Supplier One", flat_fee=0.0, free_shipping_threshold=0.0)
     s2 = make_supplier(name="Supplier Two", flat_fee=0.0, free_shipping_threshold=0.0)
-    mesh = make_category(name="Mesh", requires_single_supplier=True)
+    mesh = make_category(name="TestMesh", requires_single_supplier=True)
     mesh1 = make_material(category=mesh)
     mesh2 = make_material(category=mesh)
     # No common supplier for both -- forces a split (mirrors the ADR's
@@ -247,7 +247,7 @@ def test_run_allocation_reports_split_categories_when_category_actually_split(
     run = run_allocation(session, project.id)
 
     assert run.status == "ok"
-    assert run.split_categories == ["Mesh"]
+    assert run.split_categories == ["TestMesh"]
 
 
 def test_run_allocation_marks_infeasible_when_no_solvable_materials(

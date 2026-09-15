@@ -181,8 +181,8 @@ def make_category(db_session):
 
     def _make(name=None, sku_prefix=None, requires_single_supplier=False):
         counter["n"] += 1
-        name = name or f"Test Category {counter['n']}"
-        sku_prefix = sku_prefix or f"TC{counter['n']}"
+        name = name or f"Test Category {uuid.uuid4().hex[:12]}"
+        sku_prefix = sku_prefix or f"TC{uuid.uuid4().hex[:6].upper()}"
         category = Category(
             name=name, sku_prefix=sku_prefix, requires_single_supplier=requires_single_supplier
         )
@@ -195,17 +195,19 @@ def make_category(db_session):
 
 
 @pytest.fixture
-def make_material(db_session):
+def make_material(db_session, make_category):
     session, _project_ids, material_ids, _supplier_ids, _user_ids, _category_ids = db_session
     counter = {"n": 0}
 
     def _make(sku=None, unit="ft", category=None):
         counter["n"] += 1
         sku = sku or f"TEST-SKU-{uuid.uuid4().hex[:12]}"
+        if category is None:
+            category = make_category()
         material = Material(
             internal_sku=sku,
             canonical_name=sku,
-            category_id=category.id if category is not None else None,
+            category_id=category.id,
             unit=unit,
             attributes={},
         )

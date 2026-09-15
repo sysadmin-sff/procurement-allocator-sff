@@ -6,20 +6,24 @@ from pydantic import BaseModel, ConfigDict
 
 
 class MaterialCreate(BaseModel):
-    internal_sku: str
+    model_config = ConfigDict(extra="forbid")
+
     canonical_name: str
-    category: str | None = None
+    category_id: uuid.UUID
     unit: str
     attributes: dict = {}
 
 
 class MaterialUpdate(BaseModel):
     """Частичное обновление: поля, не переданные в payload, сохраняют текущее
-    значение в БД, а не сбрасываются на дефолт — см. update_material."""
+    значение в БД, а не сбрасываются на дефолт — см. update_material.
+    internal_sku исключён полностью — SKU выдаётся один раз при создании и
+    не пересчитывается при последующей переклассификации, см. ADR-0034 п.4."""
 
-    internal_sku: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
     canonical_name: str | None = None
-    category: str | None = None
+    category_id: uuid.UUID | None = None
     unit: str | None = None
     attributes: dict | None = None
 
@@ -30,7 +34,7 @@ class MaterialOut(BaseModel):
     id: uuid.UUID
     internal_sku: str
     canonical_name: str
-    category: str | None
+    category_name: str
     unit: str
     attributes: dict
     color_options: list[str] | None = None

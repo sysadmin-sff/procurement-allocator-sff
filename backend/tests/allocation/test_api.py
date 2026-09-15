@@ -196,7 +196,7 @@ def test_allocate_includes_split_categories_in_response(
     session, *_ = db_session
     s1 = make_supplier(name="Supplier One", flat_fee=0.0, free_shipping_threshold=0.0)
     s2 = make_supplier(name="Supplier Two", flat_fee=0.0, free_shipping_threshold=0.0)
-    mesh = make_category(name="Mesh", requires_single_supplier=True)
+    mesh = make_category(name="TestMesh", requires_single_supplier=True)
     mesh1 = make_material(category=mesh)
     mesh2 = make_material(category=mesh)
     make_price(mesh1, s1, price=5.00, availability=10)
@@ -209,7 +209,7 @@ def test_allocate_includes_split_categories_in_response(
     )
 
     assert response.status_code == 200
-    assert response.json()["split_categories"] == ["Mesh"]
+    assert response.json()["split_categories"] == ["TestMesh"]
 
 
 def test_allocate_returns_404_for_nonexistent_project(make_user, make_session):

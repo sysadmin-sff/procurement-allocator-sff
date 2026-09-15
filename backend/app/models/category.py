@@ -30,4 +30,4 @@ class Category(UUIDPKMixin, Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    materials: Mapped[list["Material"]] = relationship(back_populates="category_ref")
+    materials: Mapped[list["Material"]] = relationship(back_populates="category")

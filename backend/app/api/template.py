@@ -31,15 +31,7 @@ def _to_out(template: ProjectTemplate) -> ProjectTemplateOut:
                 material_id=item.material_id,
                 canonical_name=item.material.canonical_name,
                 unit=item.material.unit,
-                # TEMPORARY guard, removed once Task 7's real backfill +
-                # migration (b) make Material.category_id NOT NULL for every
-                # real catalog row — until then, real templates referencing
-                # not-yet-backfilled materials would otherwise 500 here.
-                category_name=(
-                    item.material.category_ref.name
-                    if item.material.category_ref is not None
-                    else "(no category)"
-                ),
+                category_name=item.material.category.name,
             )
             for item in template.items
         ],

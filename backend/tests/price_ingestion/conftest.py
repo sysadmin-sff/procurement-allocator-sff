@@ -19,9 +19,19 @@ from app.models import (
     UserSession,
 )
 
+_category_ids_pending_cleanup: list = []
+"""Populated by make_category's own teardown when a Category delete can't
+run yet (its materials aren't gone until db_session's teardown, which runs
+AFTER make_category's -- pytest fixture teardown is LIFO, and make_category
+depends on db_session). db_session's own teardown does the actual delete
+once materials are cleaned up. Module-level and cleared at the start of each
+db_session run so state never leaks between tests."""
+
 
 @pytest.fixture
 def db_session():
+    global _category_ids_pending_cleanup
+    _category_ids_pending_cleanup = []
     session = SessionLocal()
     material_ids: list = []
     supplier_ids: list = []
@@ -82,6 +92,10 @@ def db_session():
                 synchronize_session=False
             )
             session.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
+        if _category_ids_pending_cleanup:
+            session.query(Category).filter(
+                Category.id.in_(_category_ids_pending_cleanup)
+            ).delete(synchronize_session=False)
         session.commit()
         session.close()
 
@@ -155,8 +169,8 @@ def make_category(db_session):
 
     def _make(name=None, sku_prefix=None, requires_single_supplier=False):
         counter["n"] += 1
-        name = name or f"Test Category {counter['n']}"
-        sku_prefix = sku_prefix or f"TC{counter['n']}"
+        name = name or f"Test Category {uuid.uuid4().hex[:12]}"
+        sku_prefix = sku_prefix or f"TC{uuid.uuid4().hex[:6].upper()}"
         category = Category(
             name=name, sku_prefix=sku_prefix, requires_single_supplier=requires_single_supplier
         )
@@ -168,29 +182,22 @@ def make_category(db_session):
     yield _make
 
     if created_ids:
-        # Materials referencing these categories are deleted later, in
-        # db_session's own teardown (fixture teardown is LIFO -- this runs
-        # first since make_category depends on db_session). Null out the FK
-        # first so this delete doesn't violate it before that cleanup runs.
-        session.query(Material).filter(Material.category_id.in_(created_ids)).update(
-            {"category_id": None}, synchronize_session=False
-        )
-        session.query(Category).filter(Category.id.in_(created_ids)).delete(
-            synchronize_session=False
-        )
-        session.commit()
+        # Can't delete these Category rows yet -- see module docstring.
+        _category_ids_pending_cleanup.extend(created_ids)
 
 
 @pytest.fixture
-def make_material(db_session):
+def make_material(db_session, make_category):
     session, material_ids, _supplier_ids, _user_ids = db_session
 
     def _make(canonical_name=None, unit="ft", attributes=None, category=None):
         sku = f"TEST-SKU-{uuid.uuid4().hex[:12]}"
+        if category is None:
+            category = make_category()
         material = Material(
             internal_sku=sku,
             canonical_name=canonical_name or sku,
-            category_id=category.id if category is not None else None,
+            category_id=category.id,
             unit=unit,
             attributes=attributes or {},
         )

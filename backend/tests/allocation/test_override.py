@@ -284,7 +284,7 @@ def test_override_recomputes_split_categories(
     session, *_ = db_session
     old_supplier = make_supplier(name="Old Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
     new_supplier = make_supplier(name="New Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
-    doors = make_category(name="Doors", requires_single_supplier=True)
+    doors = make_category(name="TestDoors", requires_single_supplier=True)
     door1 = make_material(category=doors)
     door2 = make_material(category=doors)
     make_price(door1, old_supplier, price=5.00, availability=10)
@@ -303,7 +303,7 @@ def test_override_recomputes_split_categories(
     override_allocation_line_supplier(session, run.id, line.id, new_supplier.id)
     session.refresh(run)
 
-    assert run.split_categories == ["Doors"]
+    assert run.split_categories == ["TestDoors"]
 
 
 def test_override_clears_below_min_order_when_no_longer_applicable(

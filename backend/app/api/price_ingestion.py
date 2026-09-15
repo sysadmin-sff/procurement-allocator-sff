@@ -142,7 +142,7 @@ def apply_entry(
             entry_id,
             action=payload.action,
             material_id=payload.material_id,
-            internal_sku=payload.internal_sku,
+            category_id=payload.category_id,
             canonical_name=payload.canonical_name,
         )
     except EntryNotFoundError as exc:

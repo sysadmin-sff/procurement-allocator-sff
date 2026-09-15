@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from app.models import SupplierMaterialAlias
 from app.price_ingestion.extraction import ExtractedPriceLine
-from app.price_ingestion.matching import MatchDecision, match_price_list_lines
+from app.price_ingestion.matching import MatchDecision, _candidate_context, match_price_list_lines
 
 
 def _line(raw_name="Some Material", price=10.0, raw_sku=None, page_number=1):
@@ -295,3 +295,27 @@ def test_hallucinated_material_id_is_downgraded_to_not_found(
     assert results[0].decision.action == "not_found"
     assert results[0].decision.material_id is None
     assert "matches by attributes" in results[0].decision.reasoning
+
+
+def test_candidate_context_uses_category_name_not_repr(make_material, make_category):
+    """Regression for ADR-0034 "Контекст" п.3: _candidate_context must render
+    the human-readable Category.name in the LLM prompt, never repr() of the
+    ORM object and never an AttributeError from the old String column being
+    gone."""
+    doors = make_category(name="Doors", sku_prefix="DOOR")
+    material = make_material(canonical_name="6ft Door Panel", category=doors)
+
+    context = _candidate_context([material])
+
+    assert "категория='Doors'" in context
+    assert "Category object at" not in context
+
+
+def test_candidate_context_handles_material_without_category(make_material):
+    """A material with no category at all (category_id None) must render
+    категория=None, not raise AttributeError on a missing relationship."""
+    material = make_material(canonical_name="Uncategorized Material")
+
+    context = _candidate_context([material])
+
+    assert "категория=None" in context

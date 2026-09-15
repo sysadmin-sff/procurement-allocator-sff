@@ -8,6 +8,7 @@ from app.auth.constants import SESSION_IDLE_TTL
 from app.core.database import SessionLocal, get_db
 from app.main import app
 from app.models import (
+    Category,
     Material,
     Price,
     PriceListEntry,
@@ -141,14 +142,55 @@ def make_supplier(db_session):
 
 
 @pytest.fixture
+def make_category(db_session):
+    """Self-contained fixture (own cleanup list, not routed through
+    db_session's shared tuple) so adding it doesn't change db_session's
+    yielded shape — every other test file in this directory destructures
+    db_session positionally as a 4-tuple, and changing that would break
+    ~50 unrelated call sites for a fixture only price_ingestion's category
+    tests need."""
+    session, *_ = db_session
+    created_ids: list = []
+    counter = {"n": 0}
+
+    def _make(name=None, sku_prefix=None, requires_single_supplier=False):
+        counter["n"] += 1
+        name = name or f"Test Category {counter['n']}"
+        sku_prefix = sku_prefix or f"TC{counter['n']}"
+        category = Category(
+            name=name, sku_prefix=sku_prefix, requires_single_supplier=requires_single_supplier
+        )
+        session.add(category)
+        session.flush()
+        created_ids.append(category.id)
+        return category
+
+    yield _make
+
+    if created_ids:
+        # Materials referencing these categories are deleted later, in
+        # db_session's own teardown (fixture teardown is LIFO -- this runs
+        # first since make_category depends on db_session). Null out the FK
+        # first so this delete doesn't violate it before that cleanup runs.
+        session.query(Material).filter(Material.category_id.in_(created_ids)).update(
+            {"category_id": None}, synchronize_session=False
+        )
+        session.query(Category).filter(Category.id.in_(created_ids)).delete(
+            synchronize_session=False
+        )
+        session.commit()
+
+
+@pytest.fixture
 def make_material(db_session):
     session, material_ids, _supplier_ids, _user_ids = db_session
 
-    def _make(canonical_name=None, unit="ft", attributes=None):
+    def _make(canonical_name=None, unit="ft", attributes=None, category=None):
         sku = f"TEST-SKU-{uuid.uuid4().hex[:12]}"
         material = Material(
             internal_sku=sku,
             canonical_name=canonical_name or sku,
+            category_id=category.id if category is not None else None,
             unit=unit,
             attributes=attributes or {},
         )

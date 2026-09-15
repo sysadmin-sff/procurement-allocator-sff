@@ -1,6 +1,10 @@
 import pytest
 
-from app.allocation.service import EmptyProjectError, run_allocation
+from app.allocation.service import (
+    EmptyProjectError,
+    override_allocation_line_supplier,
+    run_allocation,
+)
 from app.models import AllocationLine, AllocationRun, Project, Supplier
 
 
@@ -205,12 +209,13 @@ def test_run_allocation_marks_infeasible_when_sole_supplier_misses_min_order_amo
 
 
 def test_run_allocation_leaves_split_categories_empty_when_category_unified(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_category, make_price, make_project
 ):
     session, *_ = db_session
     supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
-    door1 = make_material(category="Doors")
-    door2 = make_material(category="Doors")
+    doors = make_category(name="Doors", requires_single_supplier=True)
+    door1 = make_material(category=doors)
+    door2 = make_material(category=doors)
     make_price(door1, supplier, price=5.00, availability=10)
     make_price(door2, supplier, price=6.00, availability=10)
     project = make_project([(door1, 1), (door2, 1)])
@@ -222,7 +227,7 @@ def test_run_allocation_leaves_split_categories_empty_when_category_unified(
 
 
 def test_run_allocation_reports_split_categories_when_category_actually_split(
-    db_session, make_supplier, make_material, make_price, make_project
+    db_session, make_supplier, make_material, make_category, make_price, make_project
 ):
     """ADR-0028 §4: AllocationRun.split_categories lists a strict category
     only when the solver's actual chosen lines land on more than one distinct
@@ -230,8 +235,9 @@ def test_run_allocation_reports_split_categories_when_category_actually_split(
     session, *_ = db_session
     s1 = make_supplier(name="Supplier One", flat_fee=0.0, free_shipping_threshold=0.0)
     s2 = make_supplier(name="Supplier Two", flat_fee=0.0, free_shipping_threshold=0.0)
-    mesh1 = make_material(category="Mesh")
-    mesh2 = make_material(category="Mesh")
+    mesh = make_category(name="Mesh", requires_single_supplier=True)
+    mesh1 = make_material(category=mesh)
+    mesh2 = make_material(category=mesh)
     # No common supplier for both -- forces a split (mirrors the ADR's
     # empirical Mesh catalog-coverage gap).
     make_price(mesh1, s1, price=5.00, availability=10)
@@ -264,3 +270,53 @@ def test_run_allocation_marks_infeasible_when_no_solvable_materials(
     assert run.supplier_summaries == []
     assert len(run.orphaned_materials) == 1
     assert run.orphaned_materials[0]["material_id"] == str(material.id)
+
+
+def test_compute_split_categories_matches_solver_requires_single_supplier(
+    db_session, make_supplier, make_material, make_category, make_price, make_project
+):
+    """ADR-0034 §3.1: both call sites (solver.py's materials_by_category and
+    service.py's _compute_split_categories) must read
+    Category.requires_single_supplier the same way. A category with the flag
+    True and materials split across suppliers (via override) must produce a
+    non-empty split_categories; a category with the flag False in the same
+    shape must not."""
+    session, *_ = db_session
+    s1 = make_supplier(name="S1", flat_fee=0.0, free_shipping_threshold=0.0)
+    s2 = make_supplier(name="S2", flat_fee=0.0, free_shipping_threshold=0.0)
+
+    strict_cat = make_category(name="StrictCat", requires_single_supplier=True)
+    strict_1 = make_material(category=strict_cat)
+    strict_2 = make_material(category=strict_cat)
+    make_price(strict_1, s1, price=5.00, availability=10)
+    make_price(strict_2, s1, price=6.00, availability=10)
+    make_price(strict_1, s2, price=7.00, availability=10)
+    strict_project = make_project([(strict_1, 1), (strict_2, 1)])
+
+    strict_run = run_allocation(session, strict_project.id)
+    strict_line = (
+        session.query(AllocationLine)
+        .filter_by(allocation_run_id=strict_run.id, material_id=strict_1.id)
+        .one()
+    )
+    override_allocation_line_supplier(session, strict_run.id, strict_line.id, s2.id)
+    session.refresh(strict_run)
+    assert strict_run.split_categories == ["StrictCat"]
+
+    lax_cat = make_category(name="LaxCat", requires_single_supplier=False)
+    lax_1 = make_material(category=lax_cat)
+    lax_2 = make_material(category=lax_cat)
+    make_price(lax_1, s1, price=5.00, availability=10)
+    make_price(lax_2, s1, price=6.00, availability=10)
+    make_price(lax_1, s2, price=7.00, availability=10)
+    lax_project = make_project([(lax_1, 1), (lax_2, 1)])
+
+    lax_run = run_allocation(session, lax_project.id)
+    lax_line = (
+        session.query(AllocationLine)
+        .filter_by(allocation_run_id=lax_run.id, material_id=lax_1.id)
+        .one()
+    )
+    override_allocation_line_supplier(session, lax_run.id, lax_line.id, s2.id)
+    session.refresh(lax_run)
+    assert lax_run.split_categories == []

@@ -8,6 +8,7 @@ erDiagram
     Supplier ||--o{ Office : "имеет офисы"
     Supplier ||--o{ SupplierContact : "имеет контакты"
     Office ||--o{ SupplierContact : "опционально группирует"
+    Category ||--o{ Material : "классифицирует"
     Material ||--o{ Price : "имеет цену у"
     Material ||--o{ SupplierMaterialAlias : "известен как"
     Material ||--o{ ProjectItem : "используется в"
@@ -60,11 +61,19 @@ erDiagram
         string phone
         string email
     }
+    Category {
+        uuid id
+        string name "уникальное"
+        string sku_prefix "уникальный, неизменяем после создания, ADR-0034 п.5"
+        bool requires_single_supplier "драйвер строгой группировки солвера, заменяет STRICT_CATEGORIES, ADR-0034"
+        int next_sku_number "атомарный счётчик для автогенерации internal_sku, ADR-0034 п.4"
+        datetime created_at
+    }
     Material {
         uuid id
-        string internal_sku "уникальный, канонический"
+        string internal_sku "уникальный, канонический, генерируется сервером — ADR-0034 п.4/п.7"
         string canonical_name
-        string category
+        uuid category_id "FK -> Category, not null, заменяет старую строковую колонку category — ADR-0034"
         string unit
         vector embedding "pgvector(1536), nullable — эмбеддинг canonical_name+attributes, ADR-0019"
     }
@@ -254,15 +263,29 @@ NULL` естественно исключаются из результатов 
 
 `AllocationRun.split_categories` добавлено сверх исходной диаграммы — см.
 `docs/decisions/0028-strict-category-supplier-grouping.md`. Список строгих
-категорий (`Doors`/`Gutter`/`Profil`/`Mesh`/`Roof panels` — константа
-`STRICT_CATEGORIES` в `backend/app/allocation/solver.py`, не колонка в БД),
-фактически оказавшихся разбитыми между более чем одним поставщиком в текущем
+категорий (`Doors`/`Gutter`/`Profil`/`Mesh`/`Roof panels`), фактически
+оказавшихся разбитыми между более чем одним поставщиком в текущем
 состоянии строк проекта. Солвер группирует эти категории только мягко —
 штрафом в целевой функции, не hard-ограничением — поэтому разброс возможен и
 не является признаком ошибки; поле чисто информационное для UI-предупреждения,
 не участвует в дальнейших расчётах. Пересчитывается после `run_allocation()` и
 после каждого `override_allocation_line_supplier()`, той же точкой, что
 `supplier_summaries` (ADR-0006 §4).
+
+**`STRICT_CATEGORIES` (константа кода `backend/app/allocation/solver.py`)
+заменена сущностью `Category.requires_single_supplier` (колонка БД) — см.
+`docs/decisions/0034-material-category-entity-and-sku-autogeneration.md`.**
+Ни солвер (`solver.py::materials_by_category`), ни `service.py::_compute_split_categories`
+больше не читают хардкод-множество имён категорий — оба джойнят
+`Material.category_id -> Category.requires_single_supplier`, один и тот же
+способ для обоих call site. `Material.category` (свободная строка) заменена
+на `category_id` (FK, `not null`) — уникальность/написание категории теперь
+гарантированы на уровне БД (`Category.name` уникально), а не свободным
+текстом при импорте. `internal_sku` для новых материалов не вводится
+вручную — выдаётся атомарно из `Category.next_sku_number` в момент создания
+(`app/services/material_sku.py::generate_next_sku`, общая для
+`POST /materials` и для флоу "новый материал" на экране ревью прайс-листа,
+ADR-0034 §4/§7).
 
 `Office`/`SupplierContact` добавлены сверх исходной диаграммы, новые поля на `Supplier`
 (`website`, `region`, `catalog_link`, `status`, `payment_terms`, `portal_url`, `comments`) —

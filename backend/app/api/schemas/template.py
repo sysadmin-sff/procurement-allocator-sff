@@ -25,7 +25,7 @@ class ProjectTemplateItemOut(BaseModel):
     material_id: uuid.UUID
     canonical_name: str
     unit: str
-    category: str | None
+    category_name: str
 
 
 class ProjectTemplateOut(BaseModel):

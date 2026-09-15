@@ -24,16 +24,6 @@ _STATUS_NAMES = {
     cp_model.UNKNOWN: "UNKNOWN",
 }
 
-STRICT_CATEGORIES = {"Doors", "Gutter", "Profil", "Mesh", "Roof panels"}
-"""Категории, которые должны закупаться у одного поставщика в рамках проекта
-(визуальная согласованность — двери/жёлоба/профили/экраны/кровельные панели
-дают заметный на объекте цветовой разнобой между поставщиками). Реализовано
-как soft-ограничение (штраф в целевой функции), не hard-constraint — см.
-ADR-0028 §2: ни один поставщик не покрывает полный каталог ни одной строгой
-категории, hard-ограничение резко повышало бы частоту INFEASIBLE. Сверено
-буквально против CATEGORY_SKU_PREFIX реального импорта, см.
-test_strict_categories_constant_matches_real_catalog (snapshot-тест)."""
-
 CATEGORY_SPLIT_PENALTY_K = 4
 """Множитель к среднему flat_fee поставщиков проекта, дающий
 category_split_penalty — см. ADR-0028 §2. Диапазон 3-5 предложен ADR, 4 взято
@@ -78,35 +68,37 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
         candidates = [x[(m_id, s_id)] for s_id in supplier_ids if (m_id, s_id) in x]
         model.add(sum(candidates) == 1)
 
-    # ADR-0028 §1/§2: diff[C][m] против опорного материала m* (min material_id
-    # в категории) строгой категории — soft-механизм, только штраф в целевой
-    # функции (§2), без hard-равенства x[m*][s] == x[m][s]. §3 требует, чтобы
-    # категорийная группировка сама по себе не могла сделать модель
-    # infeasible ("diff[C][m] — обычная бинарная переменная без принудительного
-    # = 0") — hard-версия §1 (буквальный model.add(x[m*][s] == x[m][s])/== 0)
-    # прямо противоречила бы этому и ключевому тесту "ни один поставщик не
-    # покрывает всю категорию — soft-режим должен вернуть OPTIMAL/FEASIBLE, не
-    # INFEASIBLE" (см. обсуждение при реализации — только diff-неравенства,
-    # без hard-линковки). M_C — материалы категории, уже прошедшие
+    # ADR-0028 §1/§2, ADR-0034 §3: diff[C][m] против опорного материала m*
+    # (min material_id в категории) строгой категории — soft-механизм, только
+    # штраф в целевой функции (§2), без hard-равенства x[m*][s] == x[m][s].
+    # §3 требует, чтобы категорийная группировка сама по себе не могла
+    # сделать модель infeasible ("diff[C][m] — обычная бинарная переменная
+    # без принудительного = 0") — hard-версия §1 (буквальный
+    # model.add(x[m*][s] == x[m][s])/== 0) прямо противоречила бы этому и
+    # ключевому тесту "ни один поставщик не покрывает всю категорию —
+    # soft-режим должен вернуть OPTIMAL/FEASIBLE, не INFEASIBLE" (см.
+    # обсуждение при реализации — только diff-неравенства, без
+    # hard-линковки). M_C — материалы категории, уже прошедшие
     # предобработку orphaned (уже в material_ids/x на этом этапе, ADR-0028 не
-    # переоткрывает ADR-0002).
-    category_map = {m.material_id: m.category for m in data.materials}
+    # переоткрывает ADR-0002). Группировка — по category_id (ключ, стабилен
+    # при переименовании Category), признак строгости — Category.requires_
+    # single_supplier через MaterialInput.requires_single_supplier, читается
+    # из БД (ADR-0034), не из хардкод-множества имён категорий.
     materials_by_category: dict[str, list[str]] = {}
-    for m_id in material_ids:
-        cat = category_map.get(m_id)
-        if cat in STRICT_CATEGORIES:
-            materials_by_category.setdefault(cat, []).append(m_id)
+    for m in data.materials:
+        if m.requires_single_supplier and m.category_id is not None:
+            materials_by_category.setdefault(m.category_id, []).append(m.material_id)
 
-    diff: dict[tuple[str, str], cp_model.IntVar] = {}  # (category, m_id) -> diff[C][m]
-    for cat, cat_material_ids in materials_by_category.items():
+    diff: dict[tuple[str, str], cp_model.IntVar] = {}  # (category_id, m_id) -> diff[C][m]
+    for cat_id, cat_material_ids in materials_by_category.items():
         if len(cat_material_ids) < 2:
             continue
         ref_m_id = min(cat_material_ids)
         for m_id in cat_material_ids:
             if m_id == ref_m_id:
                 continue
-            diff_var = model.new_bool_var(f"diff_{cat}_{m_id}")
-            diff[(cat, m_id)] = diff_var
+            diff_var = model.new_bool_var(f"diff_{cat_id}_{m_id}")
+            diff[(cat_id, m_id)] = diff_var
             for s_id in supplier_ids:
                 ref_var = x.get((ref_m_id, s_id))
                 m_var = x.get((m_id, s_id))

@@ -1,6 +1,5 @@
-from app.allocation.solver import STRICT_CATEGORIES, solve_allocation
+from app.allocation.solver import solve_allocation
 from app.allocation.types import AllocationInput, MaterialInput, PriceInput, SupplierInput
-from app.scripts.xlsx_price_matrix import CATEGORY_SKU_PREFIX
 
 
 def test_material_with_null_availability_is_still_assignable():
@@ -116,12 +115,8 @@ def test_supplier_summary_covers_every_active_supplier_across_multiple():
         MaterialInput(material_id="m2", quantity=1),
     ]
     suppliers = [
-        SupplierInput(
-            supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=1500
-        ),
-        SupplierInput(
-            supplier_id="s2", flat_fee_cents=1000, free_shipping_threshold_cents=100_000
-        ),
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=1500),
+        SupplierInput(supplier_id="s2", flat_fee_cents=1000, free_shipping_threshold_cents=100_000),
     ]
     prices = [
         PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=1000, availability=10),
@@ -522,26 +517,16 @@ def test_no_valid_supplier_for_any_material_is_infeasible():
     assert result.lines == []
 
 
-def test_strict_categories_constant_matches_spec():
-    # ADR-0028 §1: the exact five visually-facing categories agreed on the call.
-    assert STRICT_CATEGORIES == {"Doors", "Gutter", "Profil", "Mesh", "Roof panels"}
-
-
-def test_strict_categories_are_a_subset_of_real_catalog_categories():
-    # Snapshot/regression test (ADR-0028 "Последствия"): STRICT_CATEGORIES is
-    # a hand-maintained constant, not derived from CATEGORY_SKU_PREFIX -- if
-    # the real catalog's category list ever diverges (renamed/removed
-    # category), this must fail loudly instead of silently degrading (a
-    # renamed strict category would just stop being grouped, with no error).
-    assert STRICT_CATEGORIES <= set(CATEGORY_SKU_PREFIX.keys())
-
-
 def test_strict_category_all_materials_at_one_supplier_stays_together():
     # ADR-0028 "Последствия" (a): all materials of a strict category already
     # at one supplier, all else equal -- no unexpected split.
     materials = [
-        MaterialInput(material_id="d1", quantity=1, category="Doors"),
-        MaterialInput(material_id="d2", quantity=1, category="Doors"),
+        MaterialInput(
+            material_id="d1", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
+        MaterialInput(
+            material_id="d2", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
     ]
     suppliers = [
         SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=0),
@@ -568,8 +553,12 @@ def test_strict_category_prefers_single_supplier_at_moderate_price_difference():
     # still prefer consolidating onto one supplier over the small per-line
     # saving of splitting.
     materials = [
-        MaterialInput(material_id="d1", quantity=1, category="Doors"),
-        MaterialInput(material_id="d2", quantity=1, category="Doors"),
+        MaterialInput(
+            material_id="d1", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
+        MaterialInput(
+            material_id="d2", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
     ]
     suppliers = [
         SupplierInput(supplier_id="s1", flat_fee_cents=1000, free_shipping_threshold_cents=None),
@@ -600,8 +589,12 @@ def test_strict_category_splits_when_price_difference_is_large_enough():
     # enough that even the split-category penalty (k=4 * avg flat_fee) can't
     # outweigh it -- the solver should give a split.
     materials = [
-        MaterialInput(material_id="d1", quantity=1, category="Doors"),
-        MaterialInput(material_id="d2", quantity=1, category="Doors"),
+        MaterialInput(
+            material_id="d1", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
+        MaterialInput(
+            material_id="d2", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
     ]
     suppliers = [
         SupplierInput(supplier_id="s1", flat_fee_cents=100, free_shipping_threshold_cents=None),
@@ -629,8 +622,12 @@ def test_strict_category_no_single_supplier_covers_whole_category_stays_feasible
     # Roof panels) -- soft mode must return OPTIMAL/FEASIBLE with a split,
     # never INFEASIBLE.
     materials = [
-        MaterialInput(material_id="mesh1", quantity=1, category="Mesh"),
-        MaterialInput(material_id="mesh2", quantity=1, category="Mesh"),
+        MaterialInput(
+            material_id="mesh1", quantity=1, category_id="mesh", requires_single_supplier=True
+        ),
+        MaterialInput(
+            material_id="mesh2", quantity=1, category_id="mesh", requires_single_supplier=True
+        ),
     ]
     suppliers = [
         SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=0),
@@ -657,8 +654,12 @@ def test_non_strict_category_split_across_suppliers_is_unpenalized():
     # just with category set on both materials, to prove the category doesn't
     # change the outcome for a non-strict category.
     materials = [
-        MaterialInput(material_id="m1", quantity=1, category="Connectors"),
-        MaterialInput(material_id="m2", quantity=1, category="Connectors"),
+        MaterialInput(
+            material_id="m1", quantity=1, category_id="connectors", requires_single_supplier=False
+        ),
+        MaterialInput(
+            material_id="m2", quantity=1, category_id="connectors", requires_single_supplier=False
+        ),
     ]
     suppliers = [
         SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=1500),
@@ -693,8 +694,12 @@ def test_strict_category_asymmetric_pair_mechanism_registers_mismatch_via_penalt
     # proving the asymmetric branch does not hard-block it -- only discourage
     # it via the objective, as required by §3's "never infeasible" guarantee.
     materials = [
-        MaterialInput(material_id="d1", quantity=1, category="Doors"),
-        MaterialInput(material_id="d2", quantity=1, category="Doors"),
+        MaterialInput(
+            material_id="d1", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
+        MaterialInput(
+            material_id="d2", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
     ]
     suppliers = [
         SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=None),
@@ -725,8 +730,12 @@ def test_strict_category_asymmetric_pair_still_penalized_at_moderate_gap():
     # supplier that covers the whole category, proving the asymmetric branch
     # does apply real pressure, not just a no-op inequality.
     materials = [
-        MaterialInput(material_id="d1", quantity=1, category="Doors"),
-        MaterialInput(material_id="d2", quantity=1, category="Doors"),
+        MaterialInput(
+            material_id="d1", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
+        MaterialInput(
+            material_id="d2", quantity=1, category_id="doors", requires_single_supplier=True
+        ),
     ]
     suppliers = [
         SupplierInput(supplier_id="s1", flat_fee_cents=1000, free_shipping_threshold_cents=None),
@@ -750,6 +759,39 @@ def test_strict_category_asymmetric_pair_still_penalized_at_moderate_gap():
     # split penalty, versus consolidating both on s1 (200+200=400c, one flat
     # fee, no penalty). The 100c per-line saving doesn't clear that bar.
     assert assignments == {"d1": "s1", "d2": "s1"}
+
+
+def test_new_category_with_requires_single_supplier_false_by_default_is_unpenalized():
+    # ADR-0034 §3.1: a brand-new Category with requires_single_supplier=False
+    # (the schema default) must behave exactly like today's non-strict
+    # categories -- no grouping, no penalty -- without anyone having to
+    # explicitly opt out.
+    materials = [
+        MaterialInput(
+            material_id="m1", quantity=1, category_id="new-cat", requires_single_supplier=False
+        ),
+        MaterialInput(
+            material_id="m2", quantity=1, category_id="new-cat", requires_single_supplier=False
+        ),
+    ]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=1500),
+        SupplierInput(supplier_id="s2", flat_fee_cents=1000, free_shipping_threshold_cents=100_000),
+    ]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=1000, availability=10),
+        PriceInput(material_id="m2", supplier_id="s1", unit_price_cents=600, availability=10),
+        PriceInput(material_id="m2", supplier_id="s2", unit_price_cents=400, availability=10),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status == "OPTIMAL"
+    assert result.total_cents == 1600
+    assignments = {line.material_id: line.supplier_id for line in result.lines}
+    assert assignments == {"m1": "s1", "m2": "s1"}
 
 
 def test_multiple_materials_each_get_a_line():

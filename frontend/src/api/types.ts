@@ -332,7 +332,9 @@ export interface AllocationRun {
 export interface OrderItem {
   id: string;
   order_id: string;
-  material_id: string;
+  /** Null for a lightweight OrderItem with no catalog material — see
+   * ADR-0033. raw_description carries the supplier's own line text instead. */
+  material_id: string | null;
   quantity: number;
   quoted_price: number;
   received_price: number | null;

@@ -15,6 +15,7 @@ import type {
   ParsedExtraLine,
   ParsedMatchedLine,
   ParseOrderResponseResult,
+  Price,
   PriceUpdateResult,
   PriceUpdateSelection,
   Supplier,
@@ -26,6 +27,11 @@ import type { PriceUpdateBatchRow } from '../components/PriceUpdateBatchScreen';
 import { PriceUpdateBatchScreen } from '../components/PriceUpdateBatchScreen';
 import { resolveMaterialName } from '../lib/colors';
 import styles from './order-detail/OrderDetail.module.css';
+// badgeActive/badgeHistorical are the same "активна"/"историческая" classes
+// MaterialPricesPanel uses (CrudScreen.module.css:288-305) — reused here
+// rather than duplicated, so both screens' badges track any future palette
+// change together.
+import crudStyles from '../components/CrudScreen.module.css';
 
 const LOW_CONFIDENCE_LEVELS = new Set(['low', 'medium']);
 /** Both "low" and "medium" get the same ⚠ treatment in MVP — see ADR-0018 §6:
@@ -235,7 +241,10 @@ export function OrderDetailPage() {
       {divergentItem?.price_divergence != null && (
         <PriceDivergenceModal
           divergence={divergentItem.price_divergence}
-          materialName={materialById.get(divergentItem.material_id)?.canonical_name ?? divergentItem.material_id}
+          materialName={
+            (divergentItem.material_id != null ? materialById.get(divergentItem.material_id) : undefined)
+              ?.canonical_name ?? divergentItem.material_id ?? divergentItem.id
+          }
           supplierName={supplier?.name ?? order.supplier_id}
           onConfirm={() => void handleDivergencePopupConfirm()}
           onDismiss={() => setDivergentItem(null)}
@@ -323,7 +332,7 @@ export function OrderDetailPage() {
                   key={item.id}
                   item={item}
                   order={order}
-                  material={materialById.get(item.material_id)}
+                  material={item.material_id != null ? materialById.get(item.material_id) : undefined}
                   saving={savingItemId === item.id}
                   onPatch={(patch) => void handleItemPatch(item, patch)}
                   onReplacementApplied={handleReplacementApplied}
@@ -454,12 +463,12 @@ function buildOrderText({
   const includedItems = order.items.filter((item) => item.declined_at == null);
 
   includedItems.forEach((item, index) => {
-    const material = materialById.get(item.material_id);
+    const material = item.material_id != null ? materialById.get(item.material_id) : undefined;
     // ADR-0031 п.5: this is a supplier-facing document, so the color
     // ambiguity ("(White/Bronze)") must be resolved to the project's single
     // chosen color before it goes out. Falls back to canonical_name as-is
     // via resolveMaterialName when the material isn't loaded yet.
-    const name = material ? resolveMaterialName(material, colorChoice) : item.material_id;
+    const name = material ? resolveMaterialName(material, colorChoice) : (item.material_id ?? item.id);
     const unit = material?.unit ?? '';
     lines.push(`${index + 1}. ${name}`);
     lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
@@ -519,10 +528,10 @@ function buildTargetPriceOrderText({
 
   let goodsTotal = 0;
   includedItems.forEach((item, index) => {
-    const material = materialById.get(item.material_id);
+    const material = item.material_id != null ? materialById.get(item.material_id) : undefined;
     // Same resolution as buildOrderText — one shared function, not a second
     // ad hoc parse of canonical_name. See ADR-0031 п.4/п.5.
-    const name = material ? resolveMaterialName(material, colorChoice) : item.material_id;
+    const name = material ? resolveMaterialName(material, colorChoice) : (item.material_id ?? item.id);
     const unit = material?.unit ?? '';
     const targetPrice = item.target_price as number;
     const lineTotal = targetPrice * item.quantity;
@@ -571,7 +580,13 @@ function OrderItemRow({
       <td className={styles.numCell}>
         {item.quantity} {material?.unit ?? ''}
       </td>
-      <td className={styles.numCell}>{formatMoney(item.quoted_price)}</td>
+      <td className={styles.numCell}>
+        {formatMoney(item.quoted_price)}
+        {/* Lightweight rows (ADR-0033, material_id === null) have no
+         * (material, supplier) pair to look up a Price history for — the
+         * indicator is omitted entirely rather than shown disabled. */}
+        {item.material_id != null && <PriceHistoryIndicator orderId={order.id} itemId={item.id} />}
+      </td>
       <td className={styles.numCell}>
         <input
           key={item.received_price ?? 'empty'}
@@ -694,6 +709,88 @@ function PriceDelta({
       {delta >= 0 ? '+' : ''}
       {formatMoney(delta)} ({deltaPct >= 0 ? '+' : ''}
       {deltaPct.toFixed(1)}%)
+    </span>
+  );
+}
+
+/** Click-to-open popup with the (material, supplier) Price history behind
+ * this row's quoted_price — click rather than hover so it works the same on
+ * touch devices, same choice as ReplacementTrigger's "Найти замену" below.
+ * Badge vocabulary (активна/историческая) reuses CrudScreen.module.css's
+ * .badgeActive/.badgeHistorical, same as MaterialPricesPanel — not a new
+ * visual language. */
+function PriceHistoryIndicator({ orderId, itemId }: { orderId: string; itemId: string }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState<Price[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [open]);
+
+  async function handleToggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (history != null) return; // already loaded from a previous open
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await ordersApi.getItemPriceHistory(orderId, itemId);
+      setHistory(data);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <span className={styles.priceHistoryWrap} ref={containerRef}>
+      <button
+        type="button"
+        className={styles.priceHistoryTrigger}
+        aria-label="История цены"
+        title="История цены"
+        onClick={() => void handleToggle()}
+      >
+        🕓
+      </button>
+      {open && (
+        <div className={styles.priceHistoryPopup} role="dialog">
+          {loading && <div className={styles.replacementLoading}>Загрузка…</div>}
+          {error != null && <div className={styles.replacementNotFound}>Не удалось загрузить историю цены.</div>}
+          {history != null && (
+            <ul className={styles.priceHistoryList}>
+              {history.map((price) => {
+                const isActive = price.valid_to === null;
+                return (
+                  <li key={price.id} className={styles.priceHistoryRow}>
+                    <span className={styles.priceHistoryValue}>{formatMoney(price.price)}</span>
+                    <span className={styles.priceHistoryDate}>{price.valid_from}</span>
+                    <span
+                      className={`${crudStyles.badge} ${isActive ? crudStyles.badgeActive : crudStyles.badgeHistorical}`}
+                    >
+                      {isActive ? 'активна' : 'историческая'}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
     </span>
   );
 }
@@ -880,6 +977,14 @@ function ParseResponseSection({
   const [batchResults, setBatchResults] = useState<PriceUpdateResult[] | null>(null);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
 
+  // Category sections (matched/missing/extra) collapse independently, all
+  // expanded by default — purely a display convenience for a long result,
+  // no effect on which rows participate in "Применить все совпадения".
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  function toggleCategory(key: string) {
+    setCollapsedCategories((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   async function handleParse() {
     const file = fileInputRef.current?.files?.[0];
     if (!file) return;
@@ -931,7 +1036,10 @@ function ParseResponseSection({
           divergences.push({
             order_item_id: updated.id,
             divergence: updated.price_divergence,
-            materialName: materialById.get(updated.material_id)?.canonical_name ?? updated.material_id,
+            materialName:
+              (updated.material_id != null ? materialById.get(updated.material_id) : undefined)?.canonical_name ??
+              updated.material_id ??
+              updated.id,
             supplierName,
           });
         }
@@ -1014,7 +1122,19 @@ function ParseResponseSection({
         <>
           <div className={styles.parseResultBlock}>
             <div className={styles.parseCategoryHeader}>
-              <div className={styles.parseCategoryTitle}>Совпало ({result.matched.length})</div>
+              <button
+                type="button"
+                className={styles.parseCategoryToggle}
+                onClick={() => toggleCategory('matched')}
+              >
+                <span
+                  className={`${styles.chevron} ${!collapsedCategories.matched ? styles.chevronExpanded : ''}`}
+                  aria-hidden="true"
+                >
+                  ▸
+                </span>
+                <span className={styles.parseCategoryTitle}>Совпало ({result.matched.length})</span>
+              </button>
               <button
                 type="button"
                 className={styles.parseButton}
@@ -1028,7 +1148,7 @@ function ParseResponseSection({
             {applyError != null && <ErrorBanner error={applyError} />}
             {applySummary != null && <div className={styles.parseApplySummary}>{applySummary}</div>}
 
-            {result.matched.length > 0 && (
+            {!collapsedCategories.matched && result.matched.length > 0 && (
               <table className={styles.parseTable}>
                 <thead>
                   <tr>
@@ -1064,14 +1184,27 @@ function ParseResponseSection({
 
           <div className={styles.parseResultBlock}>
             <div className={styles.parseCategoryHeader}>
-              <div className={styles.parseCategoryTitle}>Отсутствует в ответе ({missing.length})</div>
+              <button
+                type="button"
+                className={styles.parseCategoryToggle}
+                onClick={() => toggleCategory('missing')}
+              >
+                <span
+                  className={`${styles.chevron} ${!collapsedCategories.missing ? styles.chevronExpanded : ''}`}
+                  aria-hidden="true"
+                >
+                  ▸
+                </span>
+                <span className={styles.parseCategoryTitle}>Отсутствует в ответе ({missing.length})</span>
+              </button>
             </div>
-            {missing.length > 0 && (
+            {!collapsedCategories.missing && missing.length > 0 && (
               <ul className={styles.parseMissingList}>
                 {missing.map((item) => (
                   <li key={item.id} className={styles.parseMissingRow}>
                     <span className={styles.parseMissingInfo}>
-                      {materialById.get(item.material_id)?.canonical_name ?? item.material_id}
+                      {(item.material_id != null ? materialById.get(item.material_id) : undefined)
+                        ?.canonical_name ?? item.material_id}
                     </span>
                     <MissingItemMarkUnavailable item={item} order={order} onApplied={onApplied} />
                   </li>
@@ -1082,9 +1215,21 @@ function ParseResponseSection({
 
           <div className={styles.parseResultBlock}>
             <div className={styles.parseCategoryHeader}>
-              <div className={styles.parseCategoryTitle}>Лишнее ({result.extra.length})</div>
+              <button
+                type="button"
+                className={styles.parseCategoryToggle}
+                onClick={() => toggleCategory('extra')}
+              >
+                <span
+                  className={`${styles.chevron} ${!collapsedCategories.extra ? styles.chevronExpanded : ''}`}
+                  aria-hidden="true"
+                >
+                  ▸
+                </span>
+                <span className={styles.parseCategoryTitle}>Лишнее ({result.extra.length})</span>
+              </button>
             </div>
-            {result.extra.length > 0 && (
+            {!collapsedCategories.extra && result.extra.length > 0 && (
               <ul className={styles.parseExtraList}>
                 {result.extra.map((line, index) => (
                   <ExtraLineRow key={index} line={line} order={order} />
@@ -1125,7 +1270,8 @@ function MatchedLineRow({
   onPriceChange: (value: number) => void;
 }) {
   const orderItem = order.items.find((item) => item.id === line.order_item_id);
-  const material = orderItem ? materialById.get(orderItem.material_id) : undefined;
+  const material =
+    orderItem?.material_id != null ? materialById.get(orderItem.material_id) : undefined;
   const lowConfidence = LOW_CONFIDENCE_LEVELS.has(line.confidence);
 
   return (

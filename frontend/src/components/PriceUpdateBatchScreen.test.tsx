@@ -61,14 +61,39 @@ describe('PriceUpdateBatchScreen', () => {
     render(<PriceUpdateBatchScreen rows={rows} results={null} onSubmit={onSubmit} />);
 
     const user = userEvent.setup();
+    // First checkbox is the header "select all" — row checkboxes start at index 1.
     const checkboxes = screen.getAllByRole('checkbox');
-    await user.click(checkboxes[0]);
+    await user.click(checkboxes[1]);
     await user.click(screen.getByRole('button', { name: /Обновить выбранные цены в базе/ }));
 
     expect(onSubmit).toHaveBeenCalledWith([
       { order_item_id: 'item-1', apply: true },
       { order_item_id: 'item-2', apply: false },
     ]);
+  });
+
+  it('select-all header checkbox checks every row, unchecking it clears every row', async () => {
+    const user = userEvent.setup();
+    render(<PriceUpdateBatchScreen rows={rows} results={null} onSubmit={vi.fn()} />);
+
+    const [selectAll, ...rowCheckboxes] = screen.getAllByRole('checkbox');
+    await user.click(selectAll);
+    for (const checkbox of rowCheckboxes) expect(checkbox).toBeChecked();
+    expect(selectAll).toBeChecked();
+
+    await user.click(selectAll);
+    for (const checkbox of rowCheckboxes) expect(checkbox).not.toBeChecked();
+  });
+
+  it('select-all header checkbox becomes indeterminate when only some rows are checked', async () => {
+    const user = userEvent.setup();
+    render(<PriceUpdateBatchScreen rows={rows} results={null} onSubmit={vi.fn()} />);
+
+    const [selectAll, firstRow] = screen.getAllByRole('checkbox');
+    await user.click(firstRow);
+
+    expect(selectAll).not.toBeChecked();
+    expect((selectAll as HTMLInputElement).indeterminate).toBe(true);
   });
 
   it('shows a per-row result after submission, including an error for a stale row', () => {

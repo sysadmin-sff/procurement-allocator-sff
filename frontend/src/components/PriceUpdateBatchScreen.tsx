@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { Button } from './Button';
 import styles from './PriceUpdateBatchScreen.module.css';
 import type { PriceDivergence, PriceUpdateResult, PriceUpdateSelection } from '../api/types';
@@ -34,6 +34,18 @@ export function PriceUpdateBatchScreen({ rows, results, onSubmit, submitting }: 
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const resultByItemId = new Map((results ?? []).map((r) => [r.order_item_id, r]));
 
+  const checkedCount = rows.filter((row) => checked[row.order_item_id]).length;
+  const allChecked = rows.length > 0 && checkedCount === rows.length;
+  const someChecked = checkedCount > 0 && !allChecked;
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someChecked;
+  }, [someChecked]);
+
+  function handleSelectAll(value: boolean) {
+    setChecked(Object.fromEntries(rows.map((row) => [row.order_item_id, value])));
+  }
+
   function handleSubmit() {
     onSubmit(rows.map((row) => ({ order_item_id: row.order_item_id, apply: checked[row.order_item_id] ?? false })));
   }
@@ -49,7 +61,16 @@ export function PriceUpdateBatchScreen({ rows, results, onSubmit, submitting }: 
       <table className={styles.table}>
         <thead>
           <tr>
-            <th className={styles.checkboxCell} />
+            <th className={styles.checkboxCell}>
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allChecked}
+                disabled={submitting || rows.length === 0}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+                aria-label="Выбрать все строки"
+              />
+            </th>
             <th>Материал / поставщик</th>
             <th className={styles.numCell}>Сейчас в базе</th>
             <th className={styles.numCell}>Подтверждено</th>

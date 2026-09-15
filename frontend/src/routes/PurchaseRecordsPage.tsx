@@ -348,7 +348,7 @@ function SupplierSection({
               </thead>
               <tbody>
                 {planItems.map(({ order, item }) => {
-                  const material = materialById.get(item.material_id);
+                  const material = item.material_id != null ? materialById.get(item.material_id) : undefined;
                   return (
                     <tr key={`${order.id}-${item.id}`}>
                       <td className={styles.descColCell}>{material?.canonical_name ?? item.material_id}</td>
@@ -363,10 +363,15 @@ function SupplierSection({
                           title="Скопировать в форму «Факт», если совпало"
                           onClick={() =>
                             onCopyToFact(supplierId, {
-                              raw_description: material?.canonical_name ?? item.material_id,
+                              raw_description: material?.canonical_name ?? item.material_id ?? '',
                               quantity: item.quantity,
                               unit_price: item.quoted_price,
-                              material_id: item.material_id,
+                              // '' matches the draft form's own no-material
+                              // convention (line.material_id ?? ''), consumed
+                              // via `draft.material_id || null` on submit —
+                              // lightweight OrderItems (ADR-0033) have no
+                              // material_id to copy across.
+                              material_id: item.material_id ?? '',
                             })
                           }
                         >

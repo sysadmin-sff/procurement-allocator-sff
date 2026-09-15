@@ -20,6 +20,7 @@ from app.allocation.order_service import (
     create_orders_for_run,
     find_replacement_candidates,
     order_expected_totals,
+    order_item_price_history,
     price_delta,
     replace_and_sync_order,
     replacement_info_for_item,
@@ -295,6 +296,31 @@ def get_material_prices(material_id: uuid.UUID, db: Session = Depends(get_db)) -
         .filter(Price.material_id == material_id, Price.valid_to.is_(None))
         .all()
     )
+
+
+@router.get(
+    "/orders/{order_id}/items/{item_id}/price-history",
+    response_model=list[PriceOut],
+)
+def get_order_item_price_history(
+    order_id: uuid.UUID, item_id: uuid.UUID, db: Session = Depends(get_db)
+) -> list[Price]:
+    """Active + historical Price rows for (item.material_id,
+    order.supplier_id) — the OrderDetailPage indicator on quoted_price
+    (active vs historical, same visual vocabulary as MaterialPricesPanel).
+    Same precedent as get_material_prices above: lives here under the
+    router's get_current_user (any role), not under price.py's
+    require_role("admin") — an employee reconciling this Order would get a
+    403 calling GET /prices directly."""
+    if db.get(Order, order_id) is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    try:
+        return order_item_price_history(db, order_id, item_id)
+    except OrderItemNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Order item not found") from exc
+    except LightweightOrderItemError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post(

@@ -282,6 +282,51 @@ def find_replacement_candidates(
     return line.id, candidates
 
 
+def order_item_price_history(db: Session, order_id: uuid.UUID, item_id: uuid.UUID) -> list[Price]:
+    """GET /orders/{order_id}/items/{item_id}/price-history — employee-
+    accessible history (active + historical) for the exact (material_id,
+    supplier_id) pair quoted_price was snapshotted from, mirroring the
+    "активна"/"историческая" language already used on /materials
+    (MaterialPricesPanel.tsx) so OrderDetailPage reuses that visual
+    vocabulary instead of inventing a new one.
+
+    price.py's GET /prices carries the same (material_id, supplier_id)
+    filter/history but sits under require_role("admin") for the whole
+    router (ADR-0024 §4) — an employee viewing this Order would get a 403
+    calling it directly. Same precedent as get_material_prices (also in
+    this file's caller, order.py, not price.py/material.py) being pulled
+    out from under admin-only for an operational, any-role read — see
+    ADR-0024 §4 "permission-matrix follow-up" and get_material_prices'
+    own docstring for the prior instance of this exact reasoning.
+
+    Deliberately scoped to one supplier (order.supplier_id), unlike
+    get_material_prices (all suppliers) — this is "what has this specific
+    quoted_price's Price row looked like over time for this Order's
+    supplier", not "who else sells this material", a different question
+    already answered by find_replacement_candidates.
+
+    Raises OrderItemNotFoundError, LightweightOrderItemError (material_id
+    is None — a lightweight OrderItem, ADR-0033, has no Material to
+    resolve a Price history against)."""
+    item = db.get(OrderItem, item_id)
+    if item is None or item.order_id != order_id:
+        raise OrderItemNotFoundError(order_id, item_id)
+    if item.material_id is None:
+        raise LightweightOrderItemError(item_id)
+
+    order = db.get(Order, order_id)
+    return list(
+        db.scalars(
+            select(Price)
+            .where(
+                Price.material_id == item.material_id,
+                Price.supplier_id == order.supplier_id,
+            )
+            .order_by(Price.valid_from.desc())
+        ).all()
+    )
+
+
 def replacement_info_for_item(
     db: Session, item: OrderItem
 ) -> tuple[uuid.UUID | None, str | None, uuid.UUID | None]:

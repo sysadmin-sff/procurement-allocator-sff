@@ -8,7 +8,7 @@ import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import { projectsApi } from '../api/projects';
 import { suppliersApi } from '../api/suppliers';
-import type { Material, Order, OrderItem, ProjectWithItems, Supplier } from '../api/types';
+import type { Material, Order, OrderItem, Price, ProjectWithItems, Supplier } from '../api/types';
 
 vi.mock('../api/orders', () => ({
   ordersApi: {
@@ -20,6 +20,7 @@ vi.mock('../api/orders', () => ({
     replaceAndOrder: vi.fn(),
     parseResponse: vi.fn(),
     confirmPriceUpdates: vi.fn(),
+    getItemPriceHistory: vi.fn(),
   },
 }));
 vi.mock('../api/materials', () => ({
@@ -48,6 +49,7 @@ const findReplacementMock = vi.mocked(ordersApi.findReplacement);
 const replaceAndOrderMock = vi.mocked(ordersApi.replaceAndOrder);
 const parseResponseMock = vi.mocked(ordersApi.parseResponse);
 const confirmPriceUpdatesMock = vi.mocked(ordersApi.confirmPriceUpdates);
+const getItemPriceHistoryMock = vi.mocked(ordersApi.getItemPriceHistory);
 const materialsListMock = vi.mocked(materialsApi.list);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 const projectGetMock = vi.mocked(projectsApi.get);
@@ -187,6 +189,114 @@ describe('OrderDetailPage', () => {
     expect(screen.getByText(material.canonical_name)).toBeInTheDocument();
     expect(screen.getByText('$25.00')).toBeInTheDocument();
     expect(screen.queryByText(/расхождением цены/)).not.toBeInTheDocument();
+  });
+
+  describe('quoted-price history indicator', () => {
+    function priceFixture(overrides: Partial<Price> = {}): Price {
+      return {
+        id: 'price-1',
+        material_id: 'mat-1',
+        supplier_id: 'sup-a',
+        price: 25,
+        currency: 'USD',
+        availability: null,
+        min_order_qty: null,
+        valid_from: '2026-08-01',
+        valid_to: null,
+        source_import_id: null,
+        ...overrides,
+      };
+    }
+
+    it('shows the indicator for a row with a material_id', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      expect(await screen.findByRole('button', { name: /история цены/i })).toBeInTheDocument();
+    });
+
+    it('does not show the indicator for a lightweight row without a material_id', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1', material_id: null })],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('$25.00');
+      expect(screen.queryByRole('button', { name: /история цены/i })).not.toBeInTheDocument();
+    });
+
+    it('loads and shows price history with active/historical badges on click', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      getItemPriceHistoryMock.mockResolvedValue([
+        priceFixture({ id: 'price-2', price: 30, valid_from: '2026-08-15', valid_to: null }),
+        priceFixture({ id: 'price-1', price: 25, valid_from: '2026-08-01', valid_to: '2026-08-15' }),
+      ]);
+
+      renderPage();
+
+      const trigger = await screen.findByRole('button', { name: /история цены/i });
+      const user = userEvent.setup();
+      await user.click(trigger);
+
+      expect(getItemPriceHistoryMock).toHaveBeenCalledWith('order-1', 'item-1');
+      const activeBadge = await screen.findByText('активна');
+      const historicalBadge = await screen.findByText('историческая');
+      expect(activeBadge).toBeInTheDocument();
+      expect(historicalBadge).toBeInTheDocument();
+      expect(screen.getByText('$30.00')).toBeInTheDocument();
+      expect(screen.getByText('2026-08-15')).toBeInTheDocument();
+      expect(screen.getByText('2026-08-01')).toBeInTheDocument();
+    });
+
+    it('renders a single active price without breaking when there is no history', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      getItemPriceHistoryMock.mockResolvedValue([priceFixture({ id: 'price-1', price: 25, valid_from: '2026-08-01' })]);
+
+      renderPage();
+
+      const trigger = await screen.findByRole('button', { name: /история цены/i });
+      const user = userEvent.setup();
+      await user.click(trigger);
+
+      expect(await screen.findByText('активна')).toBeInTheDocument();
+      expect(screen.queryByText('историческая')).not.toBeInTheDocument();
+    });
   });
 
   it('saves confirmed_price on blur and shows the resulting delta', async () => {
@@ -1050,6 +1160,54 @@ describe('OrderDetailPage', () => {
       expect(within(firstSection).queryByTitle('Закрыть результат распознавания')).not.toBeInTheDocument();
     });
 
+    it('category sections start expanded and collapse/expand independently on header click', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+      getOrderMock.mockResolvedValue(order);
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '' },
+        ],
+        missing: [],
+        extra: [
+          { raw_description: 'Extra bracket', price: 5.0, quantity: 1, confidence: 'high', reasoning: '' },
+        ],
+      });
+
+      renderPage();
+
+      const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+      const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+      const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
+      const user = userEvent.setup();
+      await user.upload(fileInput, file);
+      await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+      const matchedHeader = await within(firstSection).findByText('Совпало (1)');
+      // Expanded by default — the matched table's price header is visible.
+      expect(within(firstSection).getByText('Отправленная цена')).toBeInTheDocument();
+
+      await user.click(matchedHeader);
+      expect(within(firstSection).queryByText('Отправленная цена')).not.toBeInTheDocument();
+      // Collapsing "Совпало" does not affect the independent "Лишнее" section.
+      expect(within(firstSection).getByText('Extra bracket')).toBeInTheDocument();
+
+      await user.click(matchedHeader);
+      expect(within(firstSection).getByText('Отправленная цена')).toBeInTheDocument();
+
+      const extraHeader = within(firstSection).getByText('Лишнее (1)');
+      await user.click(extraHeader);
+      expect(within(firstSection).queryByText('Extra bracket')).not.toBeInTheDocument();
+    });
+
     it('applying matches from the second block PATCHes confirmed_price, not received_price', async () => {
       const order: Order = orderFixture({
         id: 'order-1',
@@ -1187,8 +1345,10 @@ describe('OrderDetailPage', () => {
       const batchSection = batchTitle.parentElement as HTMLElement;
       expect(within(batchSection).getByText('Сетка Fiberglass 18x14')).toBeInTheDocument();
       expect(within(batchSection).queryByText('Профиль алюминиевый')).not.toBeInTheDocument();
-      const checkbox = within(batchSection).getByRole('checkbox');
-      expect(checkbox).not.toBeChecked();
+      // First checkbox is the header "select all"; the one row's checkbox is second.
+      const [selectAll, rowCheckbox] = within(batchSection).getAllByRole('checkbox');
+      expect(selectAll).not.toBeChecked();
+      expect(rowCheckbox).not.toBeChecked();
     });
 
     it('shows a per-row error when confirm-price-updates rejects a stale row', async () => {
@@ -1249,7 +1409,9 @@ describe('OrderDetailPage', () => {
 
       const batchTitle = await screen.findByText(/Расхождения со справочником цен \(1\)/);
       const batchSection = batchTitle.parentElement as HTMLElement;
-      await user.click(within(batchSection).getByRole('checkbox'));
+      // First checkbox is the header "select all"; the one row's checkbox is second.
+      const [, rowCheckbox] = within(batchSection).getAllByRole('checkbox');
+      await user.click(rowCheckbox);
       await user.click(within(batchSection).getByRole('button', { name: /Обновить выбранные цены в базе/ }));
 
       expect(await screen.findByText(/stale: confirmed_price changed or price already matches/)).toBeInTheDocument();

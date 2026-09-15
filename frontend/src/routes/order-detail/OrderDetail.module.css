@@ -221,6 +221,74 @@
   color: var(--color-disabled-text-alt);
 }
 
+/* Quoted-price history indicator — click-to-open popup (touch-safe, same
+   choice as .findReplacementButton) anchored to the trigger via
+   position: relative on the wrapping span. */
+.priceHistoryWrap {
+  position: relative;
+  display: inline-block;
+  margin-left: var(--space-2);
+}
+
+.priceHistoryTrigger {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-sm-alt2);
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-text-tertiary-alt);
+  vertical-align: middle;
+}
+
+.priceHistoryTrigger:hover {
+  color: var(--color-brand);
+}
+
+.priceHistoryPopup {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: var(--space-2);
+  min-width: 220px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card-sm);
+  padding: var(--space-4);
+  text-align: left;
+  white-space: normal;
+}
+
+.priceHistoryList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.priceHistoryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm-alt2);
+}
+
+.priceHistoryValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.priceHistoryDate {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
 .delta {
   font-weight: 600;
   color: var(--color-text-secondary);
@@ -570,6 +638,29 @@
   font-size: var(--text-md);
   font-weight: 700;
   color: var(--color-text);
+}
+
+.parseCategoryToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.chevron {
+  display: inline-flex;
+  color: var(--color-text-tertiary-alt);
+  font-size: var(--text-sm);
+  transition: transform 0.15s ease;
+}
+
+.chevronExpanded {
+  transform: rotate(90deg);
+  color: var(--color-brand);
 }
 
 .parseApplySummary {

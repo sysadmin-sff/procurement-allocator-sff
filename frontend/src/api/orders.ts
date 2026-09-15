@@ -5,6 +5,7 @@ import type {
   Order,
   OrderItem,
   ParseOrderResponseResult,
+  Price,
   PriceUpdateSelection,
 } from './types';
 
@@ -54,4 +55,10 @@ export const ordersApi = {
    * row) — same endpoint, not two API paths. */
   confirmPriceUpdates: (orderId: string, selections: PriceUpdateSelection[]) =>
     http.post<ConfirmPriceUpdatesOut>(`/orders/${orderId}/confirm-price-updates`, { selections }),
+  /** GET .../price-history — active + historical Price rows for
+   * (item.material_id, order.supplier_id), sorted by valid_from descending
+   * (server-side). 422 for a lightweight OrderItem (material_id === null) —
+   * callers should not invoke this for such items in the first place. */
+  getItemPriceHistory: (orderId: string, itemId: string) =>
+    http.get<Price[]>(`/orders/${orderId}/items/${itemId}/price-history`),
 };

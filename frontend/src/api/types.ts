@@ -335,6 +335,8 @@ export interface OrderItem {
   /** Null for a lightweight OrderItem with no catalog material — see
    * ADR-0033. raw_description carries the supplier's own line text instead. */
   material_id: string | null;
+  /** Non-null exactly when material_id is null — see ADR-0033 §1. */
+  raw_description: string | null;
   quantity: number;
   quoted_price: number;
   received_price: number | null;

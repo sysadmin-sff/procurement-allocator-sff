@@ -17,6 +17,12 @@ export interface OrderItemPatch {
   decline_reason?: string | null;
 }
 
+export interface OrderItemRawIn {
+  raw_description: string;
+  quantity: number;
+  quoted_price: number;
+}
+
 export const ordersApi = {
   /** acknowledgeConflict — "Создать дополнительно" (ADR-0012 §1/§2): caller
    * already saw the 409 and wants the extra Order anyway, without deleting
@@ -61,4 +67,10 @@ export const ordersApi = {
    * callers should not invoke this for such items in the first place. */
   getItemPriceHistory: (orderId: string, itemId: string) =>
     http.get<Price[]>(`/orders/${orderId}/items/${itemId}/price-history`),
+  /** POST .../items/raw — see ADR-0033 §2. Draft-only (409 otherwise);
+   * creates a lightweight OrderItem (material_id=null, raw_description
+   * filled) directly on the Order, replacing the old purchaseRecordsApi.create
+   * call from the "Лишнее" category's "Добавить" button. */
+  addRawItem: (orderId: string, payload: OrderItemRawIn) =>
+    http.post<OrderItem>(`/orders/${orderId}/items/raw`, payload),
 };

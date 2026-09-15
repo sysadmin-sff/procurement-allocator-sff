@@ -5,7 +5,6 @@ import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import type { OrderItemPatch } from '../api/orders';
 import { projectsApi } from '../api/projects';
-import { purchaseRecordsApi } from '../api/purchaseRecords';
 import { suppliersApi } from '../api/suppliers';
 import type {
   FindReplacementResult,
@@ -468,7 +467,7 @@ function buildOrderText({
     // ambiguity ("(White/Bronze)") must be resolved to the project's single
     // chosen color before it goes out. Falls back to canonical_name as-is
     // via resolveMaterialName when the material isn't loaded yet.
-    const name = material ? resolveMaterialName(material, colorChoice) : (item.material_id ?? item.id);
+    const name = material ? resolveMaterialName(material, colorChoice) : (item.raw_description ?? item.id);
     const unit = material?.unit ?? '';
     lines.push(`${index + 1}. ${name}`);
     lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
@@ -531,7 +530,7 @@ function buildTargetPriceOrderText({
     const material = item.material_id != null ? materialById.get(item.material_id) : undefined;
     // Same resolution as buildOrderText — one shared function, not a second
     // ad hoc parse of canonical_name. See ADR-0031 п.4/п.5.
-    const name = material ? resolveMaterialName(material, colorChoice) : (item.material_id ?? item.id);
+    const name = material ? resolveMaterialName(material, colorChoice) : (item.raw_description ?? item.id);
     const unit = material?.unit ?? '';
     const targetPrice = item.target_price as number;
     const lineTotal = targetPrice * item.quantity;
@@ -576,7 +575,9 @@ function OrderItemRow({
 
   return (
     <tr className={rowClassName}>
-      <td className={styles.materialColCell}>{material?.canonical_name ?? item.material_id}</td>
+      <td className={styles.materialColCell}>
+        {material?.canonical_name ?? item.raw_description ?? item.material_id}
+      </td>
       <td className={styles.numCell}>
         {item.quantity} {material?.unit ?? ''}
       </td>
@@ -674,7 +675,7 @@ function OrderItemRow({
             }}
           />
         )}
-        {isDeclined && (
+        {isDeclined && item.material_id != null && (
           <ReplacementTrigger
             item={item}
             order={order}
@@ -1232,7 +1233,7 @@ function ParseResponseSection({
             {!collapsedCategories.extra && result.extra.length > 0 && (
               <ul className={styles.parseExtraList}>
                 {result.extra.map((line, index) => (
-                  <ExtraLineRow key={index} line={line} order={order} />
+                  <ExtraLineRow key={index} line={line} order={order} onApplied={onApplied} />
                 ))}
               </ul>
             )}
@@ -1345,7 +1346,15 @@ function MissingItemMarkUnavailable({
   );
 }
 
-function ExtraLineRow({ line, order }: { line: ParsedExtraLine; order: Order }) {
+function ExtraLineRow({
+  line,
+  order,
+  onApplied,
+}: {
+  line: ParsedExtraLine;
+  order: Order;
+  onApplied: () => void;
+}) {
   const [quantity, setQuantity] = useState(line.quantity ?? 1);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -1355,13 +1364,12 @@ function ExtraLineRow({ line, order }: { line: ParsedExtraLine; order: Order }) 
     setAdding(true);
     setError(null);
     try {
-      await purchaseRecordsApi.create(order.project_id, {
-        supplier_id: order.supplier_id,
+      await ordersApi.addRawItem(order.id, {
         raw_description: line.raw_description,
         quantity,
-        unit_price: line.price,
-        material_id: null,
+        quoted_price: line.price,
       });
+      onApplied();
       setAdded(true);
     } catch (err) {
       setError(err);

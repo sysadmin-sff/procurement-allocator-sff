@@ -7,6 +7,7 @@ import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import { projectsApi } from '../api/projects';
+import { purchaseRecordsApi } from '../api/purchaseRecords';
 import { suppliersApi } from '../api/suppliers';
 import type { Material, Order, OrderItem, Price, ProjectWithItems, Supplier } from '../api/types';
 
@@ -21,6 +22,7 @@ vi.mock('../api/orders', () => ({
     parseResponse: vi.fn(),
     confirmPriceUpdates: vi.fn(),
     getItemPriceHistory: vi.fn(),
+    addRawItem: vi.fn(),
   },
 }));
 vi.mock('../api/materials', () => ({
@@ -42,6 +44,9 @@ vi.mock('../api/projects', () => ({
     complete: vi.fn(),
   },
 }));
+vi.mock('../api/purchaseRecords', () => ({
+  purchaseRecordsApi: { listForProject: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+}));
 
 const getOrderMock = vi.mocked(ordersApi.get);
 const patchItemMock = vi.mocked(ordersApi.patchItem);
@@ -50,6 +55,8 @@ const replaceAndOrderMock = vi.mocked(ordersApi.replaceAndOrder);
 const parseResponseMock = vi.mocked(ordersApi.parseResponse);
 const confirmPriceUpdatesMock = vi.mocked(ordersApi.confirmPriceUpdates);
 const getItemPriceHistoryMock = vi.mocked(ordersApi.getItemPriceHistory);
+const addRawItemMock = vi.mocked(ordersApi.addRawItem);
+const purchaseRecordCreateMock = vi.mocked(purchaseRecordsApi.create);
 const materialsListMock = vi.mocked(materialsApi.list);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 const projectGetMock = vi.mocked(projectsApi.get);
@@ -124,6 +131,7 @@ function itemFixture(overrides: Partial<OrderItem> = {}): OrderItem {
     id: 'item-1',
     order_id: 'order-1',
     material_id: 'mat-1',
+    raw_description: null,
     quantity: 10,
     quoted_price: 25,
     received_price: null,
@@ -163,6 +171,8 @@ describe('OrderDetailPage', () => {
     replaceAndOrderMock.mockReset();
     parseResponseMock.mockReset();
     confirmPriceUpdatesMock.mockReset();
+    addRawItemMock.mockReset();
+    purchaseRecordCreateMock.mockReset();
     materialsListMock.mockReset();
     suppliersListMock.mockReset();
     projectGetMock.mockReset();
@@ -1684,6 +1694,174 @@ describe('OrderDetailPage', () => {
       const withPricesText = textareas.find((t) => t.value.includes('Price:'))!.value;
 
       expect(withPricesText).toContain('Super Gutter End Cap 5" (White/Bronze)');
+    });
+  });
+
+  describe('lightweight OrderItem without a catalog material (ADR-0033)', () => {
+    function orderWithExtraLine(): Order {
+      return orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture()],
+      });
+    }
+
+    async function parseAndOpenExtra() {
+      const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+      const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+      const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
+      const user = userEvent.setup();
+      await user.upload(fileInput, file);
+      await user.click(within(firstSection).getByText('Распознать цены из документа'));
+      return { firstSection, user };
+    }
+
+    it('"Добавить" on an extra line calls ordersApi.addRawItem, not purchaseRecordsApi.create', async () => {
+      getOrderMock.mockResolvedValue(orderWithExtraLine());
+      parseResponseMock.mockResolvedValue({
+        matched: [],
+        missing: [],
+        extra: [
+          { raw_description: 'Extra bracket', price: 5.5, quantity: 2, confidence: 'high', reasoning: '' },
+        ],
+      });
+      addRawItemMock.mockResolvedValue(
+        itemFixture({ id: 'item-extra', material_id: null, raw_description: 'Extra bracket', quoted_price: 5.5, quantity: 2 }),
+      );
+
+      renderPage();
+      const { firstSection, user } = await parseAndOpenExtra();
+
+      const addButton = await within(firstSection).findByText('Добавить');
+      await user.click(addButton);
+
+      expect(addRawItemMock).toHaveBeenCalledWith('order-1', {
+        raw_description: 'Extra bracket',
+        quantity: 2,
+        quoted_price: 5.5,
+      });
+      expect(purchaseRecordCreateMock).not.toHaveBeenCalled();
+      expect(await within(firstSection).findByText('Добавлено ✓')).toBeInTheDocument();
+    });
+
+    it('buildOrderText shows a meaningful name for a lightweight row, not a UUID', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 11,
+        delivery_fee: 25,
+        items: [
+          itemFixture({
+            id: 'item-1',
+            material_id: null,
+            raw_description: 'Extra bracket',
+            quoted_price: 5.5,
+            quantity: 2,
+          }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с ценами)');
+      const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
+      const withPricesText = textareas.find((t) => t.value.includes('Price:'))!.value;
+
+      expect(withPricesText).toContain('1. Extra bracket');
+      expect(withPricesText).not.toContain('item-1');
+    });
+
+    it('buildTargetPriceOrderText shows a meaningful name for a lightweight row, not a UUID', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 11,
+        delivery_fee: 25,
+        items: [
+          itemFixture({
+            id: 'item-1',
+            material_id: null,
+            raw_description: 'Extra bracket',
+            target_price: 5,
+            quantity: 2,
+          }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с целевыми ценами)');
+      const heading = screen.getByText('Список материалов (с целевыми ценами)');
+      const block = heading.parentElement?.parentElement as HTMLElement;
+      const text = (within(block).getByRole('textbox') as HTMLTextAreaElement).value;
+
+      expect(text).toContain('1. Extra bracket');
+      expect(text).not.toContain('item-1');
+    });
+
+    it('does not render "Найти замену" for a declined lightweight row (material_id == null)', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 11,
+        delivery_fee: 25,
+        items: [
+          itemFixture({
+            id: 'item-1',
+            material_id: null,
+            raw_description: 'Extra bracket',
+            quoted_price: 5.5,
+            quantity: 2,
+            declined_at: '2026-08-18T10:00:00Z',
+            decline_reason: 'not needed',
+          }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('Extra bracket');
+      expect(screen.getByText('Отклонено')).toBeInTheDocument();
+      expect(screen.queryByText('Найти замену')).not.toBeInTheDocument();
+    });
+
+    it('still renders "Найти замену" for a regular declined row with a material (regression)', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [
+          itemFixture({
+            id: 'item-1',
+            material_id: 'mat-1',
+            declined_at: '2026-08-18T10:00:00Z',
+            decline_reason: 'нет в наличии',
+          }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('Отклонено');
+      expect(screen.getByText('Найти замену')).toBeInTheDocument();
     });
   });
 });

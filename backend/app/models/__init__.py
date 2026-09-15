@@ -1,5 +1,6 @@
 from app.models.allocation import AllocationLine, AllocationRun
 from app.models.base import Base
+from app.models.category import Category
 from app.models.material import Material
 from app.models.office import Office
 from app.models.order import Order, OrderItem
@@ -15,6 +16,7 @@ from app.models.user import User, UserSession
 
 __all__ = [
     "Base",
+    "Category",
     "Supplier",
     "Material",
     "SupplierMaterialAlias",

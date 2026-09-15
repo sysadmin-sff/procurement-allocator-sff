@@ -1,12 +1,15 @@
+import uuid
 from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, String
+from sqlalchemy import JSON, ForeignKey, String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, UUIDPKMixin
 
 if TYPE_CHECKING:
+    from app.models.category import Category
     from app.models.price import Price
     from app.models.price_list import PriceListEntry
     from app.models.project import ProjectItem
@@ -19,6 +22,12 @@ class Material(UUIDPKMixin, Base):
     internal_sku: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     canonical_name: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str | None] = mapped_column(String(100))
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True
+    )
+    """Nullable only during the ADR-0034 two-phase migration window (this
+    revision). Made NOT NULL and the old `category` String column dropped in
+    the follow-up revision, after backfill_material_categories.py --apply."""
     unit: Mapped[str] = mapped_column(String(20), nullable=False)
     attributes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     """диаметр, материал, класс и т.д. — для будущего фасетного поиска"""
@@ -47,6 +56,9 @@ class Material(UUIDPKMixin, Base):
     ADR-0019 §1. NULL до бэкафилла/при сбое embeddings API (graceful
     degradation), исключается из векторного поиска матчинга."""
 
+    category_ref: Mapped["Category | None"] = relationship(back_populates="materials")
+    """Temporary name — renamed to `category` once the old String column is
+    dropped in the follow-up migration (ADR-0034 п.1)."""
     prices: Mapped[list["Price"]] = relationship(back_populates="material")
     aliases: Mapped[list["SupplierMaterialAlias"]] = relationship(back_populates="material")
     project_items: Mapped[list["ProjectItem"]] = relationship(back_populates="material")

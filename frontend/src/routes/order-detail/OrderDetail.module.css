@@ -222,10 +222,8 @@
 }
 
 /* Quoted-price history indicator — click-to-open popup (touch-safe, same
-   choice as .findReplacementButton) anchored to the trigger via
-   position: relative on the wrapping span. */
+   choice as .findReplacementButton). */
 .priceHistoryWrap {
-  position: relative;
   display: inline-block;
   margin-left: var(--space-2);
 }
@@ -245,13 +243,13 @@
   color: var(--color-brand);
 }
 
+/* Portalled into document.body (position: fixed, top/left set inline from
+   the trigger's own getBoundingClientRect) — same pattern as
+   MaterialCombobox's .comboboxListPortal, so the popup escapes .tableScroll
+   (overflow-x: auto, which per the CSS spec also clips overflow-y) instead
+   of being cut off by it regardless of where the row falls on screen. */
 .priceHistoryPopup {
-  position: absolute;
-  z-index: 10;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: var(--space-2);
+  z-index: 50;
   min-width: 220px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -282,6 +280,22 @@
 .priceHistoryValue {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* Historical row's price compared to the currently active row — red when it
+   was higher than today's active price, green when it was lower. Same
+   danger/success tokens as .deltaDiscrepant/.priceHistoryDate elsewhere in
+   this file, not a new color language. */
+.priceHistoryValueHigher {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-danger-text);
+}
+
+.priceHistoryValueLower {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-success-alt);
 }
 
 .priceHistoryDate {

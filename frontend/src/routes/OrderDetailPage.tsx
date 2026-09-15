@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
@@ -726,11 +728,25 @@ function PriceHistoryIndicator({ orderId, itemId }: { orderId: string; itemId: s
   const [history, setHistory] = useState<Price[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  /** Anchor coordinates for the portalled popup, captured on open — see
+   * MaterialCombobox's anchorRect/dropdownStyle for the same pattern. The
+   * table wraps in a scroll container with overflow-x: auto (.tableScroll),
+   * which per the CSS spec also clips overflow-y — an absolutely-positioned
+   * descendant popup gets clipped by that container's box regardless of
+   * where it falls relative to the actual viewport. Portalling into
+   * document.body with position: fixed escapes that ancestor entirely. */
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
 
   useEffect(() => {
     if (!open) return;
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        !(popupRef.current && popupRef.current.contains(target))
+      ) {
         setOpen(false);
       }
     }
@@ -743,6 +759,7 @@ function PriceHistoryIndicator({ orderId, itemId }: { orderId: string; itemId: s
       setOpen(false);
       return;
     }
+    if (containerRef.current) setAnchorRect(containerRef.current.getBoundingClientRect());
     setOpen(true);
     if (history != null) return; // already loaded from a previous open
     setLoading(true);
@@ -757,6 +774,19 @@ function PriceHistoryIndicator({ orderId, itemId }: { orderId: string; itemId: s
     }
   }
 
+  // Anchored under the trigger's own left edge rather than centered — with a
+  // fixed-position portal there is no longer a parent box to center within,
+  // and clamping the left edge to the viewport (min 8px margin) is simpler
+  // and just as effective at keeping the popup fully on-screen near either
+  // table edge.
+  const popupStyle: CSSProperties | undefined = anchorRect
+    ? {
+        position: 'fixed',
+        top: anchorRect.bottom + 4,
+        left: Math.max(8, Math.min(anchorRect.left, window.innerWidth - 220 - 8)),
+      }
+    : undefined;
+
   return (
     <span className={styles.priceHistoryWrap} ref={containerRef}>
       <button
@@ -768,30 +798,38 @@ function PriceHistoryIndicator({ orderId, itemId }: { orderId: string; itemId: s
       >
         🕓
       </button>
-      {open && (
-        <div className={styles.priceHistoryPopup} role="dialog">
-          {loading && <div className={styles.replacementLoading}>Загрузка…</div>}
-          {error != null && <div className={styles.replacementNotFound}>Не удалось загрузить историю цены.</div>}
-          {history != null && (
-            <ul className={styles.priceHistoryList}>
-              {history.map((price) => {
-                const isActive = price.valid_to === null;
-                return (
-                  <li key={price.id} className={styles.priceHistoryRow}>
-                    <span className={styles.priceHistoryValue}>{formatMoney(price.price)}</span>
-                    <span className={styles.priceHistoryDate}>{price.valid_from}</span>
-                    <span
-                      className={`${crudStyles.badge} ${isActive ? crudStyles.badgeActive : crudStyles.badgeHistorical}`}
-                    >
-                      {isActive ? 'активна' : 'историческая'}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
+      {open &&
+        popupStyle &&
+        createPortal(
+          <div ref={popupRef} className={styles.priceHistoryPopup} style={popupStyle} role="dialog">
+            {loading && <div className={styles.replacementLoading}>Загрузка…</div>}
+            {error != null && <div className={styles.replacementNotFound}>Не удалось загрузить историю цены.</div>}
+            {history != null && (() => {
+              const activePrice = history.find((p) => p.valid_to === null)?.price ?? null;
+              return (
+                <ul className={styles.priceHistoryList}>
+                  {sortPriceHistory(history).map((price) => {
+                    const isActive = price.valid_to === null;
+                    return (
+                      <li key={price.id} className={styles.priceHistoryRow}>
+                        <span className={priceHistoryValueClass(price.price, isActive, activePrice, styles)}>
+                          {formatMoney(price.price)}
+                        </span>
+                        <span className={styles.priceHistoryDate}>{formatCalendarDate(price.valid_from)}</span>
+                        <span
+                          className={`${crudStyles.badge} ${isActive ? crudStyles.badgeActive : crudStyles.badgeHistorical}`}
+                        >
+                          {isActive ? 'активна' : 'историческая'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }
@@ -1417,6 +1455,47 @@ function ExtraLineRow({
 
 function formatMoney(value: number): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Price.valid_from/valid_to are plain calendar dates (no time-of-day, no
+ * timezone — backend model is `Date`, not `DateTime`), so this formats the
+ * "YYYY-MM-DD" string field-by-field instead of going through `new Date()`.
+ * `new Date("YYYY-MM-DD")` parses as UTC midnight and toLocale*Date* would
+ * then re-render it in the viewing browser's own timezone — for anyone west
+ * of UTC that silently shifts the displayed day backward by one, which is
+ * exactly wrong for a value that was never a timestamp to begin with. */
+function formatCalendarDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-');
+  return `${day}.${month}.${year}`;
+}
+
+/** Active row (valid_to === null) always first, then the rest by
+ * valid_from descending — same ordering the backend already returns
+ * (order_item_price_history, ORDER BY valid_from DESC), made explicit here
+ * so the active row's position doesn't silently depend on it also having
+ * the latest valid_from, which is true in practice but not enforced by any
+ * constraint. */
+function sortPriceHistory(history: Price[]): Price[] {
+  return [...history].sort((a, b) => {
+    if (a.valid_to === null && b.valid_to !== null) return -1;
+    if (a.valid_to !== null && b.valid_to === null) return 1;
+    return b.valid_from.localeCompare(a.valid_from);
+  });
+}
+
+/** The active row is never colored (it's the comparison baseline, not
+ * compared against itself); a historical row is red when it was priced
+ * above the active price, green when below, and the neutral default when
+ * equal or when there is no active row to compare against at all (e.g. the
+ * material's Price was deactivated entirely). */
+function priceHistoryValueClass(
+  price: number,
+  isActive: boolean,
+  activePrice: number | null,
+  cssStyles: typeof styles,
+): string {
+  if (isActive || activePrice == null || price === activePrice) return cssStyles.priceHistoryValue;
+  return price > activePrice ? cssStyles.priceHistoryValueHigher : cssStyles.priceHistoryValueLower;
 }
 
 function pluralizePositions(count: number): string {

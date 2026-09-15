@@ -281,8 +281,74 @@ describe('OrderDetailPage', () => {
       expect(activeBadge).toBeInTheDocument();
       expect(historicalBadge).toBeInTheDocument();
       expect(screen.getByText('$30.00')).toBeInTheDocument();
-      expect(screen.getByText('2026-08-15')).toBeInTheDocument();
-      expect(screen.getByText('2026-08-01')).toBeInTheDocument();
+      // Calendar dates (Price.valid_from/valid_to have no time-of-day or
+      // timezone) render as DD.MM.YYYY parsed from the ISO string directly,
+      // not through new Date()/toLocaleDateString — see formatCalendarDate.
+      expect(screen.getByText('15.08.2026')).toBeInTheDocument();
+      expect(screen.getByText('01.08.2026')).toBeInTheDocument();
+    });
+
+    it('always shows the active row first, then the rest by valid_from descending, regardless of API order', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      // Deliberately out of order and with the active row last, to prove
+      // the frontend sorts rather than trusting API order.
+      getItemPriceHistoryMock.mockResolvedValue([
+        priceFixture({ id: 'price-1', price: 20, valid_from: '2026-07-01', valid_to: '2026-07-15' }),
+        priceFixture({ id: 'price-3', price: 30, valid_from: '2026-08-15', valid_to: null }),
+        priceFixture({ id: 'price-2', price: 25, valid_from: '2026-07-15', valid_to: '2026-08-15' }),
+      ]);
+
+      renderPage();
+
+      const trigger = await screen.findByRole('button', { name: /история цены/i });
+      const user = userEvent.setup();
+      await user.click(trigger);
+
+      const popup = await screen.findByRole('dialog');
+      const rows = within(popup).getAllByText(/^\$\d/);
+      expect(rows.map((r) => r.textContent)).toEqual(['$30.00', '$25.00', '$20.00']);
+    });
+
+    it('colors a historical price red when higher than the active price, green when lower', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      getItemPriceHistoryMock.mockResolvedValue([
+        priceFixture({ id: 'price-active', price: 25, valid_from: '2026-08-15', valid_to: null }),
+        priceFixture({ id: 'price-higher', price: 30, valid_from: '2026-08-01', valid_to: '2026-08-15' }),
+        priceFixture({ id: 'price-lower', price: 20, valid_from: '2026-07-01', valid_to: '2026-08-01' }),
+      ]);
+
+      renderPage();
+
+      const trigger = await screen.findByRole('button', { name: /история цены/i });
+      const user = userEvent.setup();
+      await user.click(trigger);
+
+      const popup = await screen.findByRole('dialog');
+      const activeValue = within(popup).getByText('$25.00');
+      const higherValue = within(popup).getByText('$30.00');
+      const lowerValue = within(popup).getByText('$20.00');
+
+      expect(activeValue.className).not.toMatch(/Higher|Lower/);
+      expect(higherValue.className).toMatch(/Higher/);
+      expect(lowerValue.className).toMatch(/Lower/);
     });
 
     it('renders a single active price without breaking when there is no history', async () => {

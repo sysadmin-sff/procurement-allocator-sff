@@ -60,13 +60,16 @@ flowchart LR
 - **Allocation** — детерминированный сервис, без вызовов LLM. См. ADR по алгоритму.
 - **Order generation** — чистая шаблонизация, без бизнес-логики.
 
-Все 10 бизнес-роутеров (`supplier`/`material`/`price`/`price_ingestion`/
+Все 11 бизнес-роутеров (`supplier`/`material`/`category`/`price`/`price_ingestion`/
 `template`/`project`/`allocation`/`order`/`purchase_record` + `/users`)
 защищены на уровне `APIRouter(dependencies=[...])` — `require_role("admin")`
-для справочных данных (`supplier`/`material`/`price`/`price_ingestion`/
+для справочных данных (`supplier`/`material`/`category`/`price`/`price_ingestion`/
 `template`/`users`), `get_current_user` (любая роль) для операционной работы
 (`project`/`allocation`/`order`/`purchase_record`) — см. ADR-0024 §4/§5,
-ADR-0032 §2.
+ADR-0032 §2. `category` (`/categories`) — справочник категорий материала
+(`Category`), заменяет хардкод-константу `STRICT_CATEGORIES` управляемым
+через БД полем `requires_single_supplier`, и выдаёт `internal_sku` новым
+материалам атомарно — см. `docs/decisions/0034-material-category-entity-and-sku-autogeneration.md`.
 `health.py` остаётся публичным; `auth.py` смешанный (публичные `/login`,
 `/callback`, защищённые `/me`, `/logout`).
 

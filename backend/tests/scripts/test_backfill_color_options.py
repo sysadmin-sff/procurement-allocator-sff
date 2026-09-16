@@ -17,7 +17,7 @@ import pytest
 from sqlalchemy import event
 
 from app.core.database import engine
-from app.models import Material
+from app.models import Category, Material
 from app.scripts.backfill_color_options import run_backfill
 
 
@@ -62,9 +62,16 @@ def make_test_material(savepoint_session):
             kwargs["color_options"] = color_options
         if color_fragment is not None:
             kwargs["color_fragment"] = color_fragment
+        # Category.category_id is NOT NULL (ADR-0034) -- a throwaway
+        # Category per material needs no cleanup of its own, since the
+        # whole savepoint transaction rolls back at teardown.
+        category = Category(name=f"Test Category {counter['n']}", sku_prefix=f"TCX{counter['n']}")
+        savepoint_session.add(category)
+        savepoint_session.flush()
         material = Material(
             internal_sku=sku,
             canonical_name=canonical_name,
+            category_id=category.id,
             unit="ft",
             attributes={},
             **kwargs,

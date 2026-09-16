@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PriceListImportReviewPage } from './PriceListImportReviewPage';
 import { priceListImportsApi } from '../../api/priceListImports';
 import { materialsApi } from '../../api/materials';
+import { categoriesApi } from '../../api/categories';
 import { AuthContext } from '../../auth/AuthContext';
-import type { CurrentUser, PriceListEntry, PriceListImport } from '../../api/types';
+import type { Category, CurrentUser, PriceListEntry, PriceListImport } from '../../api/types';
 
 vi.mock('../../api/priceListImports', () => ({
   priceListImportsApi: { upload: vi.fn(), get: vi.fn(), applyEntry: vi.fn() },
@@ -14,10 +15,25 @@ vi.mock('../../api/priceListImports', () => ({
 vi.mock('../../api/materials', () => ({
   materialsApi: { list: vi.fn(), search: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
+vi.mock('../../api/categories', () => ({
+  categoriesApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+}));
 
 const getImportMock = vi.mocked(priceListImportsApi.get);
 const applyEntryMock = vi.mocked(priceListImportsApi.applyEntry);
 const materialsListMock = vi.mocked(materialsApi.list);
+const categoriesListMock = vi.mocked(categoriesApi.list);
+
+const categories: Category[] = [
+  {
+    id: 'cat-mesh',
+    name: 'Mesh',
+    sku_prefix: 'MESH',
+    requires_single_supplier: true,
+    next_sku_number: 58,
+    created_at: '2026-01-10T12:00:00Z',
+  },
+];
 
 function entryFixture(overrides: Partial<PriceListEntry> = {}): PriceListEntry {
   return {
@@ -32,7 +48,6 @@ function entryFixture(overrides: Partial<PriceListEntry> = {}): PriceListEntry {
     availability: null,
     min_order_qty: null,
     action: null,
-    suggested_internal_sku: 'MSH-NEW-1',
     possible_duplicate_of: [],
     ...overrides,
   };
@@ -41,6 +56,7 @@ function entryFixture(overrides: Partial<PriceListEntry> = {}): PriceListEntry {
 function renderPage(priceListImport: PriceListImport, role: CurrentUser['role'] = 'admin') {
   getImportMock.mockResolvedValue(priceListImport);
   materialsListMock.mockResolvedValue([]);
+  categoriesListMock.mockResolvedValue(categories);
   return render(
     <MemoryRouter initialEntries={['/price-list-imports/import-1']}>
       <AuthContext.Provider value={{ id: 'u1', email: 'a@b.com', name: 'A', role }}>
@@ -58,6 +74,7 @@ describe('PriceListImportReviewPage', () => {
     getImportMock.mockReset();
     applyEntryMock.mockReset();
     materialsListMock.mockReset();
+    categoriesListMock.mockReset();
     vi.mocked(materialsApi.search).mockReset();
   });
 
@@ -122,6 +139,11 @@ describe('PriceListImportReviewPage', () => {
 
     await screen.findByText('Screen mesh 18x14');
 
+    const categorySelects = await screen.findAllByLabelText(/категория/i);
+    for (const select of categorySelects) {
+      await user.selectOptions(select, 'cat-mesh');
+    }
+
     const applyButton = screen.getByRole('button', { name: /Применить выбранные/ });
     await user.click(applyButton);
 
@@ -146,6 +168,7 @@ describe('PriceListImportReviewPage', () => {
     );
 
     materialsListMock.mockResolvedValue([]);
+    categoriesListMock.mockResolvedValue(categories);
     let getCallCount = 0;
     getImportMock.mockImplementation(() => {
       getCallCount += 1;
@@ -179,11 +202,42 @@ describe('PriceListImportReviewPage', () => {
 
     await screen.findByText('Пропущено');
 
+    await user.selectOptions(screen.getByLabelText(/категория/i), 'cat-mesh');
+
     const applyButton = screen.getByRole('button', { name: /Применить выбранные/ });
     await user.click(applyButton);
 
     await waitFor(() => expect(applyEntryMock).toHaveBeenCalledTimes(2)); // 1 skip + 1 apply for row b
     expect(applyEntryMock).not.toHaveBeenCalledWith('import-1', 'a', expect.objectContaining({ action: 'new' }));
+  });
+
+  it('creates a new material from an unmatched row via category select, without any manual SKU input (ADR-0034 §7)', async () => {
+    const user = userEvent.setup();
+    const priceListImport: PriceListImport = {
+      import_id: 'import-1',
+      status: 'pending_review',
+      entries: [entryFixture({ id: 'a', confidence: 0.4 })],
+    };
+    applyEntryMock.mockResolvedValue(entryFixture({ id: 'a', action: 'new' }));
+    renderPage(priceListImport);
+
+    await screen.findByText('Screen mesh 18x14');
+
+    expect(screen.queryByLabelText(/sku/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/internal_sku/i)).not.toBeInTheDocument();
+
+    await user.selectOptions(await screen.findByLabelText(/категория/i), 'cat-mesh');
+
+    const applyButton = screen.getByRole('button', { name: /Применить выбранные/ });
+    await user.click(applyButton);
+
+    await waitFor(() =>
+      expect(applyEntryMock).toHaveBeenCalledWith('import-1', 'a', {
+        action: 'new',
+        category_id: 'cat-mesh',
+        canonical_name: 'Screen mesh 18x14',
+      }),
+    );
   });
 
   describe('admin-only actions (ADR-0024 §7 — UI convenience only)', () => {

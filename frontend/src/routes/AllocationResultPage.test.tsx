@@ -98,7 +98,7 @@ const materialScreen: Material = {
   id: 'mat-1',
   internal_sku: 'MSH-FG-1814',
   canonical_name: 'Сетка Fiberglass 18x14',
-  category: 'Сетка',
+  category_name: 'Сетка',
   unit: 'рулон',
   attributes: {},
 };
@@ -107,7 +107,7 @@ const colorMaterial: Material = {
   id: 'mat-color',
   internal_sku: 'GTR-EC-5',
   canonical_name: 'Super Gutter End Cap 5" (White/Bronze)',
-  category: 'Gutter',
+  category_name: 'Gutter',
   unit: 'шт',
   attributes: {},
   color_options: ['White', 'Bronze'],
@@ -118,7 +118,7 @@ const doorMaterial1: Material = {
   id: 'mat-door-1',
   internal_sku: 'DOOR-001',
   canonical_name: 'Дверь 36x80',
-  category: 'Doors',
+  category_name: 'Doors',
   unit: 'шт',
   attributes: {},
 };
@@ -127,7 +127,7 @@ const doorMaterial2: Material = {
   id: 'mat-door-2',
   internal_sku: 'DOOR-002',
   canonical_name: 'Дверь 40x80',
-  category: 'Doors',
+  category_name: 'Doors',
   unit: 'шт',
   attributes: {},
 };
@@ -136,7 +136,7 @@ const connectorMaterial: Material = {
   id: 'mat-conn-1',
   internal_sku: 'CONN-001',
   canonical_name: 'Уголок 1x1',
-  category: 'Connectors',
+  category_name: 'Connectors',
   unit: 'шт',
   attributes: {},
 };

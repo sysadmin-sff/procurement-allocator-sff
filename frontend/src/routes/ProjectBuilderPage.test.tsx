@@ -57,7 +57,7 @@ const material = {
   id: 'mat-1',
   internal_sku: 'MSH-FG-1814',
   canonical_name: 'Сетка Fiberglass 18x14',
-  category: 'Сетка',
+  category_name: 'Сетка',
   unit: 'рулон',
   attributes: {},
 };
@@ -313,7 +313,7 @@ describe('ProjectBuilderPage', () => {
       name: 'Стандартная дверь',
       created_at: '2026-01-01T00:00:00Z',
       items: [
-        { id: 'ti-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: material.unit, category: material.category },
+        { id: 'ti-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: material.unit, category_name: material.category_name },
       ],
     };
 

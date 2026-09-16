@@ -14,10 +14,18 @@ from dataclasses import dataclass, field
 class MaterialInput:
     material_id: str
     quantity: int
-    category: str | None = None
-    """Material.category, passed through so the solver can apply strict-category
-    supplier grouping — see ADR-0028. None for materials without a category or
-    when the caller doesn't care (e.g. preprocess.py, unrelated to grouping)."""
+    category_id: str | None = None
+    """Grouping key for ADR-0028 strict-category linking -- stable across a
+    Category rename (FK id, not name). None only for materials somehow
+    without a category (shouldn't occur after ADR-0034's NOT NULL, kept
+    optional here because callers like preprocess.py don't care about
+    category at all)."""
+    requires_single_supplier: bool = False
+    """Category.requires_single_supplier -- the only thing the solver needs
+    to decide whether to group this material's category. See ADR-0034 §3."""
+    category_name: str | None = None
+    """Display-only -- used for split_categories text, never for grouping
+    logic (category_id is the grouping key). See ADR-0034 §3."""
 
 
 @dataclass(frozen=True)

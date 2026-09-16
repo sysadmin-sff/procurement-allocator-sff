@@ -108,7 +108,7 @@ class MatchedLine:
 def _candidate_context(candidates: list[Material]) -> str:
     lines = [
         f"- id={m.id}, sku={m.internal_sku!r}, название={m.canonical_name!r}, "
-        f"категория={m.category!r}, единица={m.unit!r}"
+        f"категория={(m.category.name if m.category else None)!r}, единица={m.unit!r}"
         for m in candidates
     ]
     return "\n".join(lines) if lines else "(каталог пуст)"

@@ -166,7 +166,7 @@ export function MaterialCombobox({
                 >
                   <span className={styles.comboboxOptionName}>{material.canonical_name}</span>
                   <span className={styles.comboboxOptionMeta}>
-                    {material.category ?? '—'} · {material.internal_sku}
+                    {material.category_name} · {material.internal_sku}
                   </span>
                 </button>
               </li>

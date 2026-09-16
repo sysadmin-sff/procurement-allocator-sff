@@ -129,7 +129,7 @@ export interface Material {
   id: string;
   internal_sku: string;
   canonical_name: string;
-  category: string | null;
+  category_name: string;
   unit: string;
   attributes: Record<string, unknown>;
   /** Colors available for this material at the same price, extracted from
@@ -141,12 +141,36 @@ export interface Material {
   color_fragment?: string | null;
 }
 
+/** internal_sku is never sent — generated server-side from Category.sku_prefix,
+ * see ADR-0034 п.4. */
 export interface MaterialCreate {
-  internal_sku: string;
   canonical_name: string;
-  category?: string | null;
+  category_id: string;
   unit: string;
   attributes?: Record<string, unknown>;
+}
+
+/** Row shape from GET/POST/PATCH/DELETE /categories — admin-only, ADR-0034 п.5. */
+export interface Category {
+  id: string;
+  name: string;
+  /** Immutable after creation — see ADR-0034 п.5. */
+  sku_prefix: string;
+  requires_single_supplier: boolean;
+  next_sku_number: number;
+  created_at: string;
+}
+
+export interface CategoryCreate {
+  name: string;
+  sku_prefix: string;
+  requires_single_supplier?: boolean;
+}
+
+/** sku_prefix is absent on purpose — immutable after creation, ADR-0034 п.5. */
+export interface CategoryUpdate {
+  name?: string;
+  requires_single_supplier?: boolean;
 }
 
 export interface Price {
@@ -210,7 +234,7 @@ export interface ProjectTemplateItem {
   material_id: string;
   canonical_name: string;
   unit: string;
-  category: string | null;
+  category_name: string;
 }
 
 export interface ProjectTemplate {
@@ -546,8 +570,7 @@ export interface PurchaseRecordListOut {
 /** One row of a price-list import — see ADR-0019 §4-5, ADR-0020.
  * `action` is null until the review screen applies or skips the row; until
  * then, the AI's *proposed* action is implicit: matched_material_id != null
- * means "match" was proposed, null means "new" was proposed (with
- * suggested_internal_sku as the draft SKU). */
+ * means "match" was proposed, null means "new" was proposed. */
 export interface PriceListEntry {
   id: string;
   supplier_raw_name: string;
@@ -560,7 +583,6 @@ export interface PriceListEntry {
   availability: number | null;
   min_order_qty: number | null;
   action: 'match' | 'new' | 'skip' | null;
-  suggested_internal_sku: string | null;
   possible_duplicate_of: string[];
 }
 
@@ -574,5 +596,5 @@ export interface PriceListImport {
 
 export type ApplyPriceListEntryIn =
   | { action: 'match'; material_id: string }
-  | { action: 'new'; internal_sku: string; canonical_name: string }
+  | { action: 'new'; category_id: string; canonical_name: string }
   | { action: 'skip' };

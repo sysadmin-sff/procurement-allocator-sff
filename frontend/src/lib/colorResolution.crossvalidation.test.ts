@@ -51,7 +51,7 @@ describe('resolveMaterialName cross-validation against backend (real catalog, AD
         id: row.internal_sku,
         internal_sku: row.internal_sku,
         canonical_name: row.canonical_name,
-        category: null,
+        category_name: 'Gutter',
         unit: 'pcs',
         attributes: {},
         color_options: row.color_options,

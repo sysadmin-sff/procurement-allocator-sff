@@ -11,6 +11,7 @@ from app.main import app
 from app.models import (
     AllocationLine,
     AllocationRun,
+    Category,
     Material,
     Order,
     OrderItem,
@@ -30,6 +31,7 @@ def db_session():
     material_ids: list = []
     supplier_ids: list = []
     user_ids: list = []
+    category_ids: list = []
 
     def _override_get_db():
         yield session
@@ -37,7 +39,7 @@ def db_session():
     app.dependency_overrides[get_db] = _override_get_db
 
     try:
-        yield session, project_ids, material_ids, supplier_ids, user_ids
+        yield session, project_ids, material_ids, supplier_ids, user_ids, category_ids
     finally:
         app.dependency_overrides.pop(get_db, None)
         session.rollback()
@@ -88,6 +90,10 @@ def db_session():
                 synchronize_session=False
             )
             session.query(Supplier).filter(Supplier.id.in_(supplier_ids)).delete(
+                synchronize_session=False
+            )
+        if category_ids:
+            session.query(Category).filter(Category.id.in_(category_ids)).delete(
                 synchronize_session=False
             )
         if user_ids:
@@ -142,7 +148,7 @@ def make_session(db_session):
 
 @pytest.fixture
 def make_supplier(db_session):
-    session, _project_ids, _material_ids, supplier_ids, _user_ids = db_session
+    session, _project_ids, _material_ids, supplier_ids, _user_ids, _category_ids = db_session
 
     def _make(
         name="Test Supplier",
@@ -169,17 +175,39 @@ def make_supplier(db_session):
 
 
 @pytest.fixture
-def make_material(db_session):
-    session, _project_ids, material_ids, _supplier_ids, _user_ids = db_session
+def make_category(db_session):
+    session, _project_ids, _material_ids, _supplier_ids, _user_ids, category_ids = db_session
+    counter = {"n": 0}
+
+    def _make(name=None, sku_prefix=None, requires_single_supplier=False):
+        counter["n"] += 1
+        name = name or f"Test Category {uuid.uuid4().hex[:12]}"
+        sku_prefix = sku_prefix or f"TC{uuid.uuid4().hex[:6].upper()}"
+        category = Category(
+            name=name, sku_prefix=sku_prefix, requires_single_supplier=requires_single_supplier
+        )
+        session.add(category)
+        session.flush()
+        category_ids.append(category.id)
+        return category
+
+    return _make
+
+
+@pytest.fixture
+def make_material(db_session, make_category):
+    session, _project_ids, material_ids, _supplier_ids, _user_ids, _category_ids = db_session
     counter = {"n": 0}
 
     def _make(sku=None, unit="ft", category=None):
         counter["n"] += 1
         sku = sku or f"TEST-SKU-{uuid.uuid4().hex[:12]}"
+        if category is None:
+            category = make_category()
         material = Material(
             internal_sku=sku,
             canonical_name=sku,
-            category=category,
+            category_id=category.id,
             unit=unit,
             attributes={},
         )
@@ -215,7 +243,7 @@ def make_price(db_session):
 
 @pytest.fixture
 def make_project(db_session):
-    session, project_ids, _material_ids, _supplier_ids, _user_ids = db_session
+    session, project_ids, _material_ids, _supplier_ids, _user_ids, _category_ids = db_session
 
     def _make(items):
         """items: list of (material, quantity) tuples."""

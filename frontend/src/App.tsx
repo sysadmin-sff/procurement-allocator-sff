@@ -3,6 +3,7 @@ import { AppLayout } from './layout/AppLayout';
 import { RequireAuth } from './auth/RequireAuth';
 import {
   AllocationResultPage,
+  CategoriesPage,
   LoginPage,
   MaterialsPage,
   OrderDetailPage,
@@ -39,6 +40,7 @@ function App() {
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
         <Route path="/price-list-imports/:importId" element={<PriceListImportReviewPage />} />
         <Route path="/materials" element={<MaterialsPage />} />
+        <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/suppliers/:supplierId" element={<SupplierDetailPage />} />
         <Route path="/users" element={<UsersPage />} />

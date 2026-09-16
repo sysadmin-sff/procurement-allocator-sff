@@ -389,7 +389,7 @@ interface CategoryGroup {
  * Numbering (`number`) is contiguous across all groups, 1-based.
  */
 function groupItemsByCategory(items: ProjectItem[], materials: Material[]): CategoryGroup[] {
-  const categoryById = new Map(materials.map((m) => [m.id, m.category]));
+  const categoryById = new Map(materials.map((m) => [m.id, m.category_name]));
   const order: (string | null)[] = [];
   const byCategory = new Map<string | null, ProjectItem[]>();
 

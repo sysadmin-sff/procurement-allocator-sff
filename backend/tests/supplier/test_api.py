@@ -227,12 +227,18 @@ def test_delete_supplier_returns_409_when_referenced_by_price(
     session, supplier_ids, _user_ids = db_session
     import datetime
 
-    from app.models import Material
+    from app.models import Category, Material
 
     supplier = make_supplier(name="Referenced Supplier")
+    category = Category(
+        name=f"Test Category {uuid.uuid4().hex[:8]}", sku_prefix=f"TC{uuid.uuid4().hex[:6]}"
+    )
+    session.add(category)
+    session.flush()
     material = Material(
         internal_sku=f"SKU-{uuid.uuid4().hex[:12]}",
         canonical_name="Test Material",
+        category_id=category.id,
         unit="ft",
         attributes={},
     )
@@ -256,6 +262,7 @@ def test_delete_supplier_returns_409_when_referenced_by_price(
 
     session.delete(price)
     session.delete(material)
+    session.delete(category)
     session.commit()
 
 

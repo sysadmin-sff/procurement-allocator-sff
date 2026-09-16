@@ -432,7 +432,7 @@ def test_apply_match_without_material_id_returns_422(
     assert response.status_code == 422
 
 
-def test_apply_new_without_internal_sku_returns_422(
+def test_apply_new_without_category_id_returns_422(
     db_session, make_supplier, make_material, make_user, make_session
 ):
     session, _material_ids, _supplier_ids, _user_ids = db_session
@@ -445,6 +445,35 @@ def test_apply_new_without_internal_sku_returns_422(
     response = client.post(
         f"/price-list-imports/{body['import_id']}/entries/{entry_id}/apply",
         json={"action": "new", "canonical_name": "X"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 422
+
+
+def test_apply_new_rejects_client_supplied_internal_sku(
+    db_session, make_supplier, make_material, make_category, make_user, make_session
+):
+    """ADR-0034 §7: internal_sku is never accepted here (server-generated
+    via generate_next_sku, same as POST /materials) -- ApplyEntryIn has no
+    field for it at all, so sending it is a strict 422, not silently
+    ignored, matching the choice made for MaterialCreate/MaterialUpdate."""
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+    category = make_category()
+    client = _admin_client(make_user, make_session)
+    body = _upload_single_entry(client, supplier, material)
+    entry_id = body["entries"][0]["id"]
+
+    response = client.post(
+        f"/price-list-imports/{body['import_id']}/entries/{entry_id}/apply",
+        json={
+            "action": "new",
+            "canonical_name": "X",
+            "category_id": str(category.id),
+            "internal_sku": "SHOULD-NOT-APPLY",
+        },
         headers={"X-CSRF-Token": CSRF},
     )
 

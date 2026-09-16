@@ -71,7 +71,7 @@ const material: Material = {
   id: 'mat-1',
   internal_sku: 'MSH-FG-1814',
   canonical_name: 'Сетка Fiberglass 18x14',
-  category: 'Сетка',
+  category_name: 'Сетка',
   unit: 'рулон',
   attributes: {},
 };

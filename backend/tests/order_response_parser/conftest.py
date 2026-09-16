@@ -7,11 +7,21 @@ import pytest
 from app.auth.constants import SESSION_IDLE_TTL
 from app.core.database import SessionLocal, get_db
 from app.main import app
-from app.models import Material, Order, OrderItem, Project, Supplier, User, UserSession
+from app.models import Category, Material, Order, OrderItem, Project, Supplier, User, UserSession
+
+_category_ids_pending_cleanup: list = []
+"""Populated by make_category's own teardown when a Category delete can't
+run yet (its materials aren't gone until db_session's teardown, which runs
+AFTER make_category's -- pytest fixture teardown is LIFO, and make_category
+depends on db_session). db_session's own teardown does the actual delete
+once materials are cleaned up. Module-level and cleared at the start of each
+db_session run so state never leaks between tests."""
 
 
 @pytest.fixture
 def db_session():
+    global _category_ids_pending_cleanup
+    _category_ids_pending_cleanup = []
     session = SessionLocal()
     project_ids: list = []
     material_ids: list = []
@@ -53,6 +63,10 @@ def db_session():
                 synchronize_session=False
             )
             session.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
+        if _category_ids_pending_cleanup:
+            session.query(Category).filter(
+                Category.id.in_(_category_ids_pending_cleanup)
+            ).delete(synchronize_session=False)
         session.commit()
         session.close()
 
@@ -122,14 +136,46 @@ def make_supplier(db_session):
 
 
 @pytest.fixture
-def make_material(db_session):
+def make_category(db_session):
+    """Self-contained fixture (own cleanup list, not routed through
+    db_session's shared tuple) so adding it doesn't change db_session's
+    yielded shape — several call sites in this directory destructure
+    db_session positionally with a fixed arity."""
+    session, *_ = db_session
+    created_ids: list = []
+    counter = {"n": 0}
+
+    def _make(name=None, sku_prefix=None, requires_single_supplier=False):
+        counter["n"] += 1
+        name = name or f"Test Category {uuid.uuid4().hex[:12]}"
+        sku_prefix = sku_prefix or f"TC{uuid.uuid4().hex[:6].upper()}"
+        category = Category(
+            name=name, sku_prefix=sku_prefix, requires_single_supplier=requires_single_supplier
+        )
+        session.add(category)
+        session.flush()
+        created_ids.append(category.id)
+        return category
+
+    yield _make
+
+    if created_ids:
+        # Can't delete these Category rows yet -- see module docstring.
+        _category_ids_pending_cleanup.extend(created_ids)
+
+
+@pytest.fixture
+def make_material(db_session, make_category):
     session, _order_ids, material_ids, _supplier_ids, _user_ids = db_session
 
-    def _make(canonical_name=None, unit="ft"):
+    def _make(canonical_name=None, unit="ft", category=None):
         sku = f"TEST-SKU-{uuid.uuid4().hex[:12]}"
+        if category is None:
+            category = make_category()
         material = Material(
             internal_sku=sku,
             canonical_name=canonical_name or sku,
+            category_id=category.id,
             unit=unit,
             attributes={},
         )

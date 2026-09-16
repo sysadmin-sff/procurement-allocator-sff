@@ -9,6 +9,7 @@ export { PurchaseRecordsPage } from './PurchaseRecordsPage';
 export { PriceComparisonPage } from './PriceComparisonPage';
 export { PriceListImportReviewPage } from './price-list-import/PriceListImportReviewPage';
 export { MaterialsPage } from './MaterialsPage';
+export { CategoriesPage } from './CategoriesPage';
 export { SuppliersPage } from './SuppliersPage';
 export { SupplierDetailPage } from './suppliers/SupplierDetailPage';
 export { UsersPage } from './UsersPage';

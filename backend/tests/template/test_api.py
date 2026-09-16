@@ -158,10 +158,11 @@ def test_create_template_returns_409_for_duplicate_name(
 
 
 def test_add_item_returns_template_with_denormalized_material_fields(
-    db_session, make_template, make_material, make_user, make_session
+    db_session, make_template, make_material, make_category, make_user, make_session
 ):
     template = make_template()
-    material = make_material(canonical_name="6ft Vinyl Panel", unit="panel", category="fencing")
+    fencing = make_category(name="fencing", sku_prefix="FENC")
+    material = make_material(canonical_name="6ft Vinyl Panel", unit="panel", category=fencing)
     client = _admin_client(make_user, make_session)
 
     response = client.post(
@@ -176,7 +177,7 @@ def test_add_item_returns_template_with_denormalized_material_fields(
     assert items[0]["material_id"] == str(material.id)
     assert items[0]["canonical_name"] == "6ft Vinyl Panel"
     assert items[0]["unit"] == "panel"
-    assert items[0]["category"] == "fencing"
+    assert items[0]["category_name"] == "fencing"
 
 
 def test_add_item_returns_404_for_unknown_material(

@@ -182,15 +182,23 @@ def test_allocate_includes_tax_amount_in_supplier_summary_response(
 
 
 def test_allocate_includes_split_categories_in_response(
-    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+    db_session,
+    make_supplier,
+    make_material,
+    make_category,
+    make_price,
+    make_project,
+    make_user,
+    make_session,
 ):
     """ADR-0028 §4: split_categories must be exposed on the API response, not
     just persisted internally — the frontend warning depends on it."""
     session, *_ = db_session
     s1 = make_supplier(name="Supplier One", flat_fee=0.0, free_shipping_threshold=0.0)
     s2 = make_supplier(name="Supplier Two", flat_fee=0.0, free_shipping_threshold=0.0)
-    mesh1 = make_material(category="Mesh")
-    mesh2 = make_material(category="Mesh")
+    mesh = make_category(name="TestMesh", requires_single_supplier=True)
+    mesh1 = make_material(category=mesh)
+    mesh2 = make_material(category=mesh)
     make_price(mesh1, s1, price=5.00, availability=10)
     make_price(mesh2, s2, price=6.00, availability=10)
     project = make_project([(mesh1, 1), (mesh2, 1)])
@@ -201,7 +209,7 @@ def test_allocate_includes_split_categories_in_response(
     )
 
     assert response.status_code == 200
-    assert response.json()["split_categories"] == ["Mesh"]
+    assert response.json()["split_categories"] == ["TestMesh"]
 
 
 def test_allocate_returns_404_for_nonexistent_project(make_user, make_session):

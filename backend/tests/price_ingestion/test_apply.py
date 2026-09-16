@@ -151,10 +151,11 @@ def test_apply_match_does_not_duplicate_existing_alias(
 
 
 def test_apply_new_creates_material_alias_and_price_atomically(
-    db_session, make_supplier
+    db_session, make_supplier, make_category
 ):
     session, material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    category = make_category(name="ApplyNewCategory", sku_prefix="ANEW")
     price_list_import = _make_import(session, supplier)
     entry = _make_entry(
         session, price_list_import, supplier_raw_name="Brand New Screen", price=12.0
@@ -166,15 +167,16 @@ def test_apply_new_creates_material_alias_and_price_atomically(
             price_list_import.id,
             entry.id,
             action="new",
-            internal_sku="NEW-SKU-100",
+            category_id=category.id,
             canonical_name="Brand New Screen",
         )
 
     assert updated.action == "new"
-    material = session.query(Material).filter_by(internal_sku="NEW-SKU-100").one()
+    material = session.query(Material).filter_by(internal_sku="ANEW-001").one()
     # created by apply.py, not make_material() — register for teardown
     material_ids.append(material.id)
     assert material.embedding is not None
+    assert material.category_id == category.id
 
     alias = session.query(SupplierMaterialAlias).filter_by(material_id=material.id).one()
     assert alias.supplier_raw_name == "Brand New Screen"
@@ -183,11 +185,50 @@ def test_apply_new_creates_material_alias_and_price_atomically(
     assert float(price.price) == 12.0
 
 
+def test_apply_new_generates_sku_from_category_prefix_sequence(
+    db_session, make_supplier, make_category
+):
+    """ADR-0034 §7: _apply_new uses the same atomic counter as
+    create_material, not a client-supplied SKU -- two entries applied
+    against the same category get sequential, non-colliding SKUs."""
+    session, material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    category = make_category(name="SequenceCategory", sku_prefix="SEQ")
+    price_list_import = _make_import(session, supplier)
+    entry_1 = _make_entry(session, price_list_import, supplier_raw_name="First", price=1.0)
+    entry_2 = _make_entry(session, price_list_import, supplier_raw_name="Second", price=2.0)
+
+    with patch("app.price_ingestion.apply.embed_text", return_value=[0.1] * 1536):
+        apply_price_list_entry(
+            session,
+            price_list_import.id,
+            entry_1.id,
+            action="new",
+            category_id=category.id,
+            canonical_name="First",
+        )
+        apply_price_list_entry(
+            session,
+            price_list_import.id,
+            entry_2.id,
+            action="new",
+            category_id=category.id,
+            canonical_name="Second",
+        )
+
+    first_material = session.query(Material).filter_by(canonical_name="First").one()
+    second_material = session.query(Material).filter_by(canonical_name="Second").one()
+    material_ids.extend([first_material.id, second_material.id])
+    assert first_material.internal_sku == "SEQ-001"
+    assert second_material.internal_sku == "SEQ-002"
+
+
 def test_apply_new_rolls_back_material_when_price_creation_fails(
-    db_session, make_supplier
+    db_session, make_supplier, make_category
 ):
     session, _material_ids, _supplier_ids, _user_ids = db_session
     supplier = make_supplier()
+    category = make_category(name="RollbackCategory", sku_prefix="RBK")
     price_list_import = _make_import(session, supplier)
     entry = _make_entry(
         session, price_list_import, supplier_raw_name="Will Fail", price=9.0
@@ -204,12 +245,12 @@ def test_apply_new_rolls_back_material_when_price_creation_fails(
                     price_list_import.id,
                     entry.id,
                     action="new",
-                    internal_sku="ROLLBACK-SKU",
+                    category_id=category.id,
                     canonical_name="Will Fail",
                 )
 
     session.rollback()
-    assert session.query(Material).filter_by(internal_sku="ROLLBACK-SKU").first() is None
+    assert session.query(Material).filter_by(canonical_name="Will Fail").first() is None
 
 
 def test_apply_raises_entry_not_found_for_unknown_entry(db_session, make_supplier):

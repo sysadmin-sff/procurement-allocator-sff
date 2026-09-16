@@ -12,12 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.allocation.preprocess import split_orphaned_materials
-from app.allocation.solver import STRICT_CATEGORIES, solve_allocation
+from app.allocation.solver import solve_allocation
 from app.allocation.tax import calculate_tax
 from app.allocation.types import AllocationInput, MaterialInput, PriceInput, SupplierInput
 from app.models import (
     AllocationLine,
     AllocationRun,
+    Category,
     Material,
     Price,
     Project,
@@ -31,7 +32,14 @@ ALGORITHM_VERSION = "adr-0028-v1"
 Mesh/Roof panels) добавлены в целевую функцию solve_allocation. Это меняет
 саму постановку задачи, не только детали реализации — версия бампнута, как
 и предвидела ADR-0002 "Последствия" ("если модель ограничений изменится...
-это будет новый ADR и новая версия алгоритма"). Была "adr-0005-v1"."""
+это будет новый ADR и новая версия алгоритма"). Была "adr-0005-v1".
+
+Не бампается ADR-0034: та задача переносит источник булева признака
+requires_single_supplier из константы кода (STRICT_CATEGORIES) в колонку БД
+(Category.requires_single_supplier) — сама ILP-формулировка (переменные,
+ограничения, целевая функция) остаётся математически тождественной, что
+подтверждено построчной регрессией test_solver.py. По правилу самого
+ADR-0028 версия бампается только когда меняется модель ограничений."""
 
 _CENTS_PER_UNIT = 100
 
@@ -99,7 +107,9 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
         MaterialInput(
             material_id=str(item.material_id),
             quantity=item.quantity,
-            category=item.material.category,
+            category_id=str(item.material.category_id),
+            requires_single_supplier=item.material.category.requires_single_supplier,
+            category_name=item.material.category.name,
         )
         for item in project_items
     ]
@@ -206,26 +216,31 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
 
 
 def _compute_split_categories(db: Session, run_id: uuid.UUID) -> list[str]:
-    """ADR-0028 §4: a strict category is "split" for this run if the project's
-    current AllocationLine rows for that category (joined to Material.category)
-    are assigned to more than one distinct supplier. Recomputed from scratch
+    """ADR-0028 §4, updated by ADR-0034 §3: a strict category is "split" for
+    this run if the project's current AllocationLine rows for that category
+    (joined through Material.category_id to Category) are assigned to more
+    than one distinct supplier. requires_single_supplier now comes from the
+    Category row itself (read the same way solver.py reads it), not a
+    hardcoded name-set constant -- the two call sites must never diverge in
+    how they read this flag, see ADR-0034 "Контекст". Recomputed from scratch
     from the current line state -- same recompute point/style as
     _rebuild_supplier_summary (ADR-0006 §4), not an incremental patch."""
     rows = db.execute(
-        select(Material.category, AllocationLine.supplier_id)
-        .join(Material, Material.id == AllocationLine.material_id)
+        select(Category.name, Category.requires_single_supplier, AllocationLine.supplier_id)
+        .join(Material, Material.category_id == Category.id)
+        .join(AllocationLine, AllocationLine.material_id == Material.id)
         .where(AllocationLine.allocation_run_id == run_id)
     ).all()
 
     suppliers_by_category: dict[str, set[uuid.UUID]] = {}
-    for category, supplier_id in rows:
-        if category not in STRICT_CATEGORIES:
+    for category_name, requires_single_supplier, supplier_id in rows:
+        if not requires_single_supplier:
             continue
-        suppliers_by_category.setdefault(category, set()).add(supplier_id)
+        suppliers_by_category.setdefault(category_name, set()).add(supplier_id)
 
     return sorted(
-        category
-        for category, supplier_ids in suppliers_by_category.items()
+        category_name
+        for category_name, supplier_ids in suppliers_by_category.items()
         if len(supplier_ids) > 1
     )
 

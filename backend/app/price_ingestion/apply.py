@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Material, Price, PriceListEntry, SupplierMaterialAlias
 from app.price_ingestion.embeddings import EmbeddingError, embed_text, material_embedding_input
+from app.services.material_sku import generate_next_sku
 
 
 class EntryNotFoundError(Exception):
@@ -88,12 +89,14 @@ def _apply_new(
     db: Session,
     entry: PriceListEntry,
     supplier_id: uuid.UUID,
-    internal_sku: str,
+    category_id: uuid.UUID,
     canonical_name: str,
 ) -> None:
+    internal_sku = generate_next_sku(db, category_id)
     material = Material(
         internal_sku=internal_sku,
         canonical_name=canonical_name,
+        category_id=category_id,
         unit="unit",
         attributes={},
     )
@@ -132,13 +135,17 @@ def apply_price_list_entry(
     *,
     action: Literal["match", "new", "skip"],
     material_id: uuid.UUID | None = None,
-    internal_sku: str | None = None,
+    category_id: uuid.UUID | None = None,
     canonical_name: str | None = None,
 ) -> PriceListEntry:
-    """Applies one reviewed entry — see ADR-0019 §5. Raises EntryNotFoundError
-    if the entry doesn't belong to this import. Any DB failure during
-    action="new" rolls back Material+Alias+Price together (single
-    transaction — no partial Material without its Price/Alias)."""
+    """Applies one reviewed entry — see ADR-0019 §5, ADR-0034 §7. Raises
+    EntryNotFoundError if the entry doesn't belong to this import. Any DB
+    failure during action="new" rolls back Material+Alias+Price together
+    (single transaction — no partial Material without its Price/Alias).
+    internal_sku is never accepted here — action="new" generates it
+    server-side via generate_next_sku, same as create_material (ADR-0034
+    §7: this is the second of two Material-creation paths, both must follow
+    the same category+server-SKU principle)."""
     entry = _get_entry_or_raise(db, import_id, entry_id)
     supplier_id = entry.import_.supplier_id
 
@@ -153,11 +160,11 @@ def apply_price_list_entry(
                 raise ValueError("material_id is required when action is 'match'")
             _apply_match(db, entry, supplier_id, material_id)
         else:
-            if internal_sku is None or canonical_name is None:
+            if category_id is None or canonical_name is None:
                 raise ValueError(
-                    "internal_sku and canonical_name are required when action is 'new'"
+                    "category_id and canonical_name are required when action is 'new'"
                 )
-            _apply_new(db, entry, supplier_id, internal_sku, canonical_name)
+            _apply_new(db, entry, supplier_id, category_id, canonical_name)
     except Exception:
         db.rollback()
         raise

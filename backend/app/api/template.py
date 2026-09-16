@@ -31,7 +31,7 @@ def _to_out(template: ProjectTemplate) -> ProjectTemplateOut:
                 material_id=item.material_id,
                 canonical_name=item.material.canonical_name,
                 unit=item.material.unit,
-                category=item.material.category,
+                category_name=item.material.category.name,
             )
             for item in template.items
         ],

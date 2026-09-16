@@ -370,3 +370,48 @@ def test_list_prices_as_admin_succeeds(make_user, make_session):
     admin_session = make_session(admin)
     response = _client_as(admin_session).get("/prices")
     assert response.status_code == 200
+
+
+def test_update_price_via_route_actually_commits_visible_to_a_second_connection(
+    db_session, make_material, make_supplier, make_price, make_user, make_session
+):
+    """Regression for version_price()'s new commit parameter (added for
+    ADR-0035's sync_catalog_from_file.py, which needs commit=False):
+    PUT /prices/{id} must still call version_price() with the default
+    commit=True (unchanged call site), and that write must be durably
+    committed, not just visible within the same session used by both the
+    request and this test's own db_session fixture. A prior version of this
+    kind of test used client.get() through the same overridden session
+    (db_session's _override_get_db), which would pass even if the write
+    were never actually committed -- both the write and that read happen on
+    the identical uncommitted transaction either way. This test instead
+    opens a genuinely independent SessionLocal() connection, which can only
+    see data that was actually committed to the database."""
+    from app.core.database import SessionLocal
+    from app.models import Price
+
+    material = make_material()
+    supplier = make_supplier()
+    old_price = make_price(material, supplier, price=10.0)
+    db_session[0].commit()  # baseline must be committed for the independent read to see it
+    client = _admin_client(make_user, make_session)
+
+    response = client.put(
+        f"/prices/{old_price.id}",
+        json={"price": 30.0, "valid_from": str(datetime.date.today())},
+        headers={"X-CSRF-Token": CSRF},
+    )
+    assert response.status_code == 200
+    new_price_id = uuid.UUID(response.json()["id"])
+
+    independent_session = SessionLocal()
+    try:
+        seen = independent_session.get(Price, new_price_id)
+        assert seen is not None, (
+            "PUT /prices/{id} must commit its version_price() call -- a second, "
+            "independent connection saw nothing, meaning the write never committed"
+        )
+        assert float(seen.price) == 30.0
+        assert seen.valid_to is None
+    finally:
+        independent_session.close()

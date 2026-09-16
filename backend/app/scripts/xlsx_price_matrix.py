@@ -49,16 +49,9 @@ SUPPLIER_COLUMN_HEADERS: dict[str, str] = {
     "AMS": "American Metals Supply",
     "Classic Metals": "Classic Metals",
     "A&S": "A&S",
-    # NOT VERIFIED against the real updated price file (ADR-0035 п.5) --
-    # only the OLD file (data/import/materials_price_matrix.xlsx, the one
-    # import_real_data.py already uses, 7 suppliers) was available while
-    # implementing this. "A&S" is a plausible guess at the literal header
-    # text, matching the ADR's own wording, not a confirmed value. If the
-    # real file's column header differs even slightly (whitespace, casing,
-    # abbreviation), this entry won't match it and the column will land in
-    # unmapped_supplier_headers -- sync_catalog_from_file.py's own report
-    # will surface that safely, but this entry should be corrected against
-    # the real file before relying on it to auto-map A&S.
+    # Confirmed against the real updated price file (ADR-0035 п.5) -- the
+    # literal header text is exactly "A&S", no leading/trailing whitespace
+    # or newline quirk (unlike "\nLancing" above).
 }
 
 # Same prefix scheme as the old materials.csv (DOOR-001, DOOR-002, ... —

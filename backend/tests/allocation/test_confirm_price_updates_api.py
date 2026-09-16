@@ -369,3 +369,52 @@ def test_confirm_price_updates_no_session_returns_401():
         json={"selections": []},
     )
     assert response.status_code == 401
+
+
+def test_confirm_price_updates_actually_commits_visible_to_a_second_connection(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """Regression for version_price()'s new commit parameter (added for
+    ADR-0035's sync_catalog_from_file.py, which needs commit=False):
+    confirm_price_updates() (order_service.py) must still call version_price()
+    with the default commit=True (unchanged call site), and that write must
+    be durably committed. The existing
+    test_confirm_price_updates_applies_selected_row reads back through the
+    SAME session the route itself used (db_session's overridden get_db), so
+    it would pass even if the write were never actually committed. This test
+    opens a genuinely independent SessionLocal() connection instead, which
+    can only see data that was actually committed."""
+    from app.core.database import SessionLocal
+
+    session, *_ = db_session
+    order, item, supplier, material = _make_order(
+        session, make_supplier, make_material, make_price, make_project
+    )
+    session.commit()  # baseline order/item/price must be committed first
+    client = _employee_client(make_user, make_session)
+    client.patch(
+        f"/orders/{order.id}/items/{item.id}",
+        json={"confirmed_price": 6.50},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.post(
+        f"/orders/{order.id}/confirm-price-updates",
+        json={"selections": [{"order_item_id": str(item.id), "apply": True}]},
+        headers={"X-CSRF-Token": CSRF},
+    )
+    assert response.status_code == 200
+    price_id = uuid.UUID(response.json()["results"][0]["price_id"])
+
+    independent_session = SessionLocal()
+    try:
+        seen = independent_session.get(Price, price_id)
+        assert seen is not None, (
+            "confirm_price_updates() must commit its version_price() call -- a "
+            "second, independent connection saw nothing, meaning the write "
+            "never committed"
+        )
+        assert float(seen.price) == 6.50
+        assert seen.valid_to is None
+    finally:
+        independent_session.close()

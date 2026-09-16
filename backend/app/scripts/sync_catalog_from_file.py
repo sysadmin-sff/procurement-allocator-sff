@@ -322,6 +322,16 @@ def run_sync(db: Session, path: Path, apply: bool) -> SyncReport:
 
     suppliers = _resolve_suppliers(db, workbook, apply, report)
 
+    # Dry-run SKU prediction: purely in-memory, per-category counter that
+    # simulates what generate_next_sku()'s atomic UPDATE would do during
+    # --apply, one increment per new material predicted in THIS pass --
+    # without it, every new material of the same category would read the
+    # same unchanged Category.next_sku_number and predict the identical SKU
+    # (real bug found in production use: 4 new Profil materials in one file
+    # all predicted "PROF-069"). Never written to the DB -- apply=True
+    # doesn't use this dict at all, it calls the real generate_next_sku().
+    next_sku_number_by_category_id: dict[uuid.UUID, int] = {}
+
     # Every recognized supplier column starts at None (blank in the file) so
     # case (б) -- blank cell + existing active Price -- can be detected even
     # for a column where this particular row's cell never produced a
@@ -371,7 +381,14 @@ def run_sync(db: Session, path: Path, apply: bool) -> SyncReport:
             continue
 
         new_material_row = _create_new_material(
-            db, row, category, file_prices, suppliers, apply, report
+            db,
+            row,
+            category,
+            file_prices,
+            suppliers,
+            apply,
+            report,
+            next_sku_number_by_category_id,
         )
         report.new_materials.append(new_material_row)
 
@@ -420,6 +437,7 @@ def _create_new_material(
     suppliers: dict[str, Supplier],
     apply: bool,
     report: SyncReport,
+    next_sku_number_by_category_id: dict[uuid.UUID, int],
 ) -> NewMaterialRow:
     if apply:
         sku = generate_next_sku(db, category.id)
@@ -440,7 +458,16 @@ def _create_new_material(
             material_id=material.id,
         )
 
-    predicted_sku = f"{category.sku_prefix}-{category.next_sku_number:03d}"
+    # Local, in-memory increment per category -- mirrors generate_next_sku()'s
+    # atomic UPDATE without touching the DB (see run_sync's comment on
+    # next_sku_number_by_category_id). First new material of this category in
+    # this pass seeds from the real Category.next_sku_number; every
+    # subsequent one in the same pass reads the already-incremented value.
+    next_number = next_sku_number_by_category_id.setdefault(
+        category.id, category.next_sku_number
+    )
+    predicted_sku = f"{category.sku_prefix}-{next_number:03d}"
+    next_sku_number_by_category_id[category.id] = next_number + 1
     # No real material_id yet in dry-run -- every supplier price for a
     # brand-new material is unconditionally case (в) (no existing Price row
     # could exist for a Material that doesn't exist yet), so report it

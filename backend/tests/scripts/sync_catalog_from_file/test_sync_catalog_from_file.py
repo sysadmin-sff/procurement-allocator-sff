@@ -216,6 +216,101 @@ def test_new_material_with_resolvable_category_predicts_sku_in_dry_run(
     assert len(report.price_creations) == 1
 
 
+def test_multiple_new_materials_same_category_get_distinct_incrementing_skus_in_dry_run(
+    db_session, make_category, make_price_matrix_xlsx, patch_supplier_headers
+):
+    """Regression: dry-run SKU prediction must simulate the same increment
+    generate_next_sku() would apply during --apply, per category, across
+    ALL new-material rows in one dry-run pass -- not just read
+    Category.next_sku_number once and reuse it unchanged for every row.
+    Real bug found in production use: 4 new Profil materials in one file
+    all predicted "PROF-069" instead of PROF-069/070/071/072."""
+    session, *_ = db_session
+    patch_supplier_headers({})
+    category = make_category(sku_prefix="MULT", next_sku_number=69)
+
+    path = make_price_matrix_xlsx(
+        rows=[
+            {"group": category.name, "description": "Sync Test Multi New Material A"},
+            {"group": category.name, "description": "Sync Test Multi New Material B"},
+            {"group": category.name, "description": "Sync Test Multi New Material C"},
+        ],
+        supplier_headers=[],
+    )
+
+    report = run_sync(session, path, apply=False)
+
+    assert len(report.new_materials) == 3
+    predicted_skus = [row.predicted_sku for row in report.new_materials]
+    assert predicted_skus == ["MULT-069", "MULT-070", "MULT-071"], (
+        "each new material in the same category within one dry-run pass must "
+        "get a distinct, incrementing predicted SKU, not the same one repeated"
+    )
+    # dry-run must still never touch the DB -- the local prediction counter
+    # is purely in-memory, not persisted.
+    session.expire(category)
+    assert category.next_sku_number == 69
+
+
+def test_multiple_new_materials_same_category_get_distinct_incrementing_skus_on_apply(
+    db_session, make_category, make_price_matrix_xlsx, patch_supplier_headers
+):
+    """Same real-bug scenario as the dry-run version above, but through
+    --apply's actual generate_next_sku() path -- confirms the real atomic
+    counter increments correctly across multiple new materials of the same
+    category within one --apply run, not just that the dry-run prediction
+    was fixed."""
+    from app.models import Material
+
+    session, _material_ids, _supplier_ids = db_session
+    patch_supplier_headers({})
+    category = make_category(sku_prefix="MULA", next_sku_number=1)
+
+    path = make_price_matrix_xlsx(
+        rows=[
+            {"group": category.name, "description": "Sync Test Apply Multi A"},
+            {"group": category.name, "description": "Sync Test Apply Multi B"},
+            {"group": category.name, "description": "Sync Test Apply Multi C"},
+        ],
+        supplier_headers=[],
+    )
+
+    try:
+        report = run_sync(session, path, apply=True)
+
+        assert len(report.new_materials) == 3
+        applied_skus = [row.predicted_sku for row in report.new_materials]
+        assert applied_skus == ["MULA-001", "MULA-002", "MULA-003"]
+        assert all(row.material_id is not None for row in report.new_materials)
+
+        db_skus = sorted(
+            m.internal_sku
+            for m in session.query(Material).filter(Material.category_id == category.id).all()
+        )
+        assert db_skus == ["MULA-001", "MULA-002", "MULA-003"]
+
+        session.expire(category)
+        assert category.next_sku_number == 4
+    finally:
+        # Materials created here go through run_sync/generate_next_sku, not
+        # make_material -- db_session's own material_ids cleanup list never
+        # sees them (confirmed: without this block, this test left 3 orphan
+        # MULA-* Material rows + their Category behind after every run).
+        session.rollback()
+        created = session.query(Material).filter(Material.category_id == category.id).all()
+        if created:
+            from app.models import Price
+
+            created_ids = [m.id for m in created]
+            session.query(Price).filter(Price.material_id.in_(created_ids)).delete(
+                synchronize_session=False
+            )
+            session.query(Material).filter(Material.id.in_(created_ids)).delete(
+                synchronize_session=False
+            )
+            session.commit()
+
+
 def test_new_material_with_unknown_category_not_created(
     db_session, make_price_matrix_xlsx, patch_supplier_headers
 ):

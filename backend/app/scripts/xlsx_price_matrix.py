@@ -48,6 +48,17 @@ SUPPLIER_COLUMN_HEADERS: dict[str, str] = {
     "Florida Sales": "Florida Sales & Marketing",
     "AMS": "American Metals Supply",
     "Classic Metals": "Classic Metals",
+    "A&S": "A&S",
+    # NOT VERIFIED against the real updated price file (ADR-0035 п.5) --
+    # only the OLD file (data/import/materials_price_matrix.xlsx, the one
+    # import_real_data.py already uses, 7 suppliers) was available while
+    # implementing this. "A&S" is a plausible guess at the literal header
+    # text, matching the ADR's own wording, not a confirmed value. If the
+    # real file's column header differs even slightly (whitespace, casing,
+    # abbreviation), this entry won't match it and the column will land in
+    # unmapped_supplier_headers -- sync_catalog_from_file.py's own report
+    # will surface that safely, but this entry should be corrected against
+    # the real file before relying on it to auto-map A&S.
 }
 
 # Same prefix scheme as the old materials.csv (DOOR-001, DOOR-002, ... —
@@ -146,6 +157,14 @@ class ParsedWorkbook:
     rows_with_fallback_unit: list[str] = field(default_factory=list)  # descriptions
     unparseable_price_cells: list[tuple[int, str, object]] = field(default_factory=list)
     unmapped_supplier_headers: list[str] = field(default_factory=list)
+    recognized_supplier_columns: list[str] = field(default_factory=list)
+    """Supplier display names (SUPPLIER_COLUMN_HEADERS values) found in the
+    header row, regardless of whether any row had a value in that column --
+    distinct from the supplier names collected in `prices`, which only
+    reflects columns that had at least one non-blank cell somewhere. Needed
+    by callers (sync_catalog_from_file.py, ADR-0035 §2б) that must tell "this
+    supplier column exists but this cell is blank" apart from "this supplier
+    column doesn't exist in this file at all"."""
 
 
 def parse_price_matrix(path: Path) -> ParsedWorkbook:
@@ -166,6 +185,7 @@ def parse_price_matrix(path: Path) -> ParsedWorkbook:
             result.unmapped_supplier_headers.append(header_text)
             continue
         supplier_columns[col_idx] = mapped
+        result.recognized_supplier_columns.append(mapped)
 
     sku_counters: dict[str, int] = {}
     current_category: str | None = None

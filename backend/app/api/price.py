@@ -35,6 +35,7 @@ def version_price(
     source_order_item_id: uuid.UUID | None = None,
     valid_from: datetime.date | None = None,
     valid_to: datetime.date | None = None,
+    commit: bool = True,
 ) -> Price:
     """Versioned write for (material_id, supplier_id): closes the current
     active row (valid_to = today) if one exists and creates a new active
@@ -49,7 +50,14 @@ def version_price(
     same versioning logic without duplicating it. created_by_user_id/
     source_order_item_id are the ADR-0030 §6 audit columns — update_price
     never passes them (stays NULL for the admin flow, an explicit decision,
-    not an omission)."""
+    not an omission).
+
+    commit=False flushes instead of committing -- for callers (ADR-0035
+    sync_catalog_from_file.py) that need many version_price() calls to
+    share one transaction they can roll back as a whole. Session.commit()
+    always ends the whole transaction, not just a nested savepoint, so a
+    caller managing its own transaction must suppress the commit here and
+    call db.commit() itself exactly once at the end."""
     existing = _active_price_query(db, material_id, supplier_id).first()
 
     if existing is not None:
@@ -77,8 +85,11 @@ def version_price(
         source_order_item_id=source_order_item_id,
     )
     db.add(new_price)
-    db.commit()
-    db.refresh(new_price)
+    if commit:
+        db.commit()
+        db.refresh(new_price)
+    else:
+        db.flush()
     return new_price
 
 

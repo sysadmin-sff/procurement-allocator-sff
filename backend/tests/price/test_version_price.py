@@ -186,3 +186,35 @@ def test_version_price_create_case_does_not_attempt_to_close_nonexistent_row(
         .count()
     )
     assert count == 1
+
+
+def test_version_price_commit_false_does_not_end_the_transaction(
+    db_session, make_material, make_supplier
+):
+    """ADR-0035 §8: sync_catalog_from_file.py needs one transaction for an
+    entire --apply run, with rollback-everything on a post-apply mismatch.
+    version_price()'s own db.commit() (the default, commit=True) ends the
+    whole session transaction -- confirmed empirically that SQLAlchemy's
+    Session.commit() is not scoped to a nested savepoint. commit=False must
+    flush (so RETURNING/relationship access still works) without committing,
+    leaving the caller free to roll back everything including this row."""
+    session, *_ = db_session
+    material = make_material()
+    supplier = make_supplier()
+
+    assert session.in_transaction()
+
+    price = version_price(
+        session, material_id=material.id, supplier_id=supplier.id, price=9.99, commit=False
+    )
+
+    assert price.id is not None
+    assert session.in_transaction(), "commit=False must not end the session transaction"
+
+    session.rollback()
+    count = (
+        session.query(Price)
+        .filter_by(material_id=material.id, supplier_id=supplier.id)
+        .count()
+    )
+    assert count == 0, "rollback after commit=False must undo the price row"

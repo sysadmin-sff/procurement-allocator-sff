@@ -83,7 +83,7 @@ def db_session():
 
 @pytest.fixture
 def make_user(db_session):
-    session, *_rest, user_ids = db_session
+    session, _material_ids, _template_ids, _project_ids, user_ids = db_session
 
     def _make(
         email="employee@screen-factory-florida.com",
@@ -153,7 +153,7 @@ def make_category(db_session):
 
 @pytest.fixture
 def make_material(db_session, make_category):
-    session, material_ids, *_rest = db_session
+    session, material_ids, _template_ids, _project_ids, _user_ids = db_session
 
     def _make(sku=None, canonical_name=None, category=None, unit="ft"):
         sku = sku or f"TEST-SKU-{uuid.uuid4().hex[:12]}"

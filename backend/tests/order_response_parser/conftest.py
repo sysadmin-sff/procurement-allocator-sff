@@ -73,7 +73,7 @@ def db_session():
 
 @pytest.fixture
 def make_user(db_session):
-    session, *_rest, user_ids = db_session
+    session, _project_ids, _material_ids, _supplier_ids, user_ids = db_session
 
     def _make(
         email="employee@screen-factory-florida.com",

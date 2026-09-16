@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '../../components/Button';
-import type { Material, MaterialCreate } from '../../api/types';
+import type { Category, Material, MaterialCreate } from '../../api/types';
+import { useCategories } from '../../hooks/useCategories';
 import styles from '../../components/CrudScreen.module.css';
 
 interface MaterialFormProps {
@@ -15,23 +16,31 @@ function toAttributesText(material?: Material): string {
   return JSON.stringify(material.attributes, null, 2);
 }
 
+function findCategoryIdByName(categories: Category[], name: string | undefined): string {
+  if (!name) return '';
+  return categories.find((c) => c.name === name)?.id ?? '';
+}
+
 export function MaterialForm({ initial, onCancel, onSubmit }: MaterialFormProps) {
-  const [internalSku, setInternalSku] = useState(initial?.internal_sku ?? '');
+  const { categories, loading: categoriesLoading } = useCategories();
   const [canonicalName, setCanonicalName] = useState(initial?.canonical_name ?? '');
-  const [category, setCategory] = useState(initial?.category ?? '');
+  const [categoryId, setCategoryId] = useState('');
   const [unit, setUnit] = useState(initial?.unit ?? '');
   const [attributesText, setAttributesText] = useState(() => toAttributesText(initial));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const skuChanged = initial != null && internalSku.trim() !== initial.internal_sku;
+  useEffect(() => {
+    if (!initial || categories.length === 0) return;
+    setCategoryId((current) => current || findCategoryIdByName(categories, initial.category_name));
+  }, [categories, initial]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
 
-    if (!internalSku.trim() || !canonicalName.trim() || !unit.trim()) {
-      setError('internal_sku, название и единица измерения обязательны');
+    if (!canonicalName.trim() || !unit.trim() || !categoryId) {
+      setError('Название, категория и единица измерения обязательны');
       return;
     }
 
@@ -49,9 +58,8 @@ export function MaterialForm({ initial, onCancel, onSubmit }: MaterialFormProps)
     setSubmitting(true);
     try {
       await onSubmit({
-        internal_sku: internalSku.trim(),
         canonical_name: canonicalName.trim(),
-        category: category.trim() || null,
+        category_id: categoryId,
         unit: unit.trim(),
         attributes,
       });
@@ -66,46 +74,12 @@ export function MaterialForm({ initial, onCancel, onSubmit }: MaterialFormProps)
     <form className={styles.cardPadded} onSubmit={handleSubmit}>
       {initial && (
         <div className={`${styles.warningBanner} ${styles.formBanner}`}>
-          internal_sku — ключ идентичности материала (см. CLAUDE.md): по нему связаны цены и
-          позиции проектов. Меняйте только если это действительно исправление ошибки ввода, не
-          переименование товара.
+          internal_sku ({initial.internal_sku}) — ключ идентичности материала (см. CLAUDE.md):
+          выдан один раз при создании и больше не меняется, в том числе при смене категории.
         </div>
       )}
 
       <div className={styles.formGrid}>
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="material-sku">
-            internal_sku
-          </label>
-          <input
-            id="material-sku"
-            className={styles.input}
-            value={internalSku}
-            onChange={(e) => setInternalSku(e.target.value)}
-            required
-          />
-          {skuChanged && (
-            <div className={styles.fieldError}>
-              Изменение internal_sku переопределяет идентичность материала — убедитесь, что это
-              осознанно.
-            </div>
-          )}
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label} htmlFor="material-unit">
-            Единица измерения
-          </label>
-          <input
-            id="material-unit"
-            className={styles.input}
-            value={unit}
-            onChange={(e) => setUnit(e.target.value)}
-            placeholder="шт, рул., ft"
-            required
-          />
-        </div>
-
         <div className={`${styles.field} ${styles.fieldFull}`}>
           <label className={styles.label} htmlFor="material-name">
             Название
@@ -123,11 +97,36 @@ export function MaterialForm({ initial, onCancel, onSubmit }: MaterialFormProps)
           <label className={styles.label} htmlFor="material-category">
             Категория
           </label>
-          <input
+          <select
             id="material-category"
+            className={styles.select}
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            disabled={categoriesLoading}
+            required
+          >
+            <option value="" disabled>
+              {categoriesLoading ? 'Загрузка…' : 'Выберите категорию'}
+            </option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label} htmlFor="material-unit">
+            Единица измерения
+          </label>
+          <input
+            id="material-unit"
             className={styles.input}
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="шт, рул., ft"
+            required
           />
         </div>
 

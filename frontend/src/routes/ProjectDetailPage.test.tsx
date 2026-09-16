@@ -49,7 +49,7 @@ const material: Material = {
   id: 'mat-1',
   internal_sku: 'MSH-FG-1814',
   canonical_name: 'Сетка Fiberglass 18x14',
-  category: 'Сетка',
+  category_name: 'Сетка',
   unit: 'рулон',
   attributes: {},
 };
@@ -58,7 +58,7 @@ const material2: Material = {
   id: 'mat-2',
   internal_sku: 'FSTN-SMS-8',
   canonical_name: '#8 Self-Tapping Screw 1"',
-  category: 'fastener',
+  category_name: 'fastener',
   unit: 'box',
   attributes: {},
 };
@@ -463,14 +463,6 @@ describe('ProjectDetailPage', () => {
   });
 
   it('groups the spec table by material category with contiguous numbering', async () => {
-    const materialNoCategory: Material = {
-      id: 'mat-3',
-      internal_sku: 'MISC-001',
-      canonical_name: 'Разное крепление',
-      category: null,
-      unit: 'шт',
-      attributes: {},
-    };
     const project: ProjectWithItems = {
       id: 'proj-1',
       title: 'Pool cage — Bayshore Rd',
@@ -480,13 +472,13 @@ describe('ProjectDetailPage', () => {
       items: [
         { id: 'item-1', project_id: 'proj-1', material_id: 'mat-2', quantity: 5 }, // fastener
         { id: 'item-2', project_id: 'proj-1', material_id: 'mat-1', quantity: 2 }, // Сетка
-        { id: 'item-3', project_id: 'proj-1', material_id: 'mat-3', quantity: 1 }, // no category
+        { id: 'item-3', project_id: 'proj-1', material_id: 'mat-not-loaded', quantity: 1 }, // material not in the loaded list
         { id: 'item-4', project_id: 'proj-1', material_id: 'mat-2', quantity: 3 }, // fastener again
       ],
       latest_allocation_run: null,
     };
     getMock.mockResolvedValue(project);
-    materialsListMock.mockResolvedValue([material, material2, materialNoCategory]);
+    materialsListMock.mockResolvedValue([material, material2]);
 
     renderPage();
 
@@ -509,14 +501,6 @@ describe('ProjectDetailPage', () => {
   });
 
   it('puts items with no category in a single trailing group, not scattered by input order', async () => {
-    const materialNoCategory: Material = {
-      id: 'mat-3',
-      internal_sku: 'MISC-001',
-      canonical_name: 'Разное крепление',
-      category: null,
-      unit: 'шт',
-      attributes: {},
-    };
     const project: ProjectWithItems = {
       id: 'proj-1',
       title: 'Pool cage — Bayshore Rd',
@@ -524,13 +508,13 @@ describe('ProjectDetailPage', () => {
       status: 'draft',
       created_at: '2026-08-17T00:00:00Z',
       items: [
-        { id: 'item-1', project_id: 'proj-1', material_id: 'mat-3', quantity: 1 }, // no category, first in input
+        { id: 'item-1', project_id: 'proj-1', material_id: 'mat-not-loaded', quantity: 1 }, // not in the loaded list, first in input
         { id: 'item-2', project_id: 'proj-1', material_id: 'mat-1', quantity: 2 }, // Сетка
       ],
       latest_allocation_run: null,
     };
     getMock.mockResolvedValue(project);
-    materialsListMock.mockResolvedValue([material, material2, materialNoCategory]);
+    materialsListMock.mockResolvedValue([material, material2]);
 
     renderPage();
 

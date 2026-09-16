@@ -95,7 +95,7 @@ const material: Material = {
   id: 'mat-1',
   internal_sku: 'MSH-FG-1814',
   canonical_name: 'Сетка Fiberglass 18x14',
-  category: 'Сетка',
+  category_name: 'Сетка',
   unit: 'рулон',
   attributes: {},
 };
@@ -1373,7 +1373,7 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
       materialsListMock.mockResolvedValue([
         material,
-        { id: 'mat-2', internal_sku: 'PRF-AL-1', canonical_name: 'Профиль алюминиевый', category: null, unit: 'шт', attributes: {} },
+        { id: 'mat-2', internal_sku: 'PRF-AL-1', canonical_name: 'Профиль алюминиевый', category_name: 'Profil', unit: 'шт', attributes: {} },
       ]);
       parseResponseMock.mockResolvedValue({
         matched: [
@@ -1659,7 +1659,7 @@ describe('OrderDetailPage', () => {
       id: 'mat-color',
       internal_sku: 'GTR-EC-5',
       canonical_name: 'Super Gutter End Cap 5" (White/Bronze)',
-      category: 'Gutter',
+      category_name: 'Gutter',
       unit: 'шт',
       attributes: {},
       color_options: ['White', 'Bronze'],

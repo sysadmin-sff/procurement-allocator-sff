@@ -7,7 +7,7 @@ function materialFixture(overrides: Partial<Material> = {}): Material {
     id: 'mat-1',
     internal_sku: 'GTR-EC-5',
     canonical_name: 'Super Gutter End Cap 5" (White/Bronze)',
-    category: 'Gutter',
+    category_name: 'Gutter',
     unit: 'шт',
     attributes: {},
     color_options: ['White', 'Bronze'],

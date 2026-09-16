@@ -36,7 +36,7 @@ const material = {
   id: 'mat-1',
   internal_sku: 'DOOR-STD',
   canonical_name: 'Дверная ручка',
-  category: 'Двери',
+  category_name: 'Двери',
   unit: 'шт',
   attributes: {},
 };
@@ -91,7 +91,7 @@ describe('ProjectTemplatesPage', () => {
     // Add a material
     const withItem: ProjectTemplate = {
       ...emptyTemplate,
-      items: [{ id: 'item-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: 'шт', category: 'Двери' }],
+      items: [{ id: 'item-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: 'шт', category_name: 'Двери' }],
     };
     addItemMock.mockResolvedValue(withItem);
 

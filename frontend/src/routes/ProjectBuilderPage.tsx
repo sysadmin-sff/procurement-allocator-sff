@@ -430,7 +430,7 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
 
                       <div className={styles.rowUnit}>{row.material?.unit ?? '—'}</div>
 
-                      <div className={styles.rowCategory}>{row.material?.category ?? ''}</div>
+                      <div className={styles.rowCategory}>{row.material?.category_name ?? ''}</div>
 
                       <div className={styles.rowRemove}>
                         <button

@@ -3,6 +3,7 @@ import { materialsApi } from '../api/materials';
 import { suppliersApi } from '../api/suppliers';
 import type { Material, MaterialCreate, Supplier } from '../api/types';
 import { useCurrentUser } from '../auth/AuthContext';
+import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { EmptyState } from '../components/EmptyState';
@@ -27,6 +28,9 @@ export function MaterialsPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Material | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  /** SKU is server-generated on create (ADR-0034 п.4) — the admin never
+   * typed it, so surface it once after a successful create. */
+  const [createdSkuNotice, setCreatedSkuNotice] = useState<Material | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,6 +88,7 @@ export function MaterialsPage() {
   function openCreate() {
     setEditing(null);
     setActionError(null);
+    setCreatedSkuNotice(null);
     setFormOpen(true);
   }
 
@@ -104,8 +109,10 @@ export function MaterialsPage() {
       if (editing) {
         const after: Material = { ...editing, ...payload, attributes: payload.attributes ?? {} };
         await materialsApi.update(editing.id, editing, after);
+        setCreatedSkuNotice(null);
       } else {
-        await materialsApi.create(payload);
+        const created = await materialsApi.create(payload);
+        setCreatedSkuNotice(created);
       }
       closeForm();
       await load();
@@ -148,6 +155,13 @@ export function MaterialsPage() {
               error={actionError}
               conflictMessage="Материал используется в других данных (цены, позиции проектов) — удаление невозможно."
             />
+          )}
+
+          {createdSkuNotice != null && (
+            <Alert variant="success" title="Материал создан">
+              Присвоен артикул <strong>{createdSkuNotice.internal_sku}</strong> —{' '}
+              {createdSkuNotice.canonical_name}.
+            </Alert>
           )}
 
           {formOpen && (
@@ -255,7 +269,7 @@ export function MaterialsPage() {
                             </td>
                             <td>{material.internal_sku}</td>
                             <td>{material.canonical_name}</td>
-                            <td>{material.category ?? <span className={styles.muted}>—</span>}</td>
+                            <td>{material.category_name}</td>
                             <td>{material.unit}</td>
                             <td>
                               <div

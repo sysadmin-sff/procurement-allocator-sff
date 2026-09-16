@@ -54,7 +54,7 @@ export function TemplateItemsPanel({
               {template.items.map((item) => (
                 <tr key={item.id}>
                   <td>{item.canonical_name}</td>
-                  <td>{item.category ?? <span className={styles.muted}>—</span>}</td>
+                  <td>{item.category_name}</td>
                   <td>{item.unit}</td>
                   <td>
                     <div className={styles.actionsCell}>

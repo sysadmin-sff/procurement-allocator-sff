@@ -13,6 +13,7 @@ const NAV_ITEMS = [{ to: '/projects', label: 'Проекты' }];
 const ADMIN_NAV_ITEMS = [
   { to: '/suppliers', label: 'Поставщики' },
   { to: '/materials', label: 'Материалы' },
+  { to: '/categories', label: 'Категории' },
   { to: '/project-templates', label: 'Шаблоны' },
   { to: '/users', label: 'Пользователи' },
 ];

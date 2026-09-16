@@ -3,8 +3,9 @@ import { Link, useParams } from 'react-router-dom';
 import { ApiError } from '../../api/client';
 import { materialsApi } from '../../api/materials';
 import { priceListImportsApi } from '../../api/priceListImports';
-import type { Material, PriceListEntry, PriceListImport } from '../../api/types';
+import type { Category, Material, PriceListEntry, PriceListImport } from '../../api/types';
 import { useCurrentUser } from '../../auth/AuthContext';
+import { useCategories } from '../../hooks/useCategories';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { ErrorBanner } from '../../components/ErrorBanner';
@@ -44,8 +45,9 @@ export function PriceListImportReviewPage() {
   const [included, setIncluded] = useState<Record<string, boolean>>({});
   const [matchOverride, setMatchOverride] = useState<Record<string, Material | null>>({});
   const [matchQuery, setMatchQuery] = useState<Record<string, string>>({});
-  const [newSku, setNewSku] = useState<Record<string, string>>({});
+  const [newCategoryId, setNewCategoryId] = useState<Record<string, string>>({});
   const [newName, setNewName] = useState<Record<string, string>>({});
+  const { categories } = useCategories();
 
   const [applying, setApplying] = useState(false);
   const [applySummary, setApplySummary] = useState<string | null>(null);
@@ -76,16 +78,13 @@ export function PriceListImportReviewPage() {
 
   function seedDrafts(entries: PriceListEntry[]) {
     const nextIncluded: Record<string, boolean> = {};
-    const nextSku: Record<string, string> = {};
     const nextName: Record<string, string> = {};
     for (const entry of entries) {
       if (entry.action != null) continue; // already resolved — not part of the pending set
       nextIncluded[entry.id] = true;
-      nextSku[entry.id] = entry.suggested_internal_sku ?? '';
       nextName[entry.id] = entry.supplier_raw_name;
     }
     setIncluded(nextIncluded);
-    setNewSku(nextSku);
     setNewName(nextName);
   }
 
@@ -120,12 +119,12 @@ export function PriceListImportReviewPage() {
             material_id: materialId,
           });
         } else {
-          const sku = (newSku[entry.id] ?? '').trim();
+          const categoryId = newCategoryId[entry.id] ?? '';
           const name = (newName[entry.id] ?? '').trim();
-          if (!sku || !name) throw new Error('Заполните SKU и название');
+          if (!categoryId || !name) throw new Error('Заполните название и категорию');
           await priceListImportsApi.applyEntry(importId, entry.id, {
             action: 'new',
-            internal_sku: sku,
+            category_id: categoryId,
             canonical_name: name,
           });
         }
@@ -306,8 +305,11 @@ export function PriceListImportReviewPage() {
                     onMatchSelect={(material) =>
                       setMatchOverride((prev) => ({ ...prev, [entry.id]: material }))
                     }
-                    newSku={newSku[entry.id] ?? ''}
-                    onNewSkuChange={(v) => setNewSku((prev) => ({ ...prev, [entry.id]: v }))}
+                    categories={categories}
+                    newCategoryId={newCategoryId[entry.id] ?? ''}
+                    onNewCategoryIdChange={(v) =>
+                      setNewCategoryId((prev) => ({ ...prev, [entry.id]: v }))
+                    }
                     newName={newName[entry.id] ?? ''}
                     onNewNameChange={(v) => setNewName((prev) => ({ ...prev, [entry.id]: v }))}
                     onSkip={() => void handleSkip(entry)}
@@ -377,8 +379,9 @@ function EntryRow({
   matchQuery,
   onMatchQueryChange,
   onMatchSelect,
-  newSku,
-  onNewSkuChange,
+  categories,
+  newCategoryId,
+  onNewCategoryIdChange,
   newName,
   onNewNameChange,
   onSkip,
@@ -396,8 +399,9 @@ function EntryRow({
   matchQuery: string;
   onMatchQueryChange: (query: string) => void;
   onMatchSelect: (material: Material) => void;
-  newSku: string;
-  onNewSkuChange: (value: string) => void;
+  categories: Category[];
+  newCategoryId: string;
+  onNewCategoryIdChange: (value: string) => void;
   newName: string;
   onNewNameChange: (value: string) => void;
   onSkip: () => void;
@@ -471,12 +475,24 @@ function EntryRow({
           <div>
             <span className={styles.actionLabel}>Новый материал</span>
             <div className={styles.field}>
-              <span className={styles.fieldLabel}>internal_sku</span>
-              <input
+              <label className={styles.fieldLabel} htmlFor={`new-category-${entry.id}`}>
+                Категория
+              </label>
+              <select
+                id={`new-category-${entry.id}`}
                 className={styles.input}
-                value={newSku}
-                onChange={(e) => onNewSkuChange(e.target.value)}
-              />
+                value={newCategoryId}
+                onChange={(e) => onNewCategoryIdChange(e.target.value)}
+              >
+                <option value="" disabled>
+                  Выберите категорию
+                </option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className={styles.field}>
               <span className={styles.fieldLabel}>canonical_name</span>

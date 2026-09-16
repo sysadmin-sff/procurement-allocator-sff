@@ -353,8 +353,8 @@ function AllocationResultOk({
                     {lines.map((line) => {
                       const material = materialById.get(line.material_id);
                       const splitSupplierIds =
-                        material?.category != null
-                          ? splitCategorySuppliers.get(material.category)
+                        material?.category_name != null
+                          ? splitCategorySuppliers.get(material.category_name)
                           : undefined;
                       return (
                         <LineRow
@@ -521,11 +521,11 @@ function LineRow({
   // language as belowMinOrderNotice (ADR-0006 §4) — not a badge in the
   // already-dense material cell.
   const splitCategoryWarning =
-    splitCategorySupplierIds && material?.category != null ? (
+    splitCategorySupplierIds && material?.category_name != null ? (
       <tr>
         <td colSpan={5} className={styles.splitCategoryNoticeCell}>
           <Alert variant="warning" compact>
-            Категория {material.category} разбита между {splitCategorySupplierIds.size}{' '}
+            Категория {material.category_name} разбита между {splitCategorySupplierIds.size}{' '}
             поставщиками:{' '}
             {[...splitCategorySupplierIds]
               .map((supplierId) => supplierById.get(supplierId)?.short_name ?? supplierById.get(supplierId)?.name ?? supplierId)
@@ -563,7 +563,7 @@ function buildSplitCategorySupplierIndex(
 
   const splitCategories = new Set(run.split_categories);
   for (const line of run.lines) {
-    const category = materialById.get(line.material_id)?.category;
+    const category = materialById.get(line.material_id)?.category_name;
     if (category == null || !splitCategories.has(category)) continue;
     const suppliers = index.get(category);
     if (suppliers) {

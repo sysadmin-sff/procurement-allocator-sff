@@ -21,6 +21,7 @@ in for the full breakdown of row/column counts.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -89,16 +90,33 @@ def _is_divider_row(description: str, quantity_raw: object) -> bool:
     return str(quantity_raw).strip() == "-"
 
 
+_LEADING_PACK_OF_ONE_RE = re.compile(r"^1\s+(.+)$")
+"""Matches the "1 " in "1 pcs", "1 box/100 pcs", "1 sq ft" — the sheet's
+Quantity column is "pack quantity + unit" as one free-text field (verified:
+288/301 real rows have this shape). A pack count of exactly 1 carries no
+information (every material's row implicitly means "1 of its own unit"),
+so it's safe to drop. A count other than 1 (e.g. "5 box") is real business
+information — how many of the base unit make up one purchasable pack —
+and is deliberately left untouched rather than guessed at: there's no
+reliable rule for whether the caller wants "box" or "5 box" once the count
+actually varies. Doesn't touch a count elsewhere in the string (the "100"
+in "1 box/100 pcs" stays — that's the box's own contents, not this row's
+pack count) since only a leading match is stripped."""
+
+
 def _clean_unit(quantity_raw: object) -> tuple[str, bool]:
     """Returns (unit, used_fallback). The source's Quantity column is a
     free-text descriptor ("1 pcs", "1 box/100 pcs", "compl"), not a clean
-    unit code — Material.unit is stored as-is (String(20)) rather than
-    parsed further, since there is no reliable rule to reduce e.g. "1
-    box/100 pcs" to a single token without losing information the business
-    put there on purpose."""
+    unit code. An uninformative leading pack count of 1 is stripped (see
+    _LEADING_PACK_OF_ONE_RE); anything else, including a pack count other
+    than 1, is kept as-is rather than parsed further, since there is no
+    reliable rule to reduce it to a single token without losing
+    information the business put there on purpose."""
     if quantity_raw is None or str(quantity_raw).strip() == "":
         return FALLBACK_UNIT, True
-    return str(quantity_raw).strip(), False
+    text = str(quantity_raw).strip()
+    match = _LEADING_PACK_OF_ONE_RE.match(text)
+    return (match.group(1), False) if match else (text, False)
 
 
 def _clean_price(raw: object) -> float | None:

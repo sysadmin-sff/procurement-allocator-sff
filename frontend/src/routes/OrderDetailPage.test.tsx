@@ -628,13 +628,123 @@ describe('OrderDetailPage', () => {
 
     const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
     const withPricesText = textareas.find((t) => t.value.includes('Price:'));
-    const withoutPricesText = textareas.find((t) => !t.value.includes('Price:'));
+    const withoutPricesText = textareas.find(
+      (t) => t.value.includes('Order for ABC Supply') && !t.value.includes('Price:'),
+    );
 
     expect(withPricesText?.value).toContain('Order for ABC Supply');
     expect(withPricesText?.value).toContain('Qty: 10 рулон');
     expect(withPricesText?.value).toContain('Grand total: $275.00');
     expect(withoutPricesText?.value).not.toContain('Total:');
     expect(withoutPricesText?.value).not.toContain('Grand total');
+  });
+
+  describe('full project material list (standalone copy block, ADR-0027 follow-up)', () => {
+    function twoMaterialProject(): ProjectWithItems {
+      return projectFixture({
+        items: [
+          { id: 'pi-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 10 },
+          { id: 'pi-2', project_id: 'proj-1', material_id: 'mat-2', quantity: 4 },
+        ],
+      });
+    }
+
+    beforeEach(() => {
+      materialsListMock.mockResolvedValue([
+        material,
+        { ...material, id: 'mat-2', canonical_name: 'Профиль алюминиевый', unit: 'шт' },
+      ]);
+    });
+
+    function fullProjectBlockTextarea(): HTMLTextAreaElement {
+      const title = screen.getByText('Полный список материалов проекта');
+      // title -> copyBlockHeader div -> copyBlock div (sibling of the textarea)
+      const container = title.parentElement?.parentElement as HTMLElement;
+      return within(container).getByRole('textbox') as HTMLTextAreaElement;
+    }
+
+    it('renders as a fourth, separate block below the target-price list, with every project material including ones not on this order', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        // Only mat-1 is on this Order — mat-2 belongs to the project but not
+        // to this supplier's order.
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      projectGetMock.mockResolvedValue(twoMaterialProject());
+
+      renderPage();
+
+      const titles = (await screen.findAllByText(/^Список материалов|^Полный список материалов проекта$/)).map(
+        (el) => el.textContent,
+      );
+      expect(titles).toEqual([
+        'Список материалов (с ценами)',
+        'Список материалов (без цен)',
+        'Список материалов (с целевыми ценами)',
+        'Полный список материалов проекта',
+      ]);
+
+      const textarea = fullProjectBlockTextarea();
+      expect(textarea.value).toContain(material.canonical_name);
+      expect(textarea.value).toContain('Профиль алюминиевый');
+      expect(textarea.value).toContain('Qty: 4 шт');
+      // Always price-free, regardless of includePrices on any other block.
+      expect(textarea.value).not.toContain('Price:');
+      expect(textarea.value).not.toContain('Order for ABC Supply');
+
+      // The other three texts are unaffected — no full-project content leaks
+      // into them anymore.
+      const otherTextareas = screen
+        .getAllByRole('textbox')
+        .filter((t) => t !== textarea) as HTMLTextAreaElement[];
+      for (const other of otherTextareas) {
+        expect(other.value).not.toContain('Полный список материалов проекта');
+        expect(other.value).not.toContain('Профиль алюминиевый');
+      }
+    });
+
+    it('resolves project material names through the project color choice, same as the main list', async () => {
+      const colorMaterial: Material = {
+        ...material,
+        id: 'mat-3',
+        canonical_name: 'Экран (White/Bronze)',
+        color_options: ['White', 'Bronze'],
+        color_fragment: '(White/Bronze)',
+      };
+      materialsListMock.mockResolvedValue([material, colorMaterial]);
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1' })],
+      });
+      getOrderMock.mockResolvedValue(order);
+      projectGetMock.mockResolvedValue(
+        projectFixture({
+          color_choice: 'Bronze',
+          items: [
+            { id: 'pi-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 10 },
+            { id: 'pi-2', project_id: 'proj-1', material_id: 'mat-3', quantity: 2 },
+          ],
+        }),
+      );
+
+      renderPage();
+
+      await screen.findByText('Полный список материалов проекта');
+      const textarea = fullProjectBlockTextarea();
+      expect(textarea.value).toContain('Экран (Bronze)');
+      expect(textarea.value).not.toContain('(White/Bronze)');
+    });
   });
 
   describe('footer totals: sent (DB snapshot) vs expected (confirmed prices)', () => {

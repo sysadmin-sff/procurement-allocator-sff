@@ -19,6 +19,7 @@ import type {
   Price,
   PriceUpdateResult,
   PriceUpdateSelection,
+  ProjectItem,
   Supplier,
 } from '../api/types';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -61,6 +62,10 @@ interface LoadedData {
    * copy blocks (ADR-0031 п.5) — null both when not yet chosen and when the
    * project fetch itself fails (best-effort fallback, see the load effect). */
   projectColorChoice: string | null;
+  /** Every material in the project, not just this Order's supplier subset —
+   * feeds the "full project material list" block appended to both
+   * supplier-facing copy texts below. */
+  projectItems: ProjectItem[];
 }
 
 export function OrderDetailPage() {
@@ -93,7 +98,13 @@ export function OrderDetailPage() {
           projectsApi.get(order.project_id),
         ]);
         if (cancelled) return;
-        setData({ order, materials, suppliers, projectColorChoice: project.color_choice ?? null });
+        setData({
+          order,
+          materials,
+          suppliers,
+          projectColorChoice: project.color_choice ?? null,
+          projectItems: project.items,
+        });
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -197,7 +208,7 @@ export function OrderDetailPage() {
     );
   }
 
-  const { order, materials, suppliers, projectColorChoice } = data;
+  const { order, materials, suppliers, projectColorChoice, projectItems } = data;
   const materialById = new Map(materials.map((m) => [m.id, m]));
   const supplier = suppliers.find((s) => s.id === order.supplier_id);
 
@@ -395,6 +406,10 @@ export function OrderDetailPage() {
               colorChoice: projectColorChoice,
             })}
           />
+          <CopyBlock
+            title="Полный список материалов проекта"
+            text={buildFullProjectMaterialListText({ projectItems, materialById, colorChoice: projectColorChoice })}
+          />
         </div>
       </div>
     </div>
@@ -441,6 +456,31 @@ function CopyBlock({ title, text }: { title: string; text: string }) {
       />
     </div>
   );
+}
+
+/** Fourth, standalone copy block — always name + quantity only (no prices),
+ * and always every material in the project, not just this Order's supplier
+ * subset. This is still supplier-facing text (goes out with the order), so
+ * names are resolved through resolveMaterialName the same as the other three
+ * blocks — no separate formatting logic. */
+function buildFullProjectMaterialListText({
+  projectItems,
+  materialById,
+  colorChoice,
+}: {
+  projectItems: ProjectItem[];
+  materialById: Map<string, Material>;
+  colorChoice: string | null;
+}): string {
+  const lines: string[] = [];
+  projectItems.forEach((item, index) => {
+    const material = materialById.get(item.material_id);
+    const name = material ? resolveMaterialName(material, colorChoice) : item.material_id;
+    const unit = material?.unit ?? '';
+    lines.push(`${index + 1}. ${name}`);
+    lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
+  });
+  return lines.join('\n');
 }
 
 function buildOrderText({

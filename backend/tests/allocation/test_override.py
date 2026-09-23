@@ -306,6 +306,94 @@ def test_override_recomputes_split_categories(
     assert run.split_categories == ["TestDoors"]
 
 
+def test_override_preserves_supplier_summary_order_for_unaffected_and_affected_suppliers(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Overriding a line must not reorder supplier_summaries — a supplier's
+    card position on AllocationResultPage should stay stable across
+    overrides. Previously _rebuild-affected suppliers were dropped from
+    their original spot and appended at the end, so removing the last line
+    of the first-listed supplier made its card jump to the bottom even
+    though it still had other lines."""
+    session, *_ = db_session
+    supplier_a = make_supplier(name="A Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    supplier_b = make_supplier(name="B Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    supplier_c = make_supplier(name="C Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    material_a1 = make_material()
+    material_a2 = make_material()
+    material_b = make_material()
+    material_c = make_material()
+    make_price(material_a1, supplier_a, price=5.00, availability=10)
+    make_price(material_a2, supplier_a, price=5.00, availability=10)
+    make_price(material_b, supplier_b, price=5.00, availability=10)
+    make_price(material_c, supplier_c, price=5.00, availability=10)
+    # supplier_c is also a valid destination for material_a1's override below.
+    make_price(material_a1, supplier_c, price=6.00, availability=10)
+    project = make_project(
+        [(material_a1, 1), (material_a2, 1), (material_b, 1), (material_c, 1)]
+    )
+
+    run = run_allocation(session, project.id)
+    # The solver's own initial ordering isn't itself under test here (it's
+    # whatever solve_allocation produced) — only that override must not
+    # disturb it for suppliers whose set membership doesn't change.
+    original_order = [s["supplier_id"] for s in run.supplier_summaries]
+    assert set(original_order) == {str(supplier_a.id), str(supplier_b.id), str(supplier_c.id)}
+
+    line_a1 = (
+        session.query(AllocationLine)
+        .filter_by(allocation_run_id=run.id, material_id=material_a1.id)
+        .one()
+    )
+    # supplier_a keeps material_a2's line, so its summary survives — it must
+    # stay at its original position, not jump to the end.
+    override_allocation_line_supplier(session, run.id, line_a1.id, supplier_c.id)
+    session.refresh(run)
+
+    updated_order = [s["supplier_id"] for s in run.supplier_summaries]
+    assert updated_order == original_order
+
+
+def test_override_appends_new_supplier_at_end_when_not_previously_in_run(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """A supplier who had zero lines in the run before the override is a
+    genuinely new entrant to supplier_summaries — nowhere to preserve a
+    position for, so it's appended at the end, same as today."""
+    session, *_ = db_session
+    supplier_a = make_supplier(name="A Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    supplier_b = make_supplier(name="B Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    new_supplier = make_supplier(name="New Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    material_a = make_material()
+    material_b = make_material()
+    make_price(material_a, supplier_a, price=5.00, availability=10)
+    make_price(material_b, supplier_b, price=5.00, availability=10)
+    make_price(material_a, new_supplier, price=6.00, availability=10)
+    project = make_project([(material_a, 1), (material_b, 1)])
+
+    run = run_allocation(session, project.id)
+    original_order = [s["supplier_id"] for s in run.supplier_summaries]
+    assert set(original_order) == {str(supplier_a.id), str(supplier_b.id)}
+
+    line_a = (
+        session.query(AllocationLine)
+        .filter_by(allocation_run_id=run.id, material_id=material_a.id)
+        .one()
+    )
+
+    override_allocation_line_supplier(session, run.id, line_a.id, new_supplier.id)
+    session.refresh(run)
+
+    updated_order = [s["supplier_id"] for s in run.supplier_summaries]
+    # supplier_a had no other lines -> dropped; supplier_b stays at its
+    # original relative position; new_supplier is appended since it has no
+    # prior position to preserve.
+    expected_order = [sid for sid in original_order if sid != str(supplier_a.id)] + [
+        str(new_supplier.id)
+    ]
+    assert updated_order == expected_order
+
+
 def test_override_clears_below_min_order_when_no_longer_applicable(
     db_session, make_supplier, make_material, make_price, make_project
 ):

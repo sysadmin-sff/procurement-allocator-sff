@@ -350,14 +350,26 @@ def override_allocation_line_supplier(
         for supplier_id in (old_supplier_id, new_supplier_id)
     }
 
-    updated_summaries = [
-        s for s in run.supplier_summaries if s["supplier_id"] not in affected_supplier_ids
-    ]
+    # Rebuilt in place at each affected supplier's existing index, not
+    # dropped-then-appended — otherwise a supplier who merely lost one of
+    # several lines (but keeps others) would visibly jump to the end of
+    # AllocationResultPage's supplier card list on every override. A
+    # supplier with zero remaining lines is still removed; one appearing in
+    # this run for the first time (no prior index) is still appended, same
+    # as before.
+    updated_summaries = list(run.supplier_summaries)
+    index_by_supplier_id = {s["supplier_id"]: i for i, s in enumerate(updated_summaries)}
     for supplier_id_str in affected_supplier_ids:
         summary = rebuilt[supplier_id_str]
-        if summary is not None:
+        existing_index = index_by_supplier_id.get(supplier_id_str)
+        if summary is None:
+            if existing_index is not None:
+                updated_summaries[existing_index] = None
+        elif existing_index is not None:
+            updated_summaries[existing_index] = summary
+        else:
             updated_summaries.append(summary)
-    run.supplier_summaries = updated_summaries
+    run.supplier_summaries = [s for s in updated_summaries if s is not None]
     run.split_categories = _compute_split_categories(db, run_id)
 
     db.commit()

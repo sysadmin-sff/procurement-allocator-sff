@@ -16,6 +16,7 @@ vi.mock('../api/orders', () => ({
     createForRun: vi.fn(),
     listForProject: vi.fn(),
     get: vi.fn(),
+    deleteOrder: vi.fn(),
     patchItem: vi.fn(),
     findReplacement: vi.fn(),
     replaceAndOrder: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock('../api/purchaseRecords', () => ({
 }));
 
 const getOrderMock = vi.mocked(ordersApi.get);
+const deleteOrderMock = vi.mocked(ordersApi.deleteOrder);
 const patchItemMock = vi.mocked(ordersApi.patchItem);
 const findReplacementMock = vi.mocked(ordersApi.findReplacement);
 const replaceAndOrderMock = vi.mocked(ordersApi.replaceAndOrder);
@@ -167,6 +169,7 @@ function renderPage() {
 describe('OrderDetailPage', () => {
   beforeEach(() => {
     getOrderMock.mockReset();
+    deleteOrderMock.mockReset();
     patchItemMock.mockReset();
     findReplacementMock.mockReset();
     replaceAndOrderMock.mockReset();
@@ -2039,6 +2042,135 @@ describe('OrderDetailPage', () => {
 
       await screen.findByText('Отклонено');
       expect(screen.getByText('Найти замену')).toBeInTheDocument();
+    });
+  });
+
+  describe('delete order', () => {
+    function draftOrder(items: OrderItem[] = [itemFixture()]): Order {
+      return orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 250,
+        delivery_fee: 25,
+        items,
+      });
+    }
+
+    it('shows the delete button on a draft order', async () => {
+      getOrderMock.mockResolvedValue(draftOrder());
+
+      renderPage();
+
+      expect(await screen.findByRole('button', { name: /Удалить ордер/i })).toBeInTheDocument();
+    });
+
+    it('does not show the delete button on a non-draft order', async () => {
+      getOrderMock.mockResolvedValue(
+        orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'approved',
+          total_amount: 250,
+          delivery_fee: 25,
+          items: [itemFixture()],
+        }),
+      );
+
+      renderPage();
+
+      await screen.findByText(supplier.name);
+      expect(screen.queryByRole('button', { name: /Удалить ордер/i })).not.toBeInTheDocument();
+    });
+
+    it('opens a confirmation modal with the expected text on click', async () => {
+      getOrderMock.mockResolvedValue(draftOrder());
+      renderPage();
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /Удалить ордер/i }));
+
+      expect(screen.getByText(/Удалить ордер\? Это необратимо\./)).toBeInTheDocument();
+    });
+
+    it('shows the confirmed-prices warning when an item has confirmed_price set', async () => {
+      getOrderMock.mockResolvedValue(draftOrder([itemFixture({ confirmed_price: 30 })]));
+      renderPage();
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /Удалить ордер/i }));
+
+      expect(
+        screen.getByText(/В этом ордере есть подтверждённые цены — они будут потеряны безвозвратно\./),
+      ).toBeInTheDocument();
+    });
+
+    it('shows the confirmed-prices warning when an item has received_price set', async () => {
+      getOrderMock.mockResolvedValue(draftOrder([itemFixture({ received_price: 28 })]));
+      renderPage();
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /Удалить ордер/i }));
+
+      expect(
+        screen.getByText(/В этом ордере есть подтверждённые цены — они будут потеряны безвозвратно\./),
+      ).toBeInTheDocument();
+    });
+
+    it('does not show the confirmed-prices warning when no item has confirmed_price or received_price', async () => {
+      getOrderMock.mockResolvedValue(draftOrder());
+      renderPage();
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /Удалить ордер/i }));
+
+      expect(screen.queryByText(/подтверждённые цены/)).not.toBeInTheDocument();
+    });
+
+    it('deletes the order and navigates to the project on 204', async () => {
+      getOrderMock.mockResolvedValue(draftOrder());
+      deleteOrderMock.mockResolvedValue(undefined);
+      renderPage();
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /Удалить ордер/i }));
+      await user.click(screen.getByRole('button', { name: 'Удалить' }));
+
+      expect(deleteOrderMock).toHaveBeenCalledWith('order-1');
+      expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
+      expect(screen.queryByText(/Удалить ордер\? Это необратимо\./)).not.toBeInTheDocument();
+    });
+
+    it('shows the backend error text and does not navigate on a 409 conflict', async () => {
+      getOrderMock.mockResolvedValue(draftOrder());
+      deleteOrderMock.mockRejectedValue(
+        new ApiError(409, { detail: 'Ордер уже не в статусе черновика — удаление недоступно.' }),
+      );
+      renderPage();
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /Удалить ордер/i }));
+      await user.click(screen.getByRole('button', { name: 'Удалить' }));
+
+      expect(
+        await screen.findByText('Ордер уже не в статусе черновика — удаление недоступно.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Удалить ордер\? Это необратимо\./)).not.toBeInTheDocument();
+      expect(screen.queryByText('Project detail screen')).not.toBeInTheDocument();
+    });
+
+    it('cancels without calling deleteOrder', async () => {
+      getOrderMock.mockResolvedValue(draftOrder());
+      renderPage();
+
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole('button', { name: /Удалить ордер/i }));
+      await user.click(screen.getByRole('button', { name: 'Отмена' }));
+
+      expect(deleteOrderMock).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Удалить ордер\? Это необратимо\./)).not.toBeInTheDocument();
     });
   });
 });

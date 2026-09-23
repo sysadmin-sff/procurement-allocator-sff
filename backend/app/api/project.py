@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.allocation.order_service import _delete_orders
 from app.allocation.price_comparison import get_price_comparison
 from app.api.schemas.project import (
     LatestAllocationRunOut,
@@ -22,8 +23,6 @@ from app.models import (
     AllocationRun,
     Material,
     Order,
-    OrderItem,
-    Price,
     Project,
     ProjectItem,
     ProjectTemplate,
@@ -233,25 +232,8 @@ def delete_project(db: Session, project_id: uuid.UUID) -> None:
         synchronize_session=False
     )
 
-    order_ids = [
-        o.id for o in db.query(Order.id).filter(Order.project_id == project_id).all()
-    ]
-    if order_ids:
-        item_ids = [
-            i.id for i in db.query(OrderItem.id).filter(OrderItem.order_id.in_(order_ids)).all()
-        ]
-        if item_ids:
-            # Price.source_order_item_id (ADR-0030 §6) may point at one of
-            # these OrderItem rows — cleared first so the delete below
-            # doesn't violate that FK. Only the audit back-reference is
-            # dropped; the Price row and its created_by_user_id survive.
-            db.query(Price).filter(Price.source_order_item_id.in_(item_ids)).update(
-                {"source_order_item_id": None}, synchronize_session=False
-            )
-        db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(
-            synchronize_session=False
-        )
-        db.query(Order).filter(Order.id.in_(order_ids)).delete(synchronize_session=False)
+    orders = db.query(Order).filter(Order.project_id == project_id).all()
+    _delete_orders(db, orders)
 
     run_ids = [
         r.id

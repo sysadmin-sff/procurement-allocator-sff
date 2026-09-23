@@ -18,6 +18,7 @@ from app.allocation.order_service import (
     add_raw_order_item,
     confirm_price_updates,
     create_orders_for_run,
+    delete_order_by_id,
     find_replacement_candidates,
     order_expected_totals,
     order_item_price_history,
@@ -26,6 +27,7 @@ from app.allocation.order_service import (
     replacement_info_for_item,
     set_order_item_fields,
 )
+from app.allocation.order_service import OrderNotFoundError as OrderDeletionNotFoundError
 from app.allocation.service import InvalidOverrideSupplierError
 from app.api.schemas.order import (
     ConfirmPriceUpdatesIn,
@@ -182,6 +184,22 @@ def get_order(order_id: uuid.UUID, db: Session = Depends(get_db)) -> OrderOut:
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
     return _to_order_out(db, order)
+
+
+@router.delete("/orders/{order_id}", status_code=204)
+def delete_order_endpoint(order_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
+    """Standalone single-Order deletion — see ADR-0037. Draft-only; no
+    dependencies= of its own, inherits the router-level get_current_user
+    (any role, ADR-0037 §5)."""
+    try:
+        delete_order_by_id(db, order_id)
+    except OrderDeletionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Order not found") from exc
+    except OrderNotDraftError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail="Ордер уже не в статусе черновика — удаление недоступно.",
+        ) from exc
 
 
 @router.patch("/orders/{order_id}/items/{item_id}", response_model=OrderItemOut)

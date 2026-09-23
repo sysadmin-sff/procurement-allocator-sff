@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
@@ -22,8 +22,10 @@ import type {
   ProjectItem,
   Supplier,
 } from '../api/types';
+import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { FileInput } from '../components/FileInput';
+import { OrderDeleteModal } from '../components/OrderDeleteModal';
 import { PriceDivergenceModal } from '../components/PriceDivergenceModal';
 import type { PriceUpdateBatchRow } from '../components/PriceUpdateBatchScreen';
 import { PriceUpdateBatchScreen } from '../components/PriceUpdateBatchScreen';
@@ -70,6 +72,7 @@ interface LoadedData {
 
 export function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
+  const navigate = useNavigate();
   const [data, setData] = useState<LoadedData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -81,6 +84,11 @@ export function OrderDetailPage() {
   // decides whether to also write the Price catalog (ADR-0030 п.7).
   const [divergentItem, setDivergentItem] = useState<OrderItem | null>(null);
   const [divergencePopupSubmitting, setDivergencePopupSubmitting] = useState(false);
+  // Whole-Order deletion (ADR-0037 §4) — confirmation modal, not a second
+  // step: the user already sees exactly the one Order they opened.
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<unknown>(null);
 
   useEffect(() => {
     if (!orderId) return;
@@ -162,6 +170,26 @@ export function OrderDetailPage() {
     }
   }
 
+  // 204 → close the modal and leave the order page (ProjectDetailPage —
+  // where the user most plausibly came from, ADR-0037 §4). 409 (status
+  // changed between page load and click, a race) → close the modal and show
+  // the backend's own error text as-is, no silent swallow, no auto-retry.
+  async function handleDeleteConfirm() {
+    if (!data) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await ordersApi.deleteOrder(data.order.id);
+      setDeleteModalOpen(false);
+      navigate(`/projects/${data.order.project_id}`);
+    } catch (err) {
+      setDeleteModalOpen(false);
+      setDeleteError(err);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   // After a successful replacement override, re-fetch the whole Order
   // rather than trust the PATCH's own response — the PATCH only returns the
   // AllocationLine, not the updated OrderItemOut.replaced_by_* fields for
@@ -211,6 +239,14 @@ export function OrderDetailPage() {
   const { order, materials, suppliers, projectColorChoice, projectItems } = data;
   const materialById = new Map(materials.map((m) => [m.id, m]));
   const supplier = suppliers.find((s) => s.id === order.supplier_id);
+
+  // Same irreversibility criterion as OrderDraftConflictModal's
+  // has_confirmed_prices (ADR-0012 §1) — here evaluated over this single
+  // Order's own items rather than a list of ExistingDraftOrder summaries,
+  // since this page already has the full Order loaded.
+  const orderHasConfirmedPrices = order.items.some(
+    (item) => item.confirmed_price != null || item.received_price != null,
+  );
 
   const discrepantCount = order.items.filter(
     (item) => item.price_delta_pct != null && Math.abs(item.price_delta_pct) > SIGNIFICANT_PRICE_DELTA_PCT,
@@ -270,9 +306,24 @@ export function OrderDetailPage() {
 
         <div className={styles.header}>
           <h1 className={styles.title}>{supplier?.name ?? order.supplier_id}</h1>
+          {order.status === 'draft' && (
+            <Button variant="danger" onClick={() => setDeleteModalOpen(true)}>
+              Удалить ордер
+            </Button>
+          )}
         </div>
 
         {saveError != null && <ErrorBanner error={saveError} />}
+        {deleteError != null && <ErrorBanner error={deleteError} />}
+
+        {deleteModalOpen && (
+          <OrderDeleteModal
+            hasConfirmedPrices={orderHasConfirmedPrices}
+            onConfirm={() => void handleDeleteConfirm()}
+            onCancel={() => setDeleteModalOpen(false)}
+            submitting={deleting}
+          />
+        )}
 
         {(discrepantCount > 0 || declinedCount > 0) && (
           <div className={styles.discrepancyBanner} role="alert">

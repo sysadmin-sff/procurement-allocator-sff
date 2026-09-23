@@ -37,6 +37,9 @@ export const ordersApi = {
     }),
   listForProject: (projectId: string) => http.get<Order[]>(`/projects/${projectId}/orders`),
   get: (orderId: string) => http.get<Order>(`/orders/${orderId}`),
+  /** DELETE /orders/{order_id} — see ADR-0037. Draft-only server-side (409
+   * otherwise); 204 on success. */
+  deleteOrder: (orderId: string) => http.delete<void>(`/orders/${orderId}`),
   patchItem: (orderId: string, itemId: string, patch: OrderItemPatch) =>
     http.patch<OrderItem>(`/orders/${orderId}/items/${itemId}`, patch),
   findReplacement: (orderId: string, itemId: string) =>

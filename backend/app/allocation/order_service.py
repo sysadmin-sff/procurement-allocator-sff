@@ -73,6 +73,15 @@ class OrderItemNotFoundError(Exception):
         super().__init__(f"OrderItem {item_id} not found in Order {order_id}")
 
 
+class OrderNotFoundError(Exception):
+    """Raised by delete_order_by_id() when the given order_id does not
+    exist — see ADR-0037 §3."""
+
+    def __init__(self, order_id: uuid.UUID):
+        self.order_id = order_id
+        super().__init__(f"Order {order_id} not found")
+
+
 class OrderNotDraftError(Exception):
     """Raised by add_raw_order_item() when the target Order is not a draft —
     the composition of a non-draft Order is closed, same reasoning as
@@ -515,6 +524,28 @@ def _delete_orders(db: Session, orders: list[Order]) -> None:
         synchronize_session=False
     )
     db.query(Order).filter(Order.id.in_(order_ids)).delete(synchronize_session=False)
+
+
+def delete_order(db: Session, order: Order) -> None:
+    """Delete one Order: null out any Price.source_order_item_id pointing
+    at its OrderItem rows (ADR-0030 §6 audit back-reference only — the
+    Price row and its created_by_user_id survive), delete the OrderItem
+    rows, then the Order itself. Does not commit — caller controls the
+    transaction. See ADR-0037."""
+    _delete_orders(db, [order])
+
+
+def delete_order_by_id(db: Session, order_id: uuid.UUID) -> None:
+    """DELETE /orders/{order_id} service layer — see ADR-0037 §3. Raises
+    OrderNotFoundError if the order doesn't exist, OrderNotDraftError if
+    status != "draft"; otherwise deletes it and commits."""
+    order = db.get(Order, order_id)
+    if order is None:
+        raise OrderNotFoundError(order_id)
+    if order.status != "draft":
+        raise OrderNotDraftError(order_id, order.status)
+    delete_order(db, order)
+    db.commit()
 
 
 def create_orders_for_run(

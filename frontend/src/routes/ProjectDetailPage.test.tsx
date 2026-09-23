@@ -74,9 +74,10 @@ function orderFixture(base: {
   total_amount: number;
   delivery_fee: number;
   items: Order['items'];
-}, overrides: Partial<Pick<Order, 'tax_amount' | 'expected_goods_total' | 'expected_tax_amount' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined'>> = {}): Order {
+}, overrides: Partial<Pick<Order, 'tax_amount' | 'expected_goods_total' | 'expected_tax_amount' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined' | 'created_at'>> = {}): Order {
   return {
     ...base,
+    created_at: '2026-08-17T12:00:00Z',
     tax_amount: null,
     expected_goods_total: base.total_amount,
     expected_tax_amount: 0,
@@ -301,6 +302,62 @@ describe('ProjectDetailPage', () => {
     expect(await screen.findByText('Ордера')).toBeInTheDocument();
     expect(screen.getByText(supplier.name)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Открыть »' })).toHaveAttribute('href', '/orders/order-1');
+  });
+
+  it('shows each order\'s created_at date, formatted the same way as "Последний расчёт"', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: { id: 'run-1', created_at: '2026-08-17T12:00:00Z', status: 'ok' },
+    };
+    const supplier: Supplier = {
+      id: 'sup-a',
+      name: 'ABC Supply',
+      short_name: null,
+      contacts: null,
+      currency: 'USD',
+      delivery_policy: { flat_fee: 25, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },
+      website: null,
+      region: null,
+      catalog_link: null,
+      status: null,
+      payment_terms: null,
+      portal_url: null,
+      comments: null,
+    };
+    const order: Order = orderFixture(
+      {
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 150,
+        delivery_fee: 25,
+        items: [],
+      },
+      { created_at: '2026-09-01T14:30:00Z' },
+    );
+    getMock.mockResolvedValue(project);
+    suppliersListMock.mockResolvedValue([supplier]);
+    ordersListForProjectMock.mockResolvedValue([order]);
+
+    renderPage();
+
+    await screen.findByText('Ордера');
+    // Same formatDateTime() used for "Последний расчёт" above — matches the
+    // same 'ru-RU', day/month/year + hour/minute shape for both.
+    const expected = new Date('2026-09-01T14:30:00Z').toLocaleString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    expect(screen.getByText(expected)).toBeInTheDocument();
   });
 
   it('shows a "Полностью отклонён" badge for an order with fully_declined true', async () => {

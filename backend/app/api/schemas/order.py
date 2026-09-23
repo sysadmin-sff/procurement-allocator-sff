@@ -98,6 +98,7 @@ class OrderOut(BaseModel):
     project_id: uuid.UUID
     supplier_id: uuid.UUID
     status: str
+    created_at: datetime
     total_amount: float
     delivery_fee: float
     tax_amount: float | None = None

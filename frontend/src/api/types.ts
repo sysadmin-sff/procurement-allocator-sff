@@ -449,6 +449,7 @@ export interface Order {
   project_id: string;
   supplier_id: string;
   status: string;
+  created_at: string;
   total_amount: number;
   delivery_fee: number;
   /** 7% (TAX_RATE) от total_amount, снимок на момент создания Order —

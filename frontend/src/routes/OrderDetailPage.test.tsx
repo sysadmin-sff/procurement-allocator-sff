@@ -112,9 +112,10 @@ function orderFixture(base: {
   total_amount: number;
   delivery_fee: number;
   items: OrderItem[];
-}, overrides: Partial<Pick<Order, 'tax_amount' | 'expected_goods_total' | 'expected_tax_amount' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined'>> = {}): Order {
+}, overrides: Partial<Pick<Order, 'tax_amount' | 'expected_goods_total' | 'expected_tax_amount' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined' | 'created_at'>> = {}): Order {
   return {
     ...base,
+    created_at: '2026-08-17T12:00:00Z',
     tax_amount: null,
     expected_goods_total: base.total_amount,
     expected_tax_amount: 0,

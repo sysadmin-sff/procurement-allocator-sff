@@ -114,6 +114,7 @@ def _to_order_out(db: Session, order: Order) -> OrderOut:
         project_id=order.project_id,
         supplier_id=order.supplier_id,
         status=order.status,
+        created_at=order.created_at,
         total_amount=order.total_amount,
         delivery_fee=order.delivery_fee,
         tax_amount=order.tax_amount,

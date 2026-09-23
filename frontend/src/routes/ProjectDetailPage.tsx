@@ -227,6 +227,7 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                         <th>Статус</th>
                         <th>Товары</th>
                         <th>Доставка</th>
+                        <th>Создан</th>
                         <th></th>
                       </tr>
                     </thead>
@@ -247,6 +248,7 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                             <td>{order.status}</td>
                             <td>{formatMoney(order.total_amount)}</td>
                             <td>{formatMoney(order.delivery_fee)}</td>
+                            <td>{formatDateTime(order.created_at)}</td>
                             <td onClick={(e) => e.stopPropagation()}>
                               <div className={styles.actionsCell}>
                                 <Link to={`/orders/${order.id}`}>Открыть »</Link>

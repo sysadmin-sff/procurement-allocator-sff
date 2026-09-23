@@ -402,6 +402,88 @@ describe('AllocationResultPage', () => {
     expect(screen.getByText(/было: ABC Supply, \$12\.00\/ед\./)).toBeInTheDocument();
   });
 
+  it('orders supplier <select> options the same way (by name) on every line, regardless of that line\'s own prices', async () => {
+    const okRun: AllocationRun = {
+      id: 'run-order',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      split_categories: [],
+      lines: [
+        {
+          id: 'line-1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          quantity: 10,
+          unit_price: 12,
+          line_total: 120,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+        {
+          id: 'line-2',
+          material_id: 'mat-door-1',
+          supplier_id: 'sup-b',
+          quantity: 1,
+          unit_price: 90,
+          line_total: 90,
+          overridden_at: null,
+          original_supplier_id: null,
+          original_unit_price: null,
+          ordered_at: null,
+        },
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        {
+          supplier_id: 'sup-a',
+          goods_total: 120,
+          delivery_fee: 0,
+          tax_amount: 8.4,
+          total_with_tax: 128.4,
+          free_shipping_achieved: true,
+          below_min_order: false,
+        },
+        {
+          supplier_id: 'sup-b',
+          goods_total: 90,
+          delivery_fee: 15,
+          tax_amount: 6.3,
+          total_with_tax: 111.3,
+          free_shipping_achieved: false,
+          below_min_order: false,
+        },
+      ],
+    };
+    runMock.mockResolvedValue(okRun);
+    materialsListMock.mockResolvedValue([materialScreen, doorMaterial1]);
+    pricesListMock.mockResolvedValue([
+      // mat-1: cheaper supplier is sup-a (B is the pricier option here)
+      { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      { id: 'p2', material_id: 'mat-1', supplier_id: 'sup-b', price: 99, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      // mat-door-1: cheaper supplier is sup-b (A is the pricier option here) — reversed relative price order
+      { id: 'p3', material_id: 'mat-door-1', supplier_id: 'sup-b', price: 90, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-02-01', valid_to: null, source_import_id: null },
+      { id: 'p4', material_id: 'mat-door-1', supplier_id: 'sup-a', price: 150, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+    ] satisfies Price[]);
+
+    renderPage();
+
+    const selects = await screen.findAllByRole('combobox');
+    expect(selects).toHaveLength(2);
+    for (const select of selects) {
+      const optionNames = within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent);
+      expect(optionNames).toEqual([
+        expect.stringContaining(supplierA.name),
+        expect.stringContaining(supplierB.name),
+      ]);
+    }
+  });
+
   it('shows a below-min-order notice row under the supplier header', async () => {
     const okRun: AllocationRun = {
       id: 'run-3',

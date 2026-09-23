@@ -505,7 +505,7 @@ function LineRow({
           disabled={saving}
           onChange={(e) => onOverride(e.target.value)}
         >
-          {supplierOptions.map((price) => (
+          {sortSupplierOptionsByName(supplierOptions, supplierById).map((price) => (
             <option key={price.supplier_id} value={price.supplier_id}>
               {supplierById.get(price.supplier_id)?.name ?? price.supplier_id} —{' '}
               {formatMoney(price.price)}
@@ -604,6 +604,21 @@ function buildPricesByMaterialIndex(prices: Price[]): Map<string, Price[]> {
     }
   }
   return index;
+}
+
+/** Fixed, material-independent order for the supplier <select> options —
+ * alphabetical by supplier name, not by price (which the backend's
+ * ORDER BY valid_from DESC on GET /prices happens to loosely proxy,
+ * causing the same supplier to land at a different position on every
+ * line depending on that line's own price history). A stable order is the
+ * predictable visual anchor when scanning the same supplier across many
+ * material rows. */
+function sortSupplierOptionsByName(options: Price[], supplierById: Map<string, Supplier>): Price[] {
+  return [...options].sort((a, b) => {
+    const nameA = supplierById.get(a.supplier_id)?.name ?? a.supplier_id;
+    const nameB = supplierById.get(b.supplier_id)?.name ?? b.supplier_id;
+    return nameA.localeCompare(nameB);
+  });
 }
 
 function formatMoney(value: number): string {

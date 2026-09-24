@@ -304,6 +304,16 @@
   color: var(--color-text-tertiary-alt);
 }
 
+.badgeWarning {
+  background: var(--color-warning-tint);
+  color: var(--color-warning-text);
+}
+
+.table tbody tr.duplicateRow,
+.table tbody tr.duplicateRow:hover {
+  background: var(--color-warning-tint);
+}
+
 .sectionHeader {
   display: flex;
   align-items: center;

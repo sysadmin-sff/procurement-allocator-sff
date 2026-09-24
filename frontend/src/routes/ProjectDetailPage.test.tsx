@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -358,6 +358,118 @@ describe('ProjectDetailPage', () => {
       minute: '2-digit',
     });
     expect(screen.getByText(expected)).toBeInTheDocument();
+  });
+
+  describe('sorting the orders table by "Создан"', () => {
+    const supplierEarly: Supplier = {
+      id: 'sup-early',
+      name: 'Early Supplier',
+      short_name: null,
+      contacts: null,
+      currency: 'USD',
+      delivery_policy: { flat_fee: 25, free_shipping_threshold: 500, per_order_min_amount: 0, lead_time_days: 3 },
+      website: null,
+      region: null,
+      catalog_link: null,
+      status: null,
+      payment_terms: null,
+      portal_url: null,
+      comments: null,
+    };
+    const supplierMid: Supplier = { ...supplierEarly, id: 'sup-mid', name: 'Mid Supplier' };
+    const supplierLate: Supplier = { ...supplierEarly, id: 'sup-late', name: 'Late Supplier' };
+
+    function projectFixture(): ProjectWithItems {
+      return {
+        id: 'proj-1',
+        title: 'Pool cage — Bayshore Rd',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-17T00:00:00Z',
+        items: [],
+        latest_allocation_run: { id: 'run-1', created_at: '2026-08-17T12:00:00Z', status: 'ok' },
+      };
+    }
+
+    function threeOrdersOutOfDateOrder(): Order[] {
+      // API-fetched order, in a deliberately shuffled (not date-sorted) order.
+      return [
+        orderFixture(
+          { id: 'order-mid', project_id: 'proj-1', supplier_id: 'sup-mid', status: 'draft', total_amount: 100, delivery_fee: 10, items: [] },
+          { created_at: '2026-09-02T00:00:00Z' },
+        ),
+        orderFixture(
+          { id: 'order-late', project_id: 'proj-1', supplier_id: 'sup-late', status: 'draft', total_amount: 100, delivery_fee: 10, items: [] },
+          { created_at: '2026-09-03T00:00:00Z' },
+        ),
+        orderFixture(
+          { id: 'order-early', project_id: 'proj-1', supplier_id: 'sup-early', status: 'draft', total_amount: 100, delivery_fee: 10, items: [] },
+          { created_at: '2026-09-01T00:00:00Z' },
+        ),
+      ];
+    }
+
+    function supplierNamesInRowOrder(): string[] {
+      const ordersTable = screen.getByRole('columnheader', { name: /Создан/ }).closest('table');
+      if (!ordersTable) throw new Error('orders table not found');
+      const rows = within(ordersTable).getAllByRole('row').slice(1); // drop the header row
+      return rows.map((row) => within(row).getAllByRole('cell')[0].textContent ?? '');
+    }
+
+    it('shows orders in the order the API returned them, unsorted by default', async () => {
+      getMock.mockResolvedValue(projectFixture());
+      suppliersListMock.mockResolvedValue([supplierEarly, supplierMid, supplierLate]);
+      ordersListForProjectMock.mockResolvedValue(threeOrdersOutOfDateOrder());
+
+      renderPage();
+
+      await screen.findByText('Ордера');
+      expect(supplierNamesInRowOrder()).toEqual(['Mid Supplier', 'Late Supplier', 'Early Supplier']);
+    });
+
+    it('sorts newest-first on the first click of the "Создан" header', async () => {
+      getMock.mockResolvedValue(projectFixture());
+      suppliersListMock.mockResolvedValue([supplierEarly, supplierMid, supplierLate]);
+      ordersListForProjectMock.mockResolvedValue(threeOrdersOutOfDateOrder());
+
+      renderPage();
+      await screen.findByText('Ордера');
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('columnheader', { name: /Создан/ }));
+
+      expect(supplierNamesInRowOrder()).toEqual(['Late Supplier', 'Mid Supplier', 'Early Supplier']);
+    });
+
+    it('sorts oldest-first on the second click of the "Создан" header', async () => {
+      getMock.mockResolvedValue(projectFixture());
+      suppliersListMock.mockResolvedValue([supplierEarly, supplierMid, supplierLate]);
+      ordersListForProjectMock.mockResolvedValue(threeOrdersOutOfDateOrder());
+
+      renderPage();
+      await screen.findByText('Ордера');
+      const user = userEvent.setup();
+      const header = screen.getByRole('columnheader', { name: /Создан/ });
+      await user.click(header);
+      await user.click(header);
+
+      expect(supplierNamesInRowOrder()).toEqual(['Early Supplier', 'Mid Supplier', 'Late Supplier']);
+    });
+
+    it('toggles back to newest-first on a third click', async () => {
+      getMock.mockResolvedValue(projectFixture());
+      suppliersListMock.mockResolvedValue([supplierEarly, supplierMid, supplierLate]);
+      ordersListForProjectMock.mockResolvedValue(threeOrdersOutOfDateOrder());
+
+      renderPage();
+      await screen.findByText('Ордера');
+      const user = userEvent.setup();
+      const header = screen.getByRole('columnheader', { name: /Создан/ });
+      await user.click(header);
+      await user.click(header);
+      await user.click(header);
+
+      expect(supplierNamesInRowOrder()).toEqual(['Late Supplier', 'Mid Supplier', 'Early Supplier']);
+    });
   });
 
   it('shows a "Полностью отклонён" badge for an order with fully_declined true', async () => {

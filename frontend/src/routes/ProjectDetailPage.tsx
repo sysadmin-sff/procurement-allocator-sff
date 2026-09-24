@@ -35,6 +35,14 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
   const [newMaterial, setNewMaterial] = useState<Material | null>(null);
   const [newQuantity, setNewQuantity] = useState('');
   const [addingItem, setAddingItem] = useState(false);
+  // null = unsorted, the order the API returned (default). First click on
+  // "Создан" goes straight to desc (newest first) — that's the whole point
+  // of the feature, not an asc-first toggle like MaterialsPage's columns.
+  const [orderSortDirection, setOrderSortDirection] = useState<'asc' | 'desc' | null>(null);
+
+  function toggleOrderSort() {
+    setOrderSortDirection((current) => (current === 'desc' ? 'asc' : 'desc'));
+  }
 
   useEffect(() => {
     if (!projectId) return;
@@ -159,6 +167,14 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
     return <ErrorBanner error="Не указан проект." />;
   }
 
+  const sortedOrders =
+    orderSortDirection == null
+      ? orders
+      : [...orders].sort((a, b) => {
+          const delta = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          return orderSortDirection === 'asc' ? delta : -delta;
+        });
+
   return (
     <div className={styles.page}>
       <div className={styles.inner}>
@@ -227,12 +243,21 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                         <th>Статус</th>
                         <th>Товары</th>
                         <th>Доставка</th>
-                        <th>Создан</th>
+                        <th className={styles.sortableHeader} onClick={toggleOrderSort}>
+                          Создан
+                          <span
+                            className={`${styles.sortIndicator} ${
+                              orderSortDirection != null ? styles.sortIndicatorActive : ''
+                            }`}
+                          >
+                            {orderSortDirection == null ? '⇅' : orderSortDirection === 'asc' ? '▲' : '▼'}
+                          </span>
+                        </th>
                         <th></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {orders.map((order) => {
+                      {sortedOrders.map((order) => {
                         const supplier = suppliers.find((s) => s.id === order.supplier_id);
                         return (
                           <tr key={order.id} onClick={() => navigate(`/orders/${order.id}`)}>

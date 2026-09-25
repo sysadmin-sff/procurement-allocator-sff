@@ -151,4 +151,46 @@ describe('ProjectTemplatesPage', () => {
 
     expect(await screen.findByText('Недостаточно прав')).toBeInTheDocument();
   });
+
+  // ADR-0038: the error banner's conflictMessage ("Шаблон с таким названием
+  // уже существует.") must only appear for create/rename 409s — addItem's
+  // 409 (or any future one) shows the backend's own error.detail instead.
+  it('shows error.detail (not the template-name conflict text) on a 409 from addItem', async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValue([emptyTemplate]);
+    addItemMock.mockRejectedValue(new ApiError(409, { detail: 'Material already in this template' }));
+
+    renderAs('admin');
+
+    await user.click(await screen.findByText('Стандартная дверь'));
+    await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
+
+    const comboInput = screen.getByPlaceholderText('Название или артикул…');
+    await user.type(comboInput, 'ручка');
+    const option = await screen.findByText(material.canonical_name);
+    await user.click(option);
+    await user.click(screen.getByRole('button', { name: /^добавить$/i }));
+
+    expect(await screen.findByText('Material already in this template')).toBeInTheDocument();
+    expect(screen.queryByText('Шаблон с таким названием уже существует.')).not.toBeInTheDocument();
+  });
+
+  it('still shows the template-name conflict text on a 409 from create', async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValue([]);
+    createMock.mockRejectedValue(
+      new ApiError(409, { detail: 'Project template with this name already exists' }),
+    );
+
+    renderAs('admin');
+
+    await screen.findByText('Шаблонов пока нет');
+    await user.click(screen.getByRole('button', { name: '+ Создать шаблон' }));
+    await user.type(screen.getByLabelText(/название шаблона/i), 'Стандартная дверь');
+    await user.click(screen.getByRole('button', { name: /^создать шаблон$/i }));
+
+    expect(
+      await screen.findByText('Шаблон с таким названием уже существует.'),
+    ).toBeInTheDocument();
+  });
 });

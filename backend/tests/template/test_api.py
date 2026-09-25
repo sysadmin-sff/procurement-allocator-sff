@@ -210,9 +210,12 @@ def test_add_item_returns_404_for_unknown_template(
     assert response.status_code == 404
 
 
-def test_add_same_material_twice_returns_409_not_duplicate(
+def test_add_same_material_twice_returns_201_and_creates_second_row(
     db_session, make_template, make_material, make_user, make_session
 ):
+    """ADR-0038: duplicate materials in a template are allowed — no longer
+    a 409, and both rows persist as independent ProjectTemplateItem
+    records for the UI to flag as duplicates."""
     template = make_template()
     material = make_material()
     client = _admin_client(make_user, make_session)
@@ -229,7 +232,7 @@ def test_add_same_material_twice_returns_409_not_duplicate(
         json={"material_id": str(material.id)},
         headers={"X-CSRF-Token": CSRF},
     )
-    assert second.status_code == 409
+    assert second.status_code == 201
 
     session, *_ = db_session
     from app.models import ProjectTemplateItem
@@ -239,7 +242,7 @@ def test_add_same_material_twice_returns_409_not_duplicate(
         .filter_by(template_id=template.id, material_id=material.id)
         .count()
     )
-    assert count == 1
+    assert count == 2
 
 
 def test_rename_template_changes_name(db_session, make_template, make_user, make_session):

@@ -13,6 +13,14 @@ import styles from '../components/CrudScreen.module.css';
 
 type Status = 'loading' | 'ready' | 'error' | 'forbidden';
 
+/** Which action produced actionError — see ADR-0038: conflictMessage
+ * (the "template name already exists" text) is only meaningful for
+ * create/rename 409s, not addItem/removeItem/delete. */
+type ActionErrorState = {
+  action: 'create' | 'rename' | 'addItem' | 'removeItem' | 'delete';
+  error: unknown;
+};
+
 function pluralizeItems(count: number): string {
   const mod10 = count % 10;
   const mod100 = count % 100;
@@ -28,7 +36,7 @@ export function ProjectTemplatesPage() {
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
-  const [actionError, setActionError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<ActionErrorState | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -70,7 +78,7 @@ export function ProjectTemplatesPage() {
       closeCreate();
       await load();
     } catch (err) {
-      setActionError(err);
+      setActionError({ action: 'create', error: err });
       throw err;
     }
   }
@@ -82,7 +90,7 @@ export function ProjectTemplatesPage() {
       setRenamingId(null);
       await load();
     } catch (err) {
-      setActionError(err);
+      setActionError({ action: 'rename', error: err });
       throw err;
     }
   }
@@ -94,7 +102,7 @@ export function ProjectTemplatesPage() {
       if (expandedId === template.id) setExpandedId(null);
       await load();
     } catch (err) {
-      setActionError(err);
+      setActionError({ action: 'delete', error: err });
     }
   }
 
@@ -104,7 +112,7 @@ export function ProjectTemplatesPage() {
       const updated = await templatesApi.addItem(templateId, materialId);
       setTemplates((prev) => prev.map((t) => (t.id === templateId ? updated : t)));
     } catch (err) {
-      setActionError(err);
+      setActionError({ action: 'addItem', error: err });
       throw err;
     }
   }
@@ -115,7 +123,7 @@ export function ProjectTemplatesPage() {
       const updated = await templatesApi.removeItem(templateId, itemId);
       setTemplates((prev) => prev.map((t) => (t.id === templateId ? updated : t)));
     } catch (err) {
-      setActionError(err);
+      setActionError({ action: 'removeItem', error: err });
     }
   }
 
@@ -139,8 +147,12 @@ export function ProjectTemplatesPage() {
         <div className={styles.stack}>
           {actionError != null && (
             <ErrorBanner
-              error={actionError}
-              conflictMessage="Шаблон с таким названием уже существует."
+              error={actionError.error}
+              conflictMessage={
+                actionError.action === 'create' || actionError.action === 'rename'
+                  ? 'Шаблон с таким названием уже существует.'
+                  : undefined
+              }
             />
           )}
 

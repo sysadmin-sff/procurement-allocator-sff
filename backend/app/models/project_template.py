@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,9 +23,6 @@ class ProjectTemplate(UUIDPKMixin, TimestampMixin, Base):
 
 class ProjectTemplateItem(UUIDPKMixin, Base):
     __tablename__ = "project_template_items"
-    __table_args__ = (
-        UniqueConstraint("template_id", "material_id", name="uq_project_template_item"),
-    )
 
     template_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("project_templates.id", ondelete="CASCADE"), nullable=False

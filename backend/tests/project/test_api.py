@@ -473,3 +473,31 @@ def test_create_project_without_template_id_behaves_as_before(
 
     get_response = client.get(f"/projects/{body['id']}")
     assert get_response.json()["items"] == []
+
+
+def test_create_project_with_duplicate_material_in_template_creates_two_items(
+    db_session, make_material, make_template, make_user, make_session
+):
+    """ADR-0038: a template may hold the same material twice (e.g. two
+    identical locks for a front and back door). Applying it to a project
+    creates one independent ProjectItem(quantity=1) per template row —
+    no merging into a higher quantity."""
+    session, project_ids, _material_ids, _supplier_ids, _user_ids, _template_ids = db_session
+    material = make_material(canonical_name="Door Lock")
+    template = make_template(name="Two Locks", materials=[material, material])
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        "/projects",
+        json={"title": "Duplicate Material Project", "template_id": str(template.id)},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    project_ids.append(uuid.UUID(body["id"]))
+
+    items = body["items"]
+    assert len(items) == 2
+    assert all(item["material_id"] == str(material.id) for item in items)
+    assert all(item["quantity"] == 1 for item in items)

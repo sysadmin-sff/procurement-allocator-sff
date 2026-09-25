@@ -112,13 +112,7 @@ def add_template_item(
 
     item = ProjectTemplateItem(template_id=template_id, material_id=payload.material_id)
     db.add(item)
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=409, detail="Material already in this template"
-        ) from exc
+    db.commit()
 
     template = _get_template_or_404(template_id, db)
     return _to_out(template)

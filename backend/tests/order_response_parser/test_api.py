@@ -103,6 +103,45 @@ def test_full_match_all_items_found_missing_empty(
     assert matched_ids == {str(item_a.id), str(item_b.id)}
 
 
+def test_quantity_mismatch_in_matched_line_does_not_change_categorization(
+    db_session, make_supplier, make_material, make_order, make_user, make_session
+):
+    """ADR-0039 §4: a matched line whose quantity differs from the planned
+    OrderItem.quantity stays matched — quantity_delta is a property layered
+    on top of an already-matched line (ADR-0039 §1), not a fourth category.
+    This is the real incident ADR-0039 documents: supplier sent quantity=4
+    against a planned quantity=2, and it must still classify as matched, not
+    silently move to missing/extra."""
+    session, *_ = db_session
+    supplier = make_supplier()
+    material = make_material(canonical_name="84 in. 18x14 Fiberglass Screen")
+    order = make_order(supplier, [(material, 2, 5.00)])
+    item = order.items[0]
+    client = _employee_client(make_user, make_session)
+
+    lines = [
+        ExtractedLine(
+            raw_description='84" PREMIER SCREEN 18/14"',
+            matched_order_item_id=item.id,
+            price=5.00,
+            quantity=4,
+            confidence="high",
+            reasoning="matches by dimensions",
+        ),
+    ]
+
+    with _mock_extraction(lines):
+        response = _upload(client, order.id)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["matched"]) == 1
+    assert body["matched"][0]["order_item_id"] == str(item.id)
+    assert body["matched"][0]["quantity"] == 4
+    assert body["missing"] == []
+    assert body["extra"] == []
+
+
 def test_partial_match_splits_into_all_three_categories(
     db_session, make_supplier, make_material, make_order, make_user, make_session
 ):

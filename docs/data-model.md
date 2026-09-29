@@ -162,6 +162,7 @@ erDiagram
         int quantity
         decimal quoted_price
         decimal received_price "nullable — первый ответ поставщика, до торга"
+        int received_quantity "nullable — количество из первого ответа, см. ADR-0039"
         decimal confirmed_price "nullable — финальная договорённость"
         datetime confirmed_at "nullable"
         datetime declined_at "nullable — поставщик не может выполнить позицию"

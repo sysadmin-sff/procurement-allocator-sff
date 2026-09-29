@@ -443,4 +443,158 @@ describe('ProjectBuilderPage', () => {
       await waitFor(() => expect(removeItemMock).toHaveBeenCalledWith('proj-1', 'item-1'));
     });
   });
+
+  describe('category grouping and duplicate highlighting', () => {
+    const doorHandle = {
+      id: 'mat-1',
+      internal_sku: 'DOOR-STD',
+      canonical_name: 'Дверная ручка',
+      category_name: 'Двери',
+      unit: 'шт',
+      attributes: {},
+    };
+    const windowSeal = {
+      id: 'mat-2',
+      internal_sku: 'WIN-SEAL',
+      canonical_name: 'Уплотнитель окна',
+      category_name: 'Окна',
+      unit: 'м',
+      attributes: {},
+    };
+    const anotherWindowItem = {
+      id: 'mat-3',
+      internal_sku: 'WIN-FRAME',
+      canonical_name: 'Рама окна',
+      category_name: 'Окна',
+      unit: 'шт',
+      attributes: {},
+    };
+
+    async function pickMaterial(user: ReturnType<typeof userEvent.setup>, rowIndex: number, name: string) {
+      const materialInputs = screen.getAllByPlaceholderText('Название или артикул…');
+      await user.type(materialInputs[rowIndex], name);
+      const option = await screen.findByText(name);
+      await user.click(option);
+    }
+
+    async function setQuantity(user: ReturnType<typeof userEvent.setup>, rowIndex: number, qty: string) {
+      const qtyInputs = screen.getAllByPlaceholderText('0');
+      await user.type(qtyInputs[rowIndex], qty);
+    }
+
+    it('groups filled rows by category in first-appearance order, with items missing a category last', async () => {
+      const user = userEvent.setup();
+      const noCategoryItem = { ...doorHandle, id: 'mat-4', canonical_name: 'Без категории материал', category_name: '' };
+      materialsListMock.mockResolvedValue([windowSeal, noCategoryItem, doorHandle, anotherWindowItem]);
+      addItemMock.mockImplementation((_projectId, payload) =>
+        Promise.resolve({ id: `item-${payload.material_id}`, project_id: 'proj-1', ...payload }),
+      );
+      createMock.mockResolvedValue({
+        id: 'proj-1',
+        title: 'Проект без названия',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-18T00:00:00Z',
+        items: [],
+        latest_allocation_run: null,
+      });
+
+      renderPage();
+      await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
+
+      // Fill three rows in this order: Окна, Без категории, Двери. Group
+      // headers must then appear in first-appearance order regardless. Each
+      // row's save is awaited before starting the next one — first-appearance
+      // order is defined by save-completion order, which would otherwise be
+      // racy if two autosave debounces resolved out of input order.
+      await pickMaterial(user, 0, windowSeal.canonical_name);
+      await setQuantity(user, 0, '1');
+      await waitFor(() => expect(addItemMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+
+      await pickMaterial(user, 1, noCategoryItem.canonical_name);
+      await setQuantity(user, 1, '1');
+      await waitFor(() => expect(addItemMock).toHaveBeenCalledTimes(2), { timeout: 2000 });
+
+      await user.click(screen.getByRole('button', { name: /\+ Добавить материал/ }));
+      await pickMaterial(user, 2, doorHandle.canonical_name);
+      await setQuantity(user, 2, '1');
+      await waitFor(() => expect(addItemMock).toHaveBeenCalledTimes(3), { timeout: 2000 });
+
+      // Group headers are identified by their categoryRow class (plain text
+      // match is ambiguous — the same category name also appears in each
+      // row's own .rowCategory cell). Visual order comes from the CSS
+      // `order` style (see ProjectBuilderPage's orderById) rather than DOM
+      // position, since rows/headers render from one DOM-order-stable list.
+      const headerOrder = new Map<string, number>();
+      document.querySelectorAll('[class*="categoryRow"]').forEach((el) => {
+        headerOrder.set(el.textContent ?? '', Number((el as HTMLElement).style.order));
+      });
+
+      // "Без категории" is always last, regardless of first-appearance order
+      // (same rule as TemplateItemsPanel/groupByCategory) — filled in second
+      // here but expected after "Двери", filled in third.
+      expect(headerOrder.get('Окна')).toBeLessThan(headerOrder.get('Двери')!);
+      expect(headerOrder.get('Двери')).toBeLessThan(headerOrder.get('Без категории')!);
+    });
+
+    it('does not block adding a material already used in another row, and highlights both as duplicates', async () => {
+      const user = userEvent.setup();
+      materialsListMock.mockResolvedValue([doorHandle]);
+      addItemMock.mockImplementation((_projectId, payload) =>
+        Promise.resolve({ id: `item-${payload.material_id}-${Math.random()}`, project_id: 'proj-1', ...payload }),
+      );
+      createMock.mockResolvedValue({
+        id: 'proj-1',
+        title: 'Проект без названия',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-18T00:00:00Z',
+        items: [],
+        latest_allocation_run: null,
+      });
+
+      renderPage();
+      await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
+
+      await pickMaterial(user, 0, doorHandle.canonical_name);
+      await setQuantity(user, 0, '2');
+      await waitFor(() => expect(addItemMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+
+      expect(screen.queryByText('дубль')).not.toBeInTheDocument();
+
+      // Second row: same material again — not blocked, both rows highlighted.
+      await pickMaterial(user, 1, doorHandle.canonical_name);
+      await setQuantity(user, 1, '3');
+      await waitFor(() => expect(addItemMock).toHaveBeenCalledTimes(2), { timeout: 2000 });
+
+      const duplicateBadges = await screen.findAllByText('дубль');
+      expect(duplicateBadges).toHaveLength(2);
+    });
+
+    it('a row without a material yet is not counted as a duplicate and does not block grouping', async () => {
+      const user = userEvent.setup();
+      materialsListMock.mockResolvedValue([doorHandle]);
+      addItemMock.mockResolvedValue({ id: 'item-1', project_id: 'proj-1', material_id: 'mat-1', quantity: 1 });
+      createMock.mockResolvedValue({
+        id: 'proj-1',
+        title: 'Проект без названия',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-18T00:00:00Z',
+        items: [],
+        latest_allocation_run: null,
+      });
+
+      renderPage();
+      await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
+
+      await pickMaterial(user, 0, doorHandle.canonical_name);
+      await setQuantity(user, 0, '1');
+      await waitFor(() => expect(addItemMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+
+      // Row 1 (index 1) is still an empty draft — never picked a material.
+      expect(screen.queryByText('дубль')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Двери').length).toBeGreaterThan(0);
+    });
+  });
 });

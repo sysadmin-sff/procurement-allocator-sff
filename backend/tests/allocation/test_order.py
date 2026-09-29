@@ -973,3 +973,120 @@ def test_order_item_out_includes_target_price_via_api(
     response = client.get(f"/orders/{order_id}")
     item = response.json()["items"][0]
     assert item["target_price"] == 8.50
+
+
+def test_set_order_item_fields_sets_received_quantity_independent_of_other_fields(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """received_quantity can be set and read back without touching
+    received_price/confirmed_price/target_price — ADR-0039 §1/§2, same
+    independence pattern as received_price (ADR-0013 п.1)."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 2)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    item, _ = set_order_item_fields(session, orders[0].id, item_id, received_quantity=4)
+
+    assert item.received_quantity == 4
+    assert item.received_price is None
+    assert item.confirmed_price is None
+    assert item.target_price is None
+
+
+def test_set_order_item_fields_omitted_received_quantity_leaves_existing_value_untouched(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 2)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+
+    set_order_item_fields(session, orders[0].id, item_id, received_quantity=4)
+    # Second call only touches received_price; received_quantity must survive.
+    item, _ = set_order_item_fields(session, orders[0].id, item_id, received_price=5.10)
+
+    assert item.received_quantity == 4
+    assert float(item.received_price) == 5.10
+
+
+def test_patch_order_item_sets_received_quantity_via_api(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 2)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+
+    response = client.patch(
+        f"/orders/{orders[0].id}/items/{item_id}",
+        json={"received_quantity": 4},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["received_quantity"] == 4
+
+
+def test_quantity_delta_null_when_no_received_quantity(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0039 §1: quantity_delta is None (not 0) when received_quantity is
+    unset — same "no basis for comparison yet" principle as price_delta."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 2)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order_id = orders[0].id
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/orders/{order_id}")
+    item = response.json()["items"][0]
+
+    assert item["received_quantity"] is None
+    assert item["quantity_delta"] is None
+
+
+def test_quantity_delta_computed_from_received_quantity_via_api(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """ADR-0039 §1: quantity_delta = received_quantity - quantity — the real
+    incident this ADR fixes (supplier sent 4, order planned 2)."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 2)])
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order_id = orders[0].id
+    item_id = orders[0].items[0].id
+    client = _employee_client(make_user, make_session)
+
+    client.patch(
+        f"/orders/{order_id}/items/{item_id}",
+        json={"received_quantity": 4},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    response = client.get(f"/orders/{order_id}")
+    item = response.json()["items"][0]
+    assert item["received_quantity"] == 4
+    assert item["quantity_delta"] == 2

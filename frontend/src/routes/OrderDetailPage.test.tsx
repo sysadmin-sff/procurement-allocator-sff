@@ -138,6 +138,8 @@ function itemFixture(overrides: Partial<OrderItem> = {}): OrderItem {
     quantity: 10,
     quoted_price: 25,
     received_price: null,
+    received_quantity: null,
+    quantity_delta: null,
     target_price: null,
     confirmed_price: null,
     confirmed_at: null,
@@ -1305,7 +1307,14 @@ describe('OrderDetailPage', () => {
       const applyButton = await within(firstSection).findByText('Применить все совпадения');
       await user.click(applyButton);
 
-      expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { received_price: 23.75 });
+      // received_quantity=10 comes along too — the first-round block always
+      // persists it alongside received_price when the line has a quantity
+      // (ADR-0039 §2); see the dedicated 'quantity mismatch (ADR-0039)'
+      // describe block below for the mismatch-specific cases.
+      expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', {
+        received_price: 23.75,
+        received_quantity: 10,
+      });
     });
 
     it('shows a close button once a result is parsed, and clicking it hides the whole recognition result', async () => {
@@ -1433,6 +1442,225 @@ describe('OrderDetailPage', () => {
 
       expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { confirmed_price: 22.0 });
       expect(patchItemMock).not.toHaveBeenCalledWith('order-1', 'item-1', { received_price: 22.0 });
+    });
+
+    describe('quantity mismatch (ADR-0039)', () => {
+      it('applying matches from the first block PATCHes received_quantity alongside received_price', async () => {
+        const order: Order = orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 250,
+          delivery_fee: 25,
+          items: [itemFixture({ quantity: 2 })],
+        });
+        getOrderMock.mockResolvedValue(order);
+        parseResponseMock.mockResolvedValue({
+          matched: [
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '' },
+          ],
+          missing: [],
+          extra: [],
+        });
+        patchItemMock.mockResolvedValue(itemFixture({ received_price: 23.75, received_quantity: 4 }));
+
+        renderPage();
+
+        const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+        const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+        const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+        const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
+        const user = userEvent.setup();
+        await user.upload(fileInput, file);
+        await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+        const applyButton = await within(firstSection).findByText('Применить все совпадения');
+        await user.click(applyButton);
+
+        expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', {
+          received_price: 23.75,
+          received_quantity: 4,
+        });
+      });
+
+      it('applying matches from the second block does not PATCH received_quantity', async () => {
+        const order: Order = orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 250,
+          delivery_fee: 25,
+          items: [itemFixture({ quantity: 2 })],
+        });
+        getOrderMock.mockResolvedValue(order);
+        parseResponseMock.mockResolvedValue({
+          matched: [
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 4, confidence: 'high', reasoning: '' },
+          ],
+          missing: [],
+          extra: [],
+        });
+        patchItemMock.mockResolvedValue(itemFixture({ confirmed_price: 22.0 }));
+
+        renderPage();
+
+        const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
+        const secondSection = secondBlockTitle.parentElement?.parentElement as HTMLElement;
+        const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
+        const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
+        const user = userEvent.setup();
+        await user.upload(fileInput, file);
+        await user.click(within(secondSection).getByText('Распознать цены из документа'));
+
+        const applyButton = await within(secondSection).findByText('Применить все совпадения');
+        await user.click(applyButton);
+
+        expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { confirmed_price: 22.0 });
+        expect(patchItemMock).not.toHaveBeenCalledWith(
+          'order-1',
+          'item-1',
+          expect.objectContaining({ received_quantity: expect.anything() }),
+        );
+      });
+
+      it('highlights a matched row when line.quantity differs from the order item plan', async () => {
+        const order: Order = orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 250,
+          delivery_fee: 25,
+          items: [itemFixture({ quantity: 2 })],
+        });
+        getOrderMock.mockResolvedValue(order);
+        parseResponseMock.mockResolvedValue({
+          matched: [
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '' },
+          ],
+          missing: [],
+          extra: [],
+        });
+
+        renderPage();
+
+        const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+        const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+        const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+        const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
+        const user = userEvent.setup();
+        await user.upload(fileInput, file);
+        await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+        await within(firstSection).findByText('Совпало (1)');
+        const row = screen.getByText('4').closest('tr') as HTMLTableRowElement;
+        expect(row.className).toMatch(/quantityMismatchRow/);
+      });
+
+      it('does not highlight a matched row when line.quantity equals the order item plan', async () => {
+        const order: Order = orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 250,
+          delivery_fee: 25,
+          items: [itemFixture({ quantity: 4 })],
+        });
+        getOrderMock.mockResolvedValue(order);
+        parseResponseMock.mockResolvedValue({
+          matched: [
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '' },
+          ],
+          missing: [],
+          extra: [],
+        });
+
+        renderPage();
+
+        const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+        const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+        const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+        const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
+        const user = userEvent.setup();
+        await user.upload(fileInput, file);
+        await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+        await within(firstSection).findByText('Совпало (1)');
+        const row = screen.getByText('4').closest('tr') as HTMLTableRowElement;
+        expect(row.className).not.toMatch(/quantityMismatchRow/);
+      });
+
+      it('does not highlight a matched row when line.quantity is null (model could not read a quantity)', async () => {
+        const order: Order = orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 250,
+          delivery_fee: 25,
+          items: [itemFixture({ quantity: 2 })],
+        });
+        getOrderMock.mockResolvedValue(order);
+        parseResponseMock.mockResolvedValue({
+          matched: [
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: null, confidence: 'high', reasoning: '' },
+          ],
+          missing: [],
+          extra: [],
+        });
+
+        renderPage();
+
+        const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+        const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+        const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+        const file = new File(['x'], 'response.pdf', { type: 'application/pdf' });
+        const user = userEvent.setup();
+        await user.upload(fileInput, file);
+        await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+        const matchedRow = (await within(firstSection).findByText(material.canonical_name)).closest(
+          'tr',
+        ) as HTMLTableRowElement;
+        expect(matchedRow.className).not.toMatch(/quantityMismatchRow/);
+      });
+
+      it('highlights a matched row in the second (confirmed_price) block too, even though it is not persisted', async () => {
+        const order: Order = orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 250,
+          delivery_fee: 25,
+          items: [itemFixture({ quantity: 2 })],
+        });
+        getOrderMock.mockResolvedValue(order);
+        parseResponseMock.mockResolvedValue({
+          matched: [
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 4, confidence: 'high', reasoning: '' },
+          ],
+          missing: [],
+          extra: [],
+        });
+
+        renderPage();
+
+        const secondBlockTitle = await screen.findByText('Распознавание финального ответа (после торга)');
+        const secondSection = secondBlockTitle.parentElement?.parentElement as HTMLElement;
+        const fileInput = secondSection.querySelector('input[type="file"]') as HTMLInputElement;
+        const file = new File(['x'], 'final.pdf', { type: 'application/pdf' });
+        const user = userEvent.setup();
+        await user.upload(fileInput, file);
+        await user.click(within(secondSection).getByText('Распознать цены из документа'));
+
+        await within(secondSection).findByText('Совпало (1)');
+        const row = within(secondSection).getByText('4').closest('tr') as HTMLTableRowElement;
+        expect(row.className).toMatch(/quantityMismatchRow/);
+      });
     });
 
     it('does not show the batch screen when the applied batch has no price divergences', async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { allocationApi } from '../api/allocation';
 import { materialsApi } from '../api/materials';
@@ -9,8 +9,10 @@ import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { usePerKeyDebounce } from '../hooks/usePerKeyDebounce';
+import { countByMaterialId, groupByCategory, type CategorizedItem } from '../lib/groupByCategory';
 import { MaterialCombobox } from './project-builder/MaterialCombobox';
 import styles from './project-builder/ProjectBuilder.module.css';
+import crudStyles from '../components/CrudScreen.module.css';
 
 const AUTOSAVE_DEBOUNCE_MS = 500;
 
@@ -57,6 +59,22 @@ function rowFromItem(item: ProjectWithItems['items'][number], materials: Materia
 
 function isFilled(row: Row): boolean {
   return row.material !== null && Number(row.quantity) > 0;
+}
+
+/** A row already persisted as a ProjectItem — the minimum needed to
+ * group/dedupe by. Rows not yet saved to the backend (still being typed, or
+ * mid-autosave-debounce) are excluded before this adapter runs: grouping
+ * them the instant a material is picked, before quantity is even entered,
+ * would yank the row out from under the user's cursor into its category
+ * group and break Tab/Enter navigation to the next field. See row
+ * placement note below. */
+interface CategorizedRow extends CategorizedItem {
+  row: Row;
+}
+
+function toCategorizedRow(row: Row): CategorizedRow | null {
+  if (!row.material || !row.remoteId) return null;
+  return { row, material_id: row.material.id, category_name: row.material.category_name };
 }
 
 function pluralizePositions(count: number): string {
@@ -106,6 +124,64 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
   const filledRows = rows.filter(isFilled);
   const incompleteCount = rows.length - filledRows.length;
   const canCalculate = filledRows.length > 0 && !submitting && pendingSaves === 0;
+
+  // Rows not yet persisted to the backend (no material chosen, or saved
+  // material/quantity still in flight) can't be grouped by category or
+  // checked for duplicates yet — they render separately, below the grouped
+  // rows, in their original position instead.
+  const { categorized, drafts } = useMemo(() => {
+    const categorized: CategorizedRow[] = [];
+    const drafts: Row[] = [];
+    for (const row of rows) {
+      const adapted = toCategorizedRow(row);
+      if (adapted) categorized.push(adapted);
+      else drafts.push(row);
+    }
+    return { categorized, drafts };
+  }, [rows]);
+
+  const duplicateCounts = useMemo(() => countByMaterialId(categorized), [categorized]);
+  const groupedRows = useMemo(() => groupByCategory(categorized), [categorized]);
+
+  // Row's "#" column and Enter/focus behavior key off its position in the
+  // input order (rows), not its position in the category-grouped display —
+  // grouping is purely visual, entry order stays the user's mental model.
+  const rowIndexById = useMemo(() => {
+    const map = new Map<string, number>();
+    rows.forEach((row, index) => map.set(row.id, index));
+    return map;
+  }, [rows]);
+
+  /**
+   * Visual position within the category-grouped display, expressed as a CSS
+   * `order` rather than as actual DOM position. All rows (grouped + draft)
+   * render from a single rows.map() below in stable DOM order — React then
+   * reuses each row's actual <input> elements across re-renders instead of
+   * unmounting/remounting them, which matters because a row can flip from
+   * "draft" to "grouped" mid-keystroke (as soon as autosave gives it a
+   * remoteId) and unmounting the input the user is actively typing into
+   * would drop focus. A group header is a synthetic entry (id
+   * "__header__<category>") interleaved at the position right before its
+   * group's first row.
+   */
+  const { orderById, groupHeaders } = useMemo(() => {
+    const orderById = new Map<string, number>();
+    const groupHeaders: { id: string; category: string | null; order: number }[] = [];
+    let order = 0;
+    for (const group of groupedRows) {
+      groupHeaders.push({ id: `__header__${group.category ?? '__none__'}`, category: group.category, order });
+      order += 1;
+      for (const { row } of group.items) {
+        orderById.set(row.id, order);
+        order += 1;
+      }
+    }
+    for (const row of drafts) {
+      orderById.set(row.id, order);
+      order += 1;
+    }
+    return { orderById, groupHeaders };
+  }, [groupedRows, drafts]);
 
   const inFlightSavesRef = useRef(new Set<Promise<unknown>>());
 
@@ -286,6 +362,73 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
     }
   }
 
+  function renderRow(row: Row, isDuplicate: boolean) {
+    const index = rowIndexById.get(row.id) ?? 0;
+    const isLastRow = index === rows.length - 1;
+    const invalid = row.material === null && row.query.trim().length > 0;
+    const order = orderById.get(row.id) ?? 0;
+    return (
+      <div
+        key={row.id}
+        style={{ order }}
+        className={`${styles.grid} ${styles.row} ${isDuplicate ? styles.duplicateRow : ''}`}
+      >
+        <div className={styles.rowNum}>{index + 1}</div>
+
+        <div className={styles.rowMaterialCell}>
+          <div className={styles.rowMaterialInner}>
+            <MaterialCombobox
+              query={row.query}
+              selected={row.material}
+              invalid={invalid}
+              onQueryChange={(query) => handleRowFieldChange(row.id, { query, material: null })}
+              onSelect={(material) =>
+                handleRowFieldChange(row.id, { material, query: material.canonical_name })
+              }
+              onQuantityFocus={() => focusQuantity(row.id)}
+            />
+            {isDuplicate && (
+              <span className={`${crudStyles.badge} ${crudStyles.badgeWarning} ${styles.duplicateBadge}`}>
+                дубль
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.rowQtyCell}>
+          <input
+            ref={(el) => {
+              qtyInputRefs.current[row.id] = el;
+            }}
+            className={styles.rowQtyInput}
+            type="number"
+            min="0"
+            step="1"
+            value={row.quantity}
+            placeholder="0"
+            onChange={(e) => handleRowFieldChange(row.id, { quantity: e.target.value })}
+            onKeyDown={(e) => handleQuantityKeyDown(e, isLastRow)}
+          />
+        </div>
+
+        <div className={styles.rowUnit}>{row.material?.unit ?? '—'}</div>
+
+        <div className={styles.rowCategory}>{row.material?.category_name ?? ''}</div>
+
+        <div className={styles.rowRemove}>
+          <button
+            type="button"
+            className={styles.removeButton}
+            title="Удалить строку"
+            onClick={() => void removeRow(row.id)}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   async function handleCalculate() {
     if (!canCalculate) return;
     setError(null);
@@ -390,61 +533,17 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
                   <div></div>
                 </div>
 
-                {rows.map((row, index) => {
-                  const isLastRow = index === rows.length - 1;
-                  const invalid = row.material === null && row.query.trim().length > 0;
-                  return (
-                    <div key={row.id} className={`${styles.grid} ${styles.row}`}>
-                      <div className={styles.rowNum}>{index + 1}</div>
-
-                      <div className={styles.rowMaterialCell}>
-                        <MaterialCombobox
-                          query={row.query}
-                          selected={row.material}
-                          invalid={invalid}
-                          onQueryChange={(query) =>
-                            handleRowFieldChange(row.id, { query, material: null })
-                          }
-                          onSelect={(material) =>
-                            handleRowFieldChange(row.id, { material, query: material.canonical_name })
-                          }
-                          onQuantityFocus={() => focusQuantity(row.id)}
-                        />
-                      </div>
-
-                      <div className={styles.rowQtyCell}>
-                        <input
-                          ref={(el) => {
-                            qtyInputRefs.current[row.id] = el;
-                          }}
-                          className={styles.rowQtyInput}
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={row.quantity}
-                          placeholder="0"
-                          onChange={(e) => handleRowFieldChange(row.id, { quantity: e.target.value })}
-                          onKeyDown={(e) => handleQuantityKeyDown(e, isLastRow)}
-                        />
-                      </div>
-
-                      <div className={styles.rowUnit}>{row.material?.unit ?? '—'}</div>
-
-                      <div className={styles.rowCategory}>{row.material?.category_name ?? ''}</div>
-
-                      <div className={styles.rowRemove}>
-                        <button
-                          type="button"
-                          className={styles.removeButton}
-                          title="Удалить строку"
-                          onClick={() => void removeRow(row.id)}
-                        >
-                          ×
-                        </button>
-                      </div>
+                <div className={styles.rowsList}>
+                  {groupHeaders.map((header) => (
+                    <div key={header.id} style={{ order: header.order }} className={`${styles.grid} ${styles.categoryRow}`}>
+                      {header.category ?? 'Без категории'}
                     </div>
-                  );
-                })}
+                  ))}
+                  {rows.map((row) => {
+                    const isDuplicate = row.material != null && (duplicateCounts.get(row.material.id) ?? 0) > 1;
+                    return renderRow(row, isDuplicate);
+                  })}
+                </div>
               </>
             )}
 

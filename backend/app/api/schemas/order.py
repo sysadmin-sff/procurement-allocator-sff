@@ -45,6 +45,14 @@ class OrderItemOut(BaseModel):
     quantity: int
     quoted_price: float
     received_price: float | None = None
+    received_quantity: int | None = None
+    """Количество, которое поставщик прислал в ответе для этой уже сматченной
+    строки. NULL = ответа нет или ответ не содержал количества, не 0.
+    См. ADR-0039."""
+    quantity_delta: int | None = None
+    """received_quantity - quantity. NULL при received_quantity IS NULL, не
+    0 — та же семантика "нет основания для сравнения", что price_delta.
+    См. ADR-0039."""
     target_price: float | None = None
     """Наша целевая цена для торга — не факт от поставщика. См. ADR-0027 п.1."""
     confirmed_price: float | None = None
@@ -86,6 +94,7 @@ class OrderItemConfirmIn(BaseModel):
 
     confirmed_price: float | None = Field(default=None)
     received_price: float | None = Field(default=None)
+    received_quantity: int | None = Field(default=None)
     target_price: float | None = Field(default=None)
     declined: bool | None = Field(default=None)
     decline_reason: str | None = Field(default=None)

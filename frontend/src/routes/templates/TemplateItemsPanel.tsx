@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import type { Material, ProjectTemplate, ProjectTemplateItem } from '../../api/types';
 import { Button } from '../../components/Button';
 import { MaterialCombobox } from '../project-builder/MaterialCombobox';
+import { countByMaterialId, groupByCategory } from '../../lib/groupByCategory';
 import styles from '../../components/CrudScreen.module.css';
 
 interface TemplateItemsPanelProps {
@@ -9,50 +10,6 @@ interface TemplateItemsPanelProps {
   isAdmin: boolean;
   onAddItem: (materialId: string) => Promise<void>;
   onRemoveItem: (itemId: string) => Promise<void>;
-}
-
-interface CategoryGroup {
-  category: string | null;
-  items: ProjectTemplateItem[];
-}
-
-/**
- * Groups template items by category_name, preserving each category's
- * first-appearance order (not alphabetical) — same pattern as
- * ProjectDetailPage's groupItemsByCategory. Items with no category (empty
- * string) fall into a single "Без категории" group, always last regardless
- * of where they'd otherwise sort.
- */
-function groupItemsByCategory(items: ProjectTemplateItem[]): CategoryGroup[] {
-  const order: (string | null)[] = [];
-  const byCategory = new Map<string | null, ProjectTemplateItem[]>();
-
-  for (const item of items) {
-    const category = item.category_name || null;
-    if (!byCategory.has(category)) {
-      byCategory.set(category, []);
-      order.push(category);
-    }
-    byCategory.get(category)!.push(item);
-  }
-
-  const orderedCategories = [...order.filter((c) => c !== null), ...(byCategory.has(null) ? [null] : [])];
-
-  return orderedCategories.map((category) => ({
-    category,
-    items: byCategory.get(category)!,
-  }));
-}
-
-/** Counts occurrences of each material_id — used to flag duplicate rows
- * (same material added to the template more than once) without blocking
- * the add itself; see ADR-0032. */
-function countByMaterialId(items: ProjectTemplateItem[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    counts.set(item.material_id, (counts.get(item.material_id) ?? 0) + 1);
-  }
-  return counts;
 }
 
 export function TemplateItemsPanel({
@@ -96,7 +53,7 @@ export function TemplateItemsPanel({
               </tr>
             </thead>
             <tbody>
-              {groupItemsByCategory(template.items).map((group) => (
+              {groupByCategory<ProjectTemplateItem>(template.items).map((group) => (
                 <Fragment key={group.category ?? '__none__'}>
                   <tr className={styles.categoryRow}>
                     <td colSpan={3} className={styles.categoryCell}>

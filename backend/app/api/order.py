@@ -73,6 +73,9 @@ def _to_order_item_out(
 ) -> OrderItemOut:
     delta, delta_pct = price_delta(item.quoted_price, item.confirmed_price)
     received_delta, received_delta_pct = price_delta(item.quoted_price, item.received_price)
+    quantity_delta = (
+        item.received_quantity - item.quantity if item.received_quantity is not None else None
+    )
     replaced_supplier_id, replaced_supplier_name, replacement_draft_order_id = (
         replacement_info_for_item(db, item)
     )
@@ -84,6 +87,8 @@ def _to_order_item_out(
         quantity=item.quantity,
         quoted_price=item.quoted_price,
         received_price=item.received_price,
+        received_quantity=item.received_quantity,
+        quantity_delta=quantity_delta,
         target_price=item.target_price,
         confirmed_price=item.confirmed_price,
         confirmed_at=item.confirmed_at,
@@ -219,6 +224,7 @@ def patch_order_item(
         for field in (
             "confirmed_price",
             "received_price",
+            "received_quantity",
             "target_price",
             "declined",
             "decline_reason",

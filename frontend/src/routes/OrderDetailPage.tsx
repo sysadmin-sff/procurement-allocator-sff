@@ -1160,7 +1160,14 @@ function ParseResponseSection({
     try {
       for (const line of toApply) {
         const price = matchedPrices[line.order_item_id];
-        const updated = await ordersApi.patchItem(order.id, line.order_item_id, { [targetField]: price });
+        // received_quantity only persists for the first-round (received_price)
+        // block — the second round is specific to confirmed_price negotiation
+        // and has no confirmed_quantity counterpart. See ADR-0039 §2.
+        const patch =
+          targetField === 'received_price' && line.quantity != null
+            ? { [targetField]: price, received_quantity: line.quantity }
+            : { [targetField]: price };
+        const updated = await ordersApi.patchItem(order.id, line.order_item_id, patch);
         succeeded += 1;
         if (updated.price_divergence != null) {
           divergences.push({
@@ -1284,6 +1291,7 @@ function ParseResponseSection({
                   <tr>
                     <th className={styles.parseCheckboxCell} />
                     <th>Наша позиция</th>
+                    <th className={styles.numCell}>Кол-во</th>
                     <th className={styles.numCell}>Отправленная цена</th>
                     <th className={styles.numCell}>
                       {targetField === 'confirmed_price' ? 'Подтверждённая цена' : 'Полученная цена'}
@@ -1403,9 +1411,19 @@ function MatchedLineRow({
   const material =
     orderItem?.material_id != null ? materialById.get(orderItem.material_id) : undefined;
   const lowConfidence = LOW_CONFIDENCE_LEVELS.has(line.confidence);
+  // Highlighted the same way in both parse-response rounds regardless of
+  // whether this round persists received_quantity — the signal is visual
+  // only, ADR-0039 §2/§5.
+  const quantityMismatch = line.quantity != null && orderItem != null && line.quantity !== orderItem.quantity;
 
   return (
-    <tr className={lowConfidence ? styles.parseLowConfidenceRow : undefined}>
+    <tr
+      className={
+        [lowConfidence && styles.parseLowConfidenceRow, quantityMismatch && styles.quantityMismatchRow]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
+    >
       <td className={styles.parseCheckboxCell}>
         <input type="checkbox" checked={included} onChange={(e) => onToggleIncluded(e.target.checked)} />
       </td>
@@ -1415,6 +1433,12 @@ function MatchedLineRow({
           <span className={styles.parseConfidenceWarning}>⚠ низкая уверенность распознавания</span>
         )}
         <span className={styles.parseReasoning}>{line.reasoning}</span>
+      </td>
+      <td className={styles.numCell}>
+        {line.quantity ?? '—'}
+        {quantityMismatch && (
+          <span className={styles.parseConfidenceWarning}>план: {orderItem!.quantity}</span>
+        )}
       </td>
       <td className={styles.numCell}>{orderItem ? formatMoney(orderItem.quoted_price) : '—'}</td>
       <td className={styles.numCell}>

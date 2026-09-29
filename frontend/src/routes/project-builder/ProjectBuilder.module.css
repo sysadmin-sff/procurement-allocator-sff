@@ -172,6 +172,15 @@
   padding-right: var(--space-5);
 }
 
+/* Rows render from a single, DOM-order-stable list (see ProjectBuilderPage's
+   rowIndexById/orderById) so React never unmounts an <input> the user is
+   actively typing into; the category-grouped visual order is applied purely
+   via CSS `order` on each row/header, which requires this flex container. */
+.rowsList {
+  display: flex;
+  flex-direction: column;
+}
+
 .row {
   min-height: 48px;
   border-bottom: 1px solid var(--color-border-subtle);
@@ -179,6 +188,51 @@
 
 .row:nth-child(even) {
   background: var(--color-surface-subtle);
+}
+
+/* Group header row, grid-equivalent of CrudScreen.module.css's
+   .categoryRow/.categoryCell (table-only selectors that don't apply to this
+   page's div-based grid). Spans the full row width instead of one cell. */
+.categoryRow {
+  min-height: 0;
+  padding: var(--space-3) var(--space-8);
+  background: var(--color-brand-tint-alt);
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-brand);
+}
+
+/* Grid-equivalent of CrudScreen.module.css's .duplicateRow. Overrides both
+   the default and the even-row alternating background. Mixed down from
+   --color-warning-tint (already the lightest warning token) toward the
+   surface color — at full strength the tint reads too saturated against
+   this row's colored qty input, unlike TemplateItemsPanel's plain-text rows. */
+.row.duplicateRow,
+.row.duplicateRow:nth-child(even) {
+  background: color-mix(in srgb, var(--color-warning-tint) 55%, var(--color-surface));
+}
+
+/* MaterialCombobox's input is width: 100%, so this flex row lets the badge
+   sit beside it instead of being pushed onto its own line below. min-width:
+   0 on the combobox lets it shrink below its content size so the badge
+   always has room, instead of overflowing the row. */
+.rowMaterialInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.rowMaterialInner > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.duplicateBadge {
+  flex-shrink: 0;
 }
 
 .rowNum {

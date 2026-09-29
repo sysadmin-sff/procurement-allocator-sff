@@ -60,6 +60,11 @@ class OrderItem(UUIDPKMixin, Base):
     из material_id/raw_description всегда заполнено (CHECK
     ck_order_items_material_xor_raw_description). См. ADR-0033 §1."""
     quantity: Mapped[int] = mapped_column(nullable=False)
+    received_quantity: Mapped[int | None] = mapped_column()
+    """Количество, которое поставщик прислал в ответе для уже сматченной
+    строки — вводится сотрудником вручную после ответа (тот же путь, что
+    received_price). NULL = ответа ещё нет, или ответ не содержал
+    распознаваемого количества — не "получено 0". См. ADR-0039."""
     quoted_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     """Снимок AllocationLine.unit_price на момент создания Order — что мы
     рассчитали и отправили поставщику. См. ADR-0007 п.1."""

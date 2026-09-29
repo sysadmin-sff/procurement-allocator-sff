@@ -364,6 +364,14 @@ export interface OrderItem {
   quantity: number;
   quoted_price: number;
   received_price: number | null;
+  /** Количество, которое поставщик прислал в ответе для этой уже сматченной
+   * строки. NULL = ответа нет или ответ не содержал количества, не 0.
+   * См. ADR-0039. */
+  received_quantity: number | null;
+  /** received_quantity - quantity. NULL при received_quantity === null, не
+   * 0 — та же семантика "нет основания для сравнения", что price_delta.
+   * См. ADR-0039. */
+  quantity_delta: number | null;
   /** Наша целевая цена для торга — не факт от поставщика. См. ADR-0027. */
   target_price: number | null;
   confirmed_price: number | null;

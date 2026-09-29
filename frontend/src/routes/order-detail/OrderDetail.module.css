@@ -150,6 +150,15 @@
   background: var(--color-danger-tint);
 }
 
+/* Row-level highlight for a parsed matched line whose quantity differs from
+   the OrderItem's planned quantity — see ADR-0039 §5. Same danger-tint
+   language as discrepantRow, but binary (no percentage threshold): any
+   quantity mismatch in a purchase is significant, unlike a small price
+   difference. */
+.quantityMismatchRow td {
+  background: var(--color-danger-tint);
+}
+
 .declineButton {
   width: 100%;
   background: var(--color-control-fill);

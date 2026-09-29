@@ -12,7 +12,7 @@ from app.api.schemas.price_ingestion import (
 )
 from app.auth.dependencies import require_role
 from app.core.database import get_db
-from app.models import Material
+from app.models import Material, Price
 from app.price_ingestion.apply import EntryNotFoundError, apply_price_list_entry
 from app.price_ingestion.extraction import (
     PriceIngestionError,
@@ -32,7 +32,31 @@ router = APIRouter(dependencies=[Depends(require_role("admin"))])
 MAX_PRICE_LIST_FILE_SIZE = 10 * 1024 * 1024
 
 
-def _entry_out(entry) -> PriceListEntryOut:
+def _current_active_price(
+    db: Session, *, supplier_id: uuid.UUID, material_id: uuid.UUID | None
+) -> float | None:
+    """Active Price.price for this supplier + material — see ADR-0040.
+    None when material_id is None (action="new" candidate, nothing to
+    compare against) or when this supplier has never priced that material
+    before (no active Price row for the pair, e.g. a first-time position).
+    Computed fresh on every read, not persisted — a manual /prices update
+    between upload and the next GET must be reflected, unlike the
+    ADR-0020 fields which are deliberate one-time snapshots."""
+    if material_id is None:
+        return None
+    active_price = (
+        db.query(Price)
+        .filter(
+            Price.material_id == material_id,
+            Price.supplier_id == supplier_id,
+            Price.valid_to.is_(None),
+        )
+        .first()
+    )
+    return float(active_price.price) if active_price is not None else None
+
+
+def _entry_out(db: Session, entry, *, supplier_id: uuid.UUID) -> PriceListEntryOut:
     return PriceListEntryOut(
         id=entry.id,
         supplier_raw_name=entry.supplier_raw_name,
@@ -51,20 +75,28 @@ def _entry_out(entry) -> PriceListEntryOut:
             else []
         ),
         processing_status=entry.processing_status,
+        current_active_price=_current_active_price(
+            db, supplier_id=supplier_id, material_id=entry.matched_material_id
+        ),
     )
 
 
-def _to_import_out(price_list_import) -> PriceListImportOut:
+def _to_import_out(db: Session, price_list_import) -> PriceListImportOut:
     """Reads possible_duplicate_of straight from PriceListEntry — see
     ADR-0020. Used by both POST (upload) and GET:
     they are guaranteed to return the same values for the same entry,
     since both go through this one function reading the same columns
     (supersedes ADR-0019 §5's transient in-memory-only rendering, which
-    GET could not reconstruct)."""
+    GET could not reconstruct). current_active_price (ADR-0040) is the one
+    field here computed fresh from Price on every call, not read from
+    PriceListEntry columns like the rest."""
     return PriceListImportOut(
         import_id=price_list_import.id,
         status=price_list_import.status,
-        entries=[_entry_out(e) for e in price_list_import.entries],
+        entries=[
+            _entry_out(db, e, supplier_id=price_list_import.supplier_id)
+            for e in price_list_import.entries
+        ],
     )
 
 
@@ -108,7 +140,7 @@ async def upload_price_list(
     except PriceIngestionError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    return _to_import_out(price_list_import)
+    return _to_import_out(db, price_list_import)
 
 
 @router.get("/price-list-imports/{import_id}", response_model=PriceListImportOut)
@@ -119,7 +151,7 @@ def get_price_list_import_endpoint(
         price_list_import = get_price_list_import(db, import_id)
     except ImportNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Price list import not found") from exc
-    return _to_import_out(price_list_import)
+    return _to_import_out(db, price_list_import)
 
 
 @router.post(
@@ -151,4 +183,5 @@ def apply_entry(
     maybe_mark_import_approved(db, import_id)
     db.refresh(entry)
 
-    return _entry_out(entry)
+    price_list_import = get_price_list_import(db, import_id)
+    return _entry_out(db, entry, supplier_id=price_list_import.supplier_id)

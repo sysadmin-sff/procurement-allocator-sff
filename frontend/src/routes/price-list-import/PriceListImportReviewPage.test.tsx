@@ -49,6 +49,7 @@ function entryFixture(overrides: Partial<PriceListEntry> = {}): PriceListEntry {
     min_order_qty: null,
     action: null,
     possible_duplicate_of: [],
+    current_active_price: null,
     ...overrides,
   };
 }
@@ -120,6 +121,44 @@ describe('PriceListImportReviewPage', () => {
     expect(within(bodyRows[0]).getByText(/похоже на ту же позицию каталога/)).toBeInTheDocument();
     expect(within(bodyRows[1]).getByText(/похоже на ту же позицию каталога/)).toBeInTheDocument();
     expect(within(bodyRows[2]).queryByText(/похоже на ту же позицию каталога/)).not.toBeInTheDocument();
+  });
+
+  it('highlights the recognized price cheaper (green) or more expensive (red) than the current active price', async () => {
+    const priceListImport: PriceListImport = {
+      import_id: 'import-1',
+      status: 'pending_review',
+      entries: [
+        entryFixture({
+          id: 'cheaper',
+          supplier_raw_name: 'Cheaper row',
+          price: 10,
+          current_active_price: 15,
+        }),
+        entryFixture({
+          id: 'pricier',
+          supplier_raw_name: 'Pricier row',
+          price: 20,
+          current_active_price: 15,
+        }),
+        entryFixture({
+          id: 'no-current',
+          supplier_raw_name: 'No current price row',
+          price: 10,
+          current_active_price: null,
+        }),
+      ],
+    };
+    renderPage(priceListImport);
+
+    const cheaperRow = (await screen.findByText('Cheaper row')).closest('tr')!;
+    const pricierRow = (await screen.findByText('Pricier row')).closest('tr')!;
+    const noCurrentRow = (await screen.findByText('No current price row')).closest('tr')!;
+
+    expect(within(cheaperRow).getByText('$10.00').className).toMatch(/priceCheaper/);
+    expect(within(pricierRow).getByText('$20.00').className).toMatch(/priceMoreExpensive/);
+    expect(within(noCurrentRow).getByText('$10.00').className).toBe('');
+    expect(within(noCurrentRow).getByText('—')).toBeInTheDocument();
+    expect(within(cheaperRow).getByText('$15.00')).toBeInTheDocument();
   });
 
   it('applies all checked pending rows and reports a summary', async () => {

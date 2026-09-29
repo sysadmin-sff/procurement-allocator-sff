@@ -22,6 +22,12 @@ class PriceListEntryOut(BaseModel):
     action: str | None
     possible_duplicate_of: list[uuid.UUID] = []
     processing_status: str | None = None
+    current_active_price: float | None = None
+    """Active Price.price (valid_to IS NULL) for this supplier +
+    matched_material_id, at read time — see ADR-0040. NULL when
+    matched_material_id is NULL (action="new" candidate, no material to
+    compare against yet) or when this supplier has never priced that
+    material before (no active Price row for the pair)."""
 
 
 class PriceListImportOut(BaseModel):

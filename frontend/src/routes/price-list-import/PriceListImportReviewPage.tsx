@@ -267,7 +267,8 @@ export function PriceListImportReviewPage() {
               <tr>
                 <th className={styles.checkboxCell} />
                 <th>Строка прайса</th>
-                <th className={styles.numCell}>Цена</th>
+                <th className={styles.numCell}>Текущая цена</th>
+                <th className={styles.numCell}>Цена в прайсе</th>
                 <th>Уверенность</th>
                 <th className={styles.actionColCell}>Действие</th>
                 <th className={styles.statusColCell} />
@@ -446,7 +447,16 @@ function EntryRow({
           </span>
         )}
       </td>
-      <td className={styles.numCell}>{formatMoney(entry.price)}</td>
+      <td className={styles.numCell}>
+        {entry.current_active_price != null ? (
+          formatMoney(entry.current_active_price)
+        ) : (
+          <span className={styles.confidenceEmpty}>—</span>
+        )}
+      </td>
+      <td className={styles.numCell}>
+        <span className={priceComparisonClassName(entry)}>{formatMoney(entry.price)}</span>
+      </td>
       <td>
         {entry.confidence != null ? (
           <Badge variant={confidenceVariant(entry.confidence)}>
@@ -525,4 +535,17 @@ function resolvedActionLabel(entry: PriceListEntry): string {
 
 function formatMoney(value: number): string {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** Highlights the recognized price against the supplier's current active
+ * price (ADR-0040) — cheaper is green, more expensive is red, equal or no
+ * current price (new material / first position from this supplier) is
+ * neutral. Comparison is a plain number comparison: unit is shared by
+ * construction (both prices reference the same Material once matched, see
+ * ADR-0040 §2) and currency is USD-only in practice today (ADR-0019 §6). */
+function priceComparisonClassName(entry: PriceListEntry): string {
+  if (entry.current_active_price == null) return '';
+  if (entry.price < entry.current_active_price) return styles.priceCheaper;
+  if (entry.price > entry.current_active_price) return styles.priceMoreExpensive;
+  return '';
 }

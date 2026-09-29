@@ -593,6 +593,7 @@ export interface PriceListEntry {
   min_order_qty: number | null;
   action: 'match' | 'new' | 'skip' | null;
   possible_duplicate_of: string[];
+  current_active_price: number | null;
 }
 
 export type PriceListImportStatus = 'pending_review' | 'approved' | 'rejected';

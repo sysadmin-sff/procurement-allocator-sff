@@ -262,6 +262,17 @@
   color: var(--color-text-tertiary-alt);
 }
 
+/* Recognized price vs. this supplier's current active price — ADR-0040. */
+.priceCheaper {
+  color: var(--color-success-alt);
+  font-weight: 600;
+}
+
+.priceMoreExpensive {
+  color: var(--color-danger-text);
+  font-weight: 600;
+}
+
 .reasoning {
   display: block;
   margin-top: var(--space-2);

@@ -227,6 +227,17 @@ erDiagram
 "не терять на reload то, что нужно для решения", что ADR-0004 уже применил
 к клиентскому черновику проекта).
 
+`PriceListEntryOut.current_active_price` (только API-схема ответа, не
+колонка БД и не поле `PriceListEntry`) — см.
+`docs/decisions/0040-price-list-review-current-price-comparison.md`.
+Вычисляется на каждый рендер `_entry_out` join'ом на активную `Price`
+(`material_id = matched_material_id`, `supplier_id =
+price_list_import.supplier_id`, `valid_to IS NULL`) — живое состояние
+каталога на момент чтения, не снимок момента ИИ-анализа (в отличие от
+`suggested_internal_sku`/`possible_duplicate_of` ниже). `NULL`, если
+`matched_material_id IS NULL` либо для этого поставщика ещё не было
+активной цены на этот материал.
+
 `PriceListEntry.processing_status` добавлено сверх исходной диаграммы —
 см. `docs/decisions/0022-price-list-matching-dedup-and-concurrency.md`.
 Отдельно от `action`: `action` — решение пользователя на экране ревью

@@ -6,13 +6,14 @@ codes, and the transition to PriceListImport.status="approved", not model
 accuracy (see docs/known-issues.md for that open item).
 """
 
+import datetime
 import uuid
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models import PriceListImport
+from app.models import Price, PriceListImport
 from app.price_ingestion.extraction import ExtractedPriceLine, PriceIngestionError
 from app.price_ingestion.matching import MatchDecision, MatchedLine
 
@@ -274,6 +275,152 @@ def test_get_import_returns_current_entries(
 
     assert response.status_code == 200
     assert len(response.json()["entries"]) == 1
+
+
+def test_entry_includes_current_active_price_for_this_supplier(
+    db_session, make_supplier, make_material, make_user, make_session
+):
+    """ADR-0040: current_active_price reflects the active Price for
+    (matched_material_id, this import's supplier_id) — not any other
+    supplier's price for the same material."""
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    other_supplier = make_supplier()
+    material = make_material()
+    session.add(
+        Price(
+            material_id=material.id,
+            supplier_id=supplier.id,
+            price=12.5,
+            currency="USD",
+            valid_from=datetime.date.today(),
+        )
+    )
+    session.add(
+        Price(
+            material_id=material.id,
+            supplier_id=other_supplier.id,
+            price=999.0,
+            currency="USD",
+            valid_from=datetime.date.today(),
+        )
+    )
+    session.commit()
+    client = _admin_client(make_user, make_session)
+
+    matched = [
+        MatchedLine(
+            extracted=_extracted(raw_name="Screen A", price=10.0),
+            decision=MatchDecision(
+                action="match", material_id=material.id, confidence=0.9, reasoning="match",
+            ),
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        response = _upload(client, supplier.id)
+
+    entry = response.json()["entries"][0]
+    assert entry["current_active_price"] == 12.5
+
+
+def test_entry_current_active_price_is_null_for_new_material_candidate(
+    db_session, make_supplier, make_user, make_session
+):
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    client = _admin_client(make_user, make_session)
+
+    matched = [
+        MatchedLine(
+            extracted=_extracted(raw_name="Brand New Screen"),
+            decision=MatchDecision(
+                action="not_found", material_id=None, confidence=0.4, reasoning="no match",
+            ),
+            processing_status="failed",
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        response = _upload(client, supplier.id)
+
+    entry = response.json()["entries"][0]
+    assert entry["current_active_price"] is None
+
+
+def test_entry_current_active_price_is_null_for_first_time_supplier_position(
+    db_session, make_supplier, make_material, make_user, make_session
+):
+    """Material matched, but this supplier has never priced it before —
+    no active Price row for this (material, supplier) pair yet."""
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+    client = _admin_client(make_user, make_session)
+
+    matched = [
+        MatchedLine(
+            extracted=_extracted(raw_name="Screen A"),
+            decision=MatchDecision(
+                action="match", material_id=material.id, confidence=0.9, reasoning="match",
+            ),
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        response = _upload(client, supplier.id)
+
+    entry = response.json()["entries"][0]
+    assert entry["current_active_price"] is None
+
+
+def test_current_active_price_reflects_manual_price_update_between_upload_and_get(
+    db_session, make_supplier, make_material, make_user, make_session
+):
+    """ADR-0040: current_active_price is computed fresh on every read, not
+    a snapshot taken at upload time — a manual PUT /prices/{id} between the
+    initial upload and a later GET must be reflected in that later GET."""
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+    price = Price(
+        material_id=material.id,
+        supplier_id=supplier.id,
+        price=12.5,
+        currency="USD",
+        valid_from=datetime.date.today(),
+    )
+    session.add(price)
+    session.commit()
+    session.refresh(price)
+    client = _admin_client(make_user, make_session)
+
+    matched = [
+        MatchedLine(
+            extracted=_extracted(raw_name="Screen A", price=10.0),
+            decision=MatchDecision(
+                action="match", material_id=material.id, confidence=0.9, reasoning="match",
+            ),
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        upload_response = _upload(client, supplier.id)
+
+    upload_entry = upload_response.json()["entries"][0]
+    assert upload_entry["current_active_price"] == 12.5
+    import_id = upload_response.json()["import_id"]
+
+    update_response = client.put(
+        f"/prices/{price.id}",
+        json={"price": 20.0, "valid_from": datetime.date.today().isoformat()},
+        headers={"X-CSRF-Token": CSRF},
+    )
+    assert update_response.status_code == 200
+
+    get_response = client.get(f"/price-list-imports/{import_id}")
+    get_entry = get_response.json()["entries"][0]
+    assert get_entry["current_active_price"] == 20.0
 
 
 def test_apply_match_entry_updates_status_when_all_entries_resolved(

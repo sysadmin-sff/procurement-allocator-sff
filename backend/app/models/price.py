@@ -25,7 +25,7 @@ class Price(UUIDPKMixin, Base):
     supplier_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False
     )
-    price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    price: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     availability: Mapped[int | None] = mapped_column()
     min_order_qty: Mapped[int | None] = mapped_column()

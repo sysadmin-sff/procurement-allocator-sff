@@ -123,7 +123,7 @@ export function PriceForm({
             className={styles.input}
             type="number"
             min="0"
-            step="0.01"
+            step="0.001"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             required

@@ -89,6 +89,11 @@ export function OrderDetailPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<unknown>(null);
+  // Declined+replaced items (declined_at != null) are hidden from the main
+  // list by default and shown only inside this collapsible section — see
+  // ADR-0043. Nothing is deleted from the DB; this is display-only, same as
+  // the collapsedCategories section state in ParseResponseSection below.
+  const [declinedSectionCollapsed, setDeclinedSectionCollapsed] = useState(true);
 
   useEffect(() => {
     if (!orderId) return;
@@ -276,13 +281,12 @@ export function OrderDetailPage() {
   const expectedTaxAmountByConfirmed = calculateTax(expectedGoodsTotalByConfirmed);
   const expectedTotalByConfirmed =
     expectedGoodsTotalByConfirmed + expectedTaxAmountByConfirmed + order.expected_delivery_fee;
-  // Declined items sort to the bottom, keeping their relative order (and the
-  // relative order of everything else) intact — Array.prototype.sort is a
-  // stable sort per spec, so a single boolean comparator is enough. Purely a
-  // display concern: order.items itself is untouched.
-  const sortedItems = order.items
-    .slice()
-    .sort((a, b) => Number(a.declined_at != null) - Number(b.declined_at != null));
+  // Declined+replaced items are split out of the main list entirely and
+  // shown only inside the collapsible "Перенесённые позиции" section below
+  // — see ADR-0043. order.items itself is untouched; this is purely a
+  // display split.
+  const activeItems = order.items.filter((item) => item.declined_at == null);
+  const declinedItems = order.items.filter((item) => item.declined_at != null);
 
   return (
     <div className={styles.page}>
@@ -390,7 +394,7 @@ export function OrderDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map((item) => (
+              {activeItems.map((item) => (
                 <OrderItemRow
                   key={item.id}
                   item={item}
@@ -404,6 +408,74 @@ export function OrderDetailPage() {
             </tbody>
           </table>
         </div>
+
+        {declinedItems.length > 0 && (
+          <div className={styles.parseResultBlock}>
+            <div className={styles.parseCategoryHeader}>
+              <button
+                type="button"
+                className={styles.parseCategoryToggle}
+                onClick={() => setDeclinedSectionCollapsed((prev) => !prev)}
+              >
+                <span
+                  className={`${styles.chevron} ${!declinedSectionCollapsed ? styles.chevronExpanded : ''}`}
+                  aria-hidden="true"
+                >
+                  ▸
+                </span>
+                <span className={styles.parseCategoryTitle}>Перенесённые позиции ({declinedItems.length})</span>
+              </button>
+            </div>
+
+            {!declinedSectionCollapsed && (
+              <div className={styles.tableScroll}>
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th className={styles.materialColHeader}>Материал</th>
+                      <th className={styles.numCell}>Кол-во</th>
+                      <th className={styles.numCell}>
+                        Отправленная
+                        <br />
+                        цена
+                      </th>
+                      <th className={styles.numCell}>
+                        Полученная
+                        <br />
+                        цена
+                      </th>
+                      <th className={styles.numCell}>
+                        Целевая
+                        <br />
+                        цена
+                      </th>
+                      <th className={styles.numCell}>
+                        Подтверждённая
+                        <br />
+                        цена
+                      </th>
+                      <th className={styles.numCell}>Расхождение</th>
+                      <th className={styles.statusColHeader}>Статус</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {declinedItems.map((item) => (
+                      <OrderItemRow
+                        key={item.id}
+                        item={item}
+                        order={order}
+                        material={item.material_id != null ? materialById.get(item.material_id) : undefined}
+                        saving={savingItemId === item.id}
+                        onPatch={(patch) => void handleItemPatch(item, patch)}
+                        onReplacementApplied={handleReplacementApplied}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className={styles.footer}>
           <div className={styles.footerTotals}>
@@ -687,7 +759,7 @@ function OrderItemRow({
           className={styles.priceInput}
           type="number"
           min="0"
-          step="0.01"
+          step="0.001"
           placeholder="—"
           defaultValue={item.received_price ?? ''}
           disabled={saving}
@@ -707,7 +779,7 @@ function OrderItemRow({
           className={styles.priceInput}
           type="number"
           min="0"
-          step="0.01"
+          step="0.001"
           placeholder="—"
           defaultValue={item.target_price ?? ''}
           disabled={saving}
@@ -727,7 +799,7 @@ function OrderItemRow({
           className={styles.priceInput}
           type="number"
           min="0"
-          step="0.01"
+          step="0.001"
           placeholder="—"
           defaultValue={item.confirmed_price ?? ''}
           disabled={saving}
@@ -1446,7 +1518,7 @@ function MatchedLineRow({
           className={styles.priceInput}
           type="number"
           min="0"
-          step="0.01"
+          step="0.001"
           value={price}
           onChange={(e) => {
             const value = Number(e.target.value);

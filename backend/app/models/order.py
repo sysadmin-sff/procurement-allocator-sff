@@ -65,20 +65,20 @@ class OrderItem(UUIDPKMixin, Base):
     строки — вводится сотрудником вручную после ответа (тот же путь, что
     received_price). NULL = ответа ещё нет, или ответ не содержал
     распознаваемого количества — не "получено 0". См. ADR-0039."""
-    quoted_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    quoted_price: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
     """Снимок AllocationLine.unit_price на момент создания Order — что мы
     рассчитали и отправили поставщику. См. ADR-0007 п.1."""
-    confirmed_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    confirmed_price: Mapped[float | None] = mapped_column(Numeric(12, 3))
     """То, что реально подтвердил поставщик — вводится сотрудником вручную
     после ответа. NULL = ещё не сверено, не "подтверждено с ценой 0"."""
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """Когда сотрудник ввёл confirmed_price. Сбрасывается в NULL, если
     confirmed_price явно очищен."""
-    received_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    received_price: Mapped[float | None] = mapped_column(Numeric(12, 3))
     """Цена, которую поставщик прислал первым, до торга. NULL = ответа ещё
     нет. Независимо от confirmed_price — может быть заполнено без него и
     наоборот. См. ADR-0013."""
-    target_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    target_price: Mapped[float | None] = mapped_column(Numeric(12, 3))
     """Цена, на которую сотрудник хочет сторговаться — намерение с нашей
     стороны, не факт от поставщика. NULL = торг не предлагался. См. ADR-0027."""
     declined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

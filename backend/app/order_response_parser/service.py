@@ -36,6 +36,9 @@ class OrderNotFoundError(Exception):
 
 
 def _order_items_context(order: Order) -> list[dict]:
+    """Excludes declined+replaced items (declined_at IS NOT NULL) — they are
+    no longer this supplier's to answer for, so they must not be offered to
+    the LLM as matching candidates. See ADR-0043."""
     return [
         {
             "id": item.id,
@@ -46,6 +49,7 @@ def _order_items_context(order: Order) -> list[dict]:
             "quoted_price": float(item.quoted_price),
         }
         for item in order.items
+        if item.declined_at is None
     ]
 
 
@@ -61,7 +65,9 @@ def parse_order_response(
 
     - matched: extracted lines with matched_order_item_id != null (all
       confidence levels, including "low" — ADR-0018 §3a/§6).
-    - missing: this Order's OrderItem that no extracted line referenced.
+    - missing: this Order's non-declined OrderItem that no extracted line
+      referenced (declined_at IS NOT NULL items are excluded — ADR-0043,
+      their absence from this supplier's reply is expected, not a gap).
     - extra: extracted lines with matched_order_item_id == null.
 
     Returns (matched_lines, missing_items, extra_lines). Never writes to the
@@ -86,6 +92,10 @@ def parse_order_response(
 
     matched_lines = [line for line in extracted if line.matched_order_item_id is not None]
     extra_lines = [line for line in extracted if line.matched_order_item_id is None]
-    missing_items = [item for item in order.items if item.id not in matched_ids]
+    missing_items = [
+        item
+        for item in order.items
+        if item.declined_at is None and item.id not in matched_ids
+    ]
 
     return matched_lines, missing_items, extra_lines

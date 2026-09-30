@@ -64,8 +64,8 @@ class AllocationLine(UUIDPKMixin, Base):
         UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False
     )
     quantity: Mapped[int] = mapped_column(nullable=False)
-    unit_price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    line_total: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    unit_price: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
+    line_total: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
     overridden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     """Не NULL, если поставщик строки был вручную переопределён пользователем
     после run_allocation() — см. ADR-0006. NULL = строка в исходном
@@ -80,7 +80,7 @@ class AllocationLine(UUIDPKMixin, Base):
     original_supplier_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("suppliers.id")
     )
-    original_unit_price: Mapped[float | None] = mapped_column(Numeric(12, 2))
+    original_unit_price: Mapped[float | None] = mapped_column(Numeric(12, 3))
     """supplier_id/unit_price до первого override — не перезаписываются при
     повторном override той же строки, чтобы бейдж "не самая дешёвая цена"
     мог всегда сравнить с настоящим ILP-решением. См. ADR-0006 п.1."""

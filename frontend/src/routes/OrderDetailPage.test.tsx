@@ -208,6 +208,30 @@ describe('OrderDetailPage', () => {
     expect(screen.queryByText(/расхождением цены/)).not.toBeInTheDocument();
   });
 
+  it('allows 3-decimal input on received/target/confirmed price cells, matching the Numeric(12,3) backend columns', async () => {
+    const order: Order = orderFixture({
+      id: 'order-1',
+      project_id: 'proj-1',
+      supplier_id: 'sup-a',
+      status: 'draft',
+      total_amount: 250,
+      delivery_fee: 25,
+      items: [itemFixture()],
+    });
+    getOrderMock.mockResolvedValue(order);
+
+    renderPage();
+
+    const row = (await screen.findByText(material.canonical_name)).closest('tr') as HTMLElement;
+    const priceInputs = within(row).getAllByRole('spinbutton') as HTMLInputElement[];
+    // quoted_price is plain text (not editable), so the spinbuttons here are
+    // received_price, target_price, confirmed_price in that column order.
+    const [receivedPriceInput, targetPriceInput, confirmedPriceInput] = priceInputs;
+    expect(receivedPriceInput).toHaveAttribute('step', '0.001');
+    expect(targetPriceInput).toHaveAttribute('step', '0.001');
+    expect(confirmedPriceInput).toHaveAttribute('step', '0.001');
+  });
+
   describe('quoted-price history indicator', () => {
     function priceFixture(overrides: Partial<Price> = {}): Price {
       return {
@@ -484,7 +508,7 @@ describe('OrderDetailPage', () => {
     expect(screen.queryByText(/расхождением цены/)).not.toBeInTheDocument();
   });
 
-  it('renders received_price and shows decline reason for a declined row', async () => {
+  it('renders received_price and shows decline reason for a declined row inside the collapsed section', async () => {
     const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
@@ -504,10 +528,18 @@ describe('OrderDetailPage', () => {
 
     renderPage();
 
+    expect(await screen.findByText(/1 позиция отклонено поставщиком/)).toBeInTheDocument();
+    // Collapsed by default (ADR-0043) — the declined row's own content is
+    // not yet in the document.
+    expect(screen.queryByText('Отклонено')).not.toBeInTheDocument();
+
+    const toggle = screen.getByText(/Перенесённые позиции \(1\)/);
+    const user = userEvent.setup();
+    await user.click(toggle);
+
     expect(await screen.findByDisplayValue('23.75')).toBeInTheDocument();
     expect(screen.getByText('Отклонено')).toBeInTheDocument();
     expect(screen.getByDisplayValue('нет в наличии')).toBeInTheDocument();
-    expect(await screen.findByText(/1 позиция отклонено поставщиком/)).toBeInTheDocument();
   });
 
   it('marks a row as declined when the decline button is clicked', async () => {
@@ -547,14 +579,17 @@ describe('OrderDetailPage', () => {
 
     renderPage();
 
-    const button = await screen.findByText('Отклонено');
+    const toggle = await screen.findByText(/Перенесённые позиции \(1\)/);
     const user = userEvent.setup();
+    await user.click(toggle);
+
+    const button = await screen.findByText('Отклонено');
     await user.click(button);
 
     expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { declined: false });
   });
 
-  it('sorts declined rows to the bottom, keeping non-declined rows in their original order', async () => {
+  it('excludes declined rows from the main list by default, showing only non-declined rows', async () => {
     const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
@@ -579,13 +614,16 @@ describe('OrderDetailPage', () => {
 
     renderPage();
 
-    const rows = await screen.findAllByRole('row');
-    // rows[0] is the header row.
+    await screen.findByText('Material Two');
+    const mainTable = screen.getByText('Material Two').closest('table') as HTMLElement;
+    const rows = within(mainTable).getAllByRole('row');
     const materialCells = rows.slice(1).map((row) => row.querySelector('td')?.textContent);
-    expect(materialCells).toEqual(['Material Two', 'Material Four', material.canonical_name, 'Material Three']);
+    expect(materialCells).toEqual(['Material Two', 'Material Four']);
+
+    expect(screen.getByText(/Перенесённые позиции \(2\)/)).toBeInTheDocument();
   });
 
-  it('moves a row to the bottom immediately after it is declined, without waiting for a refetch', async () => {
+  it('moves a row into the collapsed declined section immediately after it is declined, without waiting for a refetch', async () => {
     const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
@@ -606,12 +644,13 @@ describe('OrderDetailPage', () => {
 
     const buttons = await screen.findAllByText('Отметить как недоступно');
     const user = userEvent.setup();
-    await user.click(buttons[0]); // decline item-1 (originally first)
+    await user.click(buttons[0]); // decline item-1
 
-    await screen.findByText('Отклонено');
-    const rows = await screen.findAllByRole('row');
+    await screen.findByText(/Перенесённые позиции \(1\)/);
+    const mainTable = screen.getByText('Material Two').closest('table') as HTMLElement;
+    const rows = within(mainTable).getAllByRole('row');
     const materialCells = rows.slice(1).map((row) => row.querySelector('td')?.textContent);
-    expect(materialCells).toEqual(['Material Two', material.canonical_name]);
+    expect(materialCells).toEqual(['Material Two']);
   });
 
   it('renders copyable material lists with and without prices', async () => {
@@ -875,6 +914,16 @@ describe('OrderDetailPage', () => {
       expect(screen.queryByText('Найти замену')).not.toBeInTheDocument();
     });
 
+    /** Declined rows live inside the collapsed-by-default "Перенесённые
+     * позиции" section (ADR-0043) — every find-replacement interaction test
+     * must expand it first to reach the row. */
+    async function expandDeclinedSection() {
+      const toggle = await screen.findByText(/Перенесённые позиции/);
+      const user = userEvent.setup();
+      await user.click(toggle);
+      return user;
+    }
+
     it('shows candidates with an availability-risk warning when clicked', async () => {
       getOrderMock.mockResolvedValue(declinedOrder());
       findReplacementMock.mockResolvedValue({
@@ -886,9 +935,9 @@ describe('OrderDetailPage', () => {
       });
 
       renderPage();
+      const user = await expandDeclinedSection();
 
       const trigger = await screen.findByText('Найти замену');
-      const user = userEvent.setup();
       await user.click(trigger);
 
       expect(findReplacementMock).toHaveBeenCalledWith('order-1', 'item-1');
@@ -904,9 +953,9 @@ describe('OrderDetailPage', () => {
       );
 
       renderPage();
+      const user = await expandDeclinedSection();
 
       const trigger = await screen.findByText('Найти замену');
-      const user = userEvent.setup();
       await user.click(trigger);
 
       expect(
@@ -940,9 +989,9 @@ describe('OrderDetailPage', () => {
       );
 
       renderPage();
+      const user = await expandDeclinedSection();
 
       const trigger = await screen.findByText('Найти замену');
-      const user = userEvent.setup();
       await user.click(trigger);
 
       const candidateButton = await screen.findByText('Better Supply');
@@ -973,9 +1022,9 @@ describe('OrderDetailPage', () => {
       );
 
       renderPage();
+      const user = await expandDeclinedSection();
 
       const trigger = await screen.findByText('Найти замену');
-      const user = userEvent.setup();
       await user.click(trigger);
 
       const candidateButton = await screen.findByText('Better Supply');
@@ -998,6 +1047,7 @@ describe('OrderDetailPage', () => {
       );
 
       renderPage();
+      await expandDeclinedSection();
 
       const link = await screen.findByText('черновик уже создан »');
       expect(link.closest('a')).toHaveAttribute('href', '/orders/order-2');
@@ -2242,6 +2292,9 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
 
       renderPage();
+      const toggle = await screen.findByText(/Перенесённые позиции/);
+      const user = userEvent.setup();
+      await user.click(toggle);
 
       await screen.findByText('Extra bracket');
       expect(screen.getByText('Отклонено')).toBeInTheDocument();
@@ -2268,6 +2321,9 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
 
       renderPage();
+      const toggle = await screen.findByText(/Перенесённые позиции/);
+      const user = userEvent.setup();
+      await user.click(toggle);
 
       await screen.findByText('Отклонено');
       expect(screen.getByText('Найти замену')).toBeInTheDocument();

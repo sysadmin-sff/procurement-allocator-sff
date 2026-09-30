@@ -9,6 +9,7 @@ and that the endpoint never writes to OrderItem/PurchaseRecord.
 """
 
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -340,6 +341,112 @@ def test_endpoint_does_not_write_to_order_item_or_purchase_record(
     assert refreshed_b.received_price is None
 
     assert session.query(PurchaseRecord).count() == before_purchase_record_count
+
+
+def test_declined_item_excluded_from_matching_context_and_not_missing(
+    db_session, make_supplier, make_material, make_order, make_user, make_session
+):
+    """ADR-0043: a declined+replaced OrderItem (declined_at IS NOT NULL) is
+    not this supplier's problem to answer for -- it must not be offered to
+    the LLM as a matching candidate, and its absence from the reply must not
+    land it in missing. Categorization for the other (non-declined) item is
+    unaffected."""
+    session, *_ = db_session
+    supplier = make_supplier()
+    material_a = make_material(canonical_name="84 in. 18x14 Fiberglass Screen")
+    material_b = make_material(canonical_name="Aluminum Frame Track")
+    order = make_order(
+        supplier,
+        [(material_a, 10, 5.00), (material_b, 5, 12.00)],
+    )
+    item_a, item_b = order.items
+    item_b.declined_at = datetime.now(timezone.utc)
+    item_b.decline_reason = "перенесено другому поставщику"
+    session.flush()
+    session.commit()
+    client = _employee_client(make_user, make_session)
+
+    lines = [
+        ExtractedLine(
+            raw_description='84" PREMIER SCREEN 18/14"',
+            matched_order_item_id=item_a.id,
+            price=5.10,
+            quantity=10,
+            confidence="high",
+            reasoning="matches by dimensions",
+        ),
+    ]
+
+    captured_context = {}
+
+    def _fake_extraction(*, file_bytes, content_type, order_items):
+        captured_context["order_items"] = order_items
+        return lines
+
+    with patch(
+        "app.order_response_parser.service.parse_order_response_document",
+        side_effect=_fake_extraction,
+    ):
+        response = _upload(client, order.id)
+
+    assert response.status_code == 200
+    body = response.json()
+
+    context_ids = {item["id"] for item in captured_context["order_items"]}
+    assert item_b.id not in context_ids
+    assert item_a.id in context_ids
+
+    assert len(body["matched"]) == 1
+    assert body["matched"][0]["order_item_id"] == str(item_a.id)
+    assert body["missing"] == []
+    assert body["extra"] == []
+
+
+def test_declined_item_mentioned_by_supplier_falls_into_extra(
+    db_session, make_supplier, make_material, make_order, make_user, make_session
+):
+    """ADR-0043 §3: if the supplier mentions a declined item out of old
+    habit, the extracted line finds no candidate in the filtered
+    order_items and lands in extra -- it must not auto-create or update any
+    OrderItem (extra requires an explicit user decision, ADR-0033)."""
+    session, *_ = db_session
+    supplier = make_supplier()
+    material = make_material(canonical_name="84 in. 18x14 Fiberglass Screen")
+    order = make_order(supplier, [(material, 10, 5.00)])
+    item = order.items[0]
+    item.declined_at = datetime.now(timezone.utc)
+    session.flush()
+    session.commit()
+    client = _employee_client(make_user, make_session)
+
+    lines = [
+        ExtractedLine(
+            raw_description='84" PREMIER SCREEN 18/14" (old quote)',
+            matched_order_item_id=None,
+            price=5.00,
+            quantity=10,
+            confidence="low",
+            reasoning="mentioned in response text but no active candidate",
+        ),
+    ]
+
+    before_confirmed = item.confirmed_price
+    before_received = item.received_price
+
+    with _mock_extraction(lines):
+        response = _upload(client, order.id)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["matched"] == []
+    assert body["missing"] == []
+    assert len(body["extra"]) == 1
+    assert body["extra"][0]["raw_description"] == '84" PREMIER SCREEN 18/14" (old quote)'
+
+    session.expire_all()
+    refreshed = session.get(OrderItem, item.id)
+    assert refreshed.confirmed_price == before_confirmed
+    assert refreshed.received_price == before_received
 
 
 def test_parse_response_no_session_returns_401():

@@ -508,7 +508,7 @@ describe('OrderDetailPage', () => {
     expect(screen.queryByText(/расхождением цены/)).not.toBeInTheDocument();
   });
 
-  it('renders received_price and shows decline reason for a declined row inside the collapsed section', async () => {
+  it('renders received_price and shows decline reason for an unreplaced declined row, visible without expanding anything', async () => {
     const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
@@ -529,14 +529,8 @@ describe('OrderDetailPage', () => {
     renderPage();
 
     expect(await screen.findByText(/1 позиция отклонено поставщиком/)).toBeInTheDocument();
-    // Collapsed by default (ADR-0043) — the declined row's own content is
-    // not yet in the document.
-    expect(screen.queryByText('Отклонено')).not.toBeInTheDocument();
-
-    const toggle = screen.getByText(/Перенесённые позиции \(1\)/);
-    const user = userEvent.setup();
-    await user.click(toggle);
-
+    // ADR-0043 Amendment 1: declined-but-not-yet-replaced rows are an active
+    // task, not archival — visible immediately, no section to expand.
     expect(await screen.findByDisplayValue('23.75')).toBeInTheDocument();
     expect(screen.getByText('Отклонено')).toBeInTheDocument();
     expect(screen.getByDisplayValue('нет в наличии')).toBeInTheDocument();
@@ -579,11 +573,9 @@ describe('OrderDetailPage', () => {
 
     renderPage();
 
-    const toggle = await screen.findByText(/Перенесённые позиции \(1\)/);
-    const user = userEvent.setup();
-    await user.click(toggle);
-
+    // Unreplaced decline — visible immediately, no section to expand.
     const button = await screen.findByText('Отклонено');
+    const user = userEvent.setup();
     await user.click(button);
 
     expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { declined: false });
@@ -600,7 +592,13 @@ describe('OrderDetailPage', () => {
       items: [
         itemFixture({ id: 'item-1', material_id: 'mat-1', declined_at: '2026-08-18T10:00:00Z' }),
         itemFixture({ id: 'item-2', material_id: 'mat-2' }),
-        itemFixture({ id: 'item-3', material_id: 'mat-3', declined_at: '2026-08-18T11:00:00Z' }),
+        itemFixture({
+          id: 'item-3',
+          material_id: 'mat-3',
+          declined_at: '2026-08-18T11:00:00Z',
+          replaced_by_supplier_id: 'sup-b',
+          replaced_by_supplier_name: 'Better Supply',
+        }),
         itemFixture({ id: 'item-4', material_id: 'mat-4' }),
       ],
     });
@@ -618,12 +616,55 @@ describe('OrderDetailPage', () => {
     const mainTable = screen.getByText('Material Two').closest('table') as HTMLElement;
     const rows = within(mainTable).getAllByRole('row');
     const materialCells = rows.slice(1).map((row) => row.querySelector('td')?.textContent);
+    // Only item-3 (already replaced) is excluded by default; item-1
+    // (declined, not yet replaced) stays visible outside the main table but
+    // is not itself in the main table either — this assertion is scoped to
+    // the main table only, see the dedicated unreplacedDeclines test below
+    // for item-1's visibility.
     expect(materialCells).toEqual(['Material Two', 'Material Four']);
 
-    expect(screen.getByText(/Перенесённые позиции \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Перенесённые позиции \(1\)/)).toBeInTheDocument();
   });
 
-  it('moves a row into the collapsed declined section immediately after it is declined, without waiting for a refetch', async () => {
+  it('shows an unreplaced decline in its own visible block, separate from the main table and the collapsed section', async () => {
+    const order: Order = orderFixture({
+      id: 'order-1',
+      project_id: 'proj-1',
+      supplier_id: 'sup-a',
+      status: 'draft',
+      total_amount: 250,
+      delivery_fee: 25,
+      items: [
+        itemFixture({ id: 'item-1', material_id: 'mat-1' }),
+        itemFixture({
+          id: 'item-2',
+          material_id: 'mat-2',
+          declined_at: '2026-08-18T10:00:00Z',
+          decline_reason: 'нет в наличии',
+        }),
+      ],
+    });
+    getOrderMock.mockResolvedValue(order);
+    materialsListMock.mockResolvedValue([material, { ...material, id: 'mat-2', canonical_name: 'Material Two' }]);
+
+    renderPage();
+
+    await screen.findByText(material.canonical_name);
+    // Visible immediately (no section to expand) and carries the active
+    // find-replacement CTA, same as before this split.
+    expect(await screen.findByText('Material Two')).toBeInTheDocument();
+    expect(screen.getByText('Найти замену')).toBeInTheDocument();
+    // Not counted into the collapsed "Перенесённые позиции" section — that
+    // section doesn't even render since there's no replaced item yet.
+    expect(screen.queryByText(/Перенесённые позиции/)).not.toBeInTheDocument();
+
+    const mainTable = screen.getByText(material.canonical_name).closest('table') as HTMLElement;
+    const mainRows = within(mainTable).getAllByRole('row');
+    const mainMaterialCells = mainRows.slice(1).map((row) => row.querySelector('td')?.textContent);
+    expect(mainMaterialCells).toEqual([material.canonical_name]);
+  });
+
+  it('moves an already-replaced row into the collapsed declined section immediately after replacement, without waiting for a refetch', async () => {
     const order: Order = orderFixture({
       id: 'order-1',
       project_id: 'proj-1',
@@ -646,11 +687,16 @@ describe('OrderDetailPage', () => {
     const user = userEvent.setup();
     await user.click(buttons[0]); // decline item-1
 
-    await screen.findByText(/Перенесённые позиции \(1\)/);
+    // Declining alone (no replacement yet) keeps the row visible outside the
+    // main table, not in the collapsed section — no "Перенесённые позиции"
+    // section renders yet.
+    await screen.findByText('Отклонено');
+    expect(screen.queryByText(/Перенесённые позиции/)).not.toBeInTheDocument();
+
     const mainTable = screen.getByText('Material Two').closest('table') as HTMLElement;
-    const rows = within(mainTable).getAllByRole('row');
-    const materialCells = rows.slice(1).map((row) => row.querySelector('td')?.textContent);
-    expect(materialCells).toEqual(['Material Two']);
+    const mainRows = within(mainTable).getAllByRole('row');
+    const mainMaterialCells = mainRows.slice(1).map((row) => row.querySelector('td')?.textContent);
+    expect(mainMaterialCells).toEqual(['Material Two']);
   });
 
   it('renders copyable material lists with and without prices', async () => {
@@ -914,9 +960,11 @@ describe('OrderDetailPage', () => {
       expect(screen.queryByText('Найти замену')).not.toBeInTheDocument();
     });
 
-    /** Declined rows live inside the collapsed-by-default "Перенесённые
-     * позиции" section (ADR-0043) — every find-replacement interaction test
-     * must expand it first to reach the row. */
+    /** Only an already-replaced order (replaced_by_supplier_id set) puts its
+     * row inside the collapsed-by-default "Перенесённые позиции" section
+     * (ADR-0043 Amendment 1) — used only by the one test below that starts
+     * from an already-replaced state. An unreplaced decline (plain
+     * declinedOrder()) is visible immediately, no expand needed. */
     async function expandDeclinedSection() {
       const toggle = await screen.findByText(/Перенесённые позиции/);
       const user = userEvent.setup();
@@ -935,9 +983,9 @@ describe('OrderDetailPage', () => {
       });
 
       renderPage();
-      const user = await expandDeclinedSection();
 
       const trigger = await screen.findByText('Найти замену');
+      const user = userEvent.setup();
       await user.click(trigger);
 
       expect(findReplacementMock).toHaveBeenCalledWith('order-1', 'item-1');
@@ -953,9 +1001,9 @@ describe('OrderDetailPage', () => {
       );
 
       renderPage();
-      const user = await expandDeclinedSection();
 
       const trigger = await screen.findByText('Найти замену');
+      const user = userEvent.setup();
       await user.click(trigger);
 
       expect(
@@ -989,9 +1037,9 @@ describe('OrderDetailPage', () => {
       );
 
       renderPage();
-      const user = await expandDeclinedSection();
 
       const trigger = await screen.findByText('Найти замену');
+      const user = userEvent.setup();
       await user.click(trigger);
 
       const candidateButton = await screen.findByText('Better Supply');
@@ -999,6 +1047,11 @@ describe('OrderDetailPage', () => {
 
       expect(replaceAndOrderMock).toHaveBeenCalledWith('order-1', 'item-1', 'sup-b');
       expect(getOrderMock).toHaveBeenCalledTimes(2);
+
+      // Now replaced -- the row (and its "→ Перенесено на …" notice) moved
+      // into the collapsed section; expand it to see the confirmation.
+      const toggle = await screen.findByText(/Перенесённые позиции/);
+      await user.click(toggle);
 
       expect(await screen.findByText(/→ Перенесено на Better Supply/)).toBeInTheDocument();
       expect(screen.getByText(/ордер ещё не создан/)).toBeInTheDocument();
@@ -1022,9 +1075,9 @@ describe('OrderDetailPage', () => {
       );
 
       renderPage();
-      const user = await expandDeclinedSection();
 
       const trigger = await screen.findByText('Найти замену');
+      const user = userEvent.setup();
       await user.click(trigger);
 
       const candidateButton = await screen.findByText('Better Supply');
@@ -1047,6 +1100,7 @@ describe('OrderDetailPage', () => {
       );
 
       renderPage();
+      // Already replaced -- lives in the collapsed section.
       await expandDeclinedSection();
 
       const link = await screen.findByText('черновик уже создан »');
@@ -2292,10 +2346,8 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
 
       renderPage();
-      const toggle = await screen.findByText(/Перенесённые позиции/);
-      const user = userEvent.setup();
-      await user.click(toggle);
 
+      // Unreplaced decline — visible immediately, no section to expand.
       await screen.findByText('Extra bracket');
       expect(screen.getByText('Отклонено')).toBeInTheDocument();
       expect(screen.queryByText('Найти замену')).not.toBeInTheDocument();
@@ -2321,10 +2373,8 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
 
       renderPage();
-      const toggle = await screen.findByText(/Перенесённые позиции/);
-      const user = userEvent.setup();
-      await user.click(toggle);
 
+      // Unreplaced decline — visible immediately, no section to expand.
       await screen.findByText('Отклонено');
       expect(screen.getByText('Найти замену')).toBeInTheDocument();
     });

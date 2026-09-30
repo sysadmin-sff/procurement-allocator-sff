@@ -89,10 +89,12 @@ export function OrderDetailPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<unknown>(null);
-  // Declined+replaced items (declined_at != null) are hidden from the main
-  // list by default and shown only inside this collapsible section — see
-  // ADR-0043. Nothing is deleted from the DB; this is display-only, same as
-  // the collapsedCategories section state in ParseResponseSection below.
+  // Only already-replaced items (replaced_by_supplier_id != null) are hidden
+  // by default, inside this collapsible section — see ADR-0043 Amendment 1.
+  // Declined-but-not-yet-replaced items stay visible in their own block
+  // (unreplacedDeclines below), not behind this collapse. Nothing is deleted
+  // from the DB; this is display-only, same as the collapsedCategories
+  // section state in ParseResponseSection below.
   const [declinedSectionCollapsed, setDeclinedSectionCollapsed] = useState(true);
 
   useEffect(() => {
@@ -281,12 +283,21 @@ export function OrderDetailPage() {
   const expectedTaxAmountByConfirmed = calculateTax(expectedGoodsTotalByConfirmed);
   const expectedTotalByConfirmed =
     expectedGoodsTotalByConfirmed + expectedTaxAmountByConfirmed + order.expected_delivery_fee;
-  // Declined+replaced items are split out of the main list entirely and
-  // shown only inside the collapsible "Перенесённые позиции" section below
-  // — see ADR-0043. order.items itself is untouched; this is purely a
-  // display split.
+  // Three display groups — see ADR-0043 + Amendment 1. order.items itself is
+  // untouched; this is purely a display split:
+  // - activeItems: declined_at == null, the main list, unchanged.
+  // - unreplacedDeclines: declined_at != null but not yet replaced — an
+  //   active, unfinished task (the employee still needs to find a
+  //   replacement supplier), so it stays visible as its own block, not
+  //   buried in the collapsed section.
+  // - replacedItems: replaced_by_supplier_id != null — the transfer is
+  //   already done, genuinely archival, goes in the collapsible
+  //   "Перенесённые позиции" section.
   const activeItems = order.items.filter((item) => item.declined_at == null);
-  const declinedItems = order.items.filter((item) => item.declined_at != null);
+  const unreplacedDeclines = order.items.filter(
+    (item) => item.declined_at != null && item.replaced_by_supplier_id == null,
+  );
+  const replacedItems = order.items.filter((item) => item.replaced_by_supplier_id != null);
 
   return (
     <div className={styles.page}>
@@ -409,7 +420,55 @@ export function OrderDetailPage() {
           </table>
         </div>
 
-        {declinedItems.length > 0 && (
+        {unreplacedDeclines.length > 0 && (
+          <div className={styles.tableScroll}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.materialColHeader}>Материал</th>
+                  <th className={styles.numCell}>Кол-во</th>
+                  <th className={styles.numCell}>
+                    Отправленная
+                    <br />
+                    цена
+                  </th>
+                  <th className={styles.numCell}>
+                    Полученная
+                    <br />
+                    цена
+                  </th>
+                  <th className={styles.numCell}>
+                    Целевая
+                    <br />
+                    цена
+                  </th>
+                  <th className={styles.numCell}>
+                    Подтверждённая
+                    <br />
+                    цена
+                  </th>
+                  <th className={styles.numCell}>Расхождение</th>
+                  <th className={styles.statusColHeader}>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unreplacedDeclines.map((item) => (
+                  <OrderItemRow
+                    key={item.id}
+                    item={item}
+                    order={order}
+                    material={item.material_id != null ? materialById.get(item.material_id) : undefined}
+                    saving={savingItemId === item.id}
+                    onPatch={(patch) => void handleItemPatch(item, patch)}
+                    onReplacementApplied={handleReplacementApplied}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {replacedItems.length > 0 && (
           <div className={styles.parseResultBlock}>
             <div className={styles.parseCategoryHeader}>
               <button
@@ -423,7 +482,7 @@ export function OrderDetailPage() {
                 >
                   ▸
                 </span>
-                <span className={styles.parseCategoryTitle}>Перенесённые позиции ({declinedItems.length})</span>
+                <span className={styles.parseCategoryTitle}>Перенесённые позиции ({replacedItems.length})</span>
               </button>
             </div>
 
@@ -459,7 +518,7 @@ export function OrderDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {declinedItems.map((item) => (
+                    {replacedItems.map((item) => (
                       <OrderItemRow
                         key={item.id}
                         item={item}

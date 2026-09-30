@@ -4,14 +4,20 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectBuilderPage } from './ProjectBuilderPage';
 import { allocationApi } from '../api/allocation';
+import { categoriesApi } from '../api/categories';
 import { materialsApi } from '../api/materials';
 import { projectsApi } from '../api/projects';
 import { templatesApi } from '../api/templates';
+import type { Category } from '../api/types';
 
 vi.mock('../api/materials', () => ({
   materialsApi: {
     list: vi.fn(),
   },
+}));
+
+vi.mock('../api/categories', () => ({
+  categoriesApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 
 vi.mock('../api/projects', () => ({
@@ -37,6 +43,7 @@ vi.mock('../api/templates', () => ({
 }));
 
 const materialsListMock = vi.mocked(materialsApi.list);
+const categoriesListMock = vi.mocked(categoriesApi.list);
 const createMock = vi.mocked(projectsApi.create);
 const updateProjectMock = vi.mocked(projectsApi.updateProject);
 const addItemMock = vi.mocked(projectsApi.addItem);
@@ -44,6 +51,18 @@ const updateItemMock = vi.mocked(projectsApi.updateItem);
 const removeItemMock = vi.mocked(projectsApi.removeItem);
 const runAllocationMock = vi.mocked(allocationApi.run);
 const templatesListMock = vi.mocked(templatesApi.list);
+
+function category(name: string, display_order: number): Category {
+  return {
+    id: `cat-${name}`,
+    name,
+    sku_prefix: name.slice(0, 4).toUpperCase(),
+    requires_single_supplier: false,
+    next_sku_number: 1,
+    display_order,
+    created_at: '2026-01-01T00:00:00Z',
+  };
+}
 
 function renderPage() {
   return render(
@@ -65,6 +84,7 @@ const material = {
 describe('ProjectBuilderPage', () => {
   beforeEach(() => {
     materialsListMock.mockReset();
+    categoriesListMock.mockReset();
     createMock.mockReset();
     updateProjectMock.mockReset();
     addItemMock.mockReset();
@@ -73,6 +93,7 @@ describe('ProjectBuilderPage', () => {
     runAllocationMock.mockReset();
     templatesListMock.mockReset();
     materialsListMock.mockResolvedValue([]);
+    categoriesListMock.mockResolvedValue([]);
     templatesListMock.mockResolvedValue([]);
   });
 
@@ -482,10 +503,15 @@ describe('ProjectBuilderPage', () => {
       await user.type(qtyInputs[rowIndex], qty);
     }
 
-    it('groups filled rows by category in first-appearance order, with items missing a category last', async () => {
+    it('groups filled rows by Category.display_order (ADR-0042), not fill order, with items missing a category last', async () => {
       const user = userEvent.setup();
       const noCategoryItem = { ...doorHandle, id: 'mat-4', canonical_name: 'Без категории материал', category_name: '' };
       materialsListMock.mockResolvedValue([windowSeal, noCategoryItem, doorHandle, anotherWindowItem]);
+      // display_order says Двери (0) before Окна (1) -- rows are filled in
+      // the opposite order (Окна first, Двери last) below, so a regression
+      // to fill-order/first-appearance grouping would put Окна first and
+      // fail this test.
+      categoriesListMock.mockResolvedValue([category('Двери', 0), category('Окна', 1)]);
       addItemMock.mockImplementation((_projectId, payload) =>
         Promise.resolve({ id: `item-${payload.material_id}`, project_id: 'proj-1', ...payload }),
       );
@@ -503,10 +529,9 @@ describe('ProjectBuilderPage', () => {
       await waitFor(() => expect(materialsListMock).toHaveBeenCalled());
 
       // Fill three rows in this order: Окна, Без категории, Двери. Group
-      // headers must then appear in first-appearance order regardless. Each
-      // row's save is awaited before starting the next one — first-appearance
-      // order is defined by save-completion order, which would otherwise be
-      // racy if two autosave debounces resolved out of input order.
+      // headers must appear by display_order regardless of this fill order.
+      // Each row's save is awaited before starting the next one to keep the
+      // sequence deterministic.
       await pickMaterial(user, 0, windowSeal.canonical_name);
       await setQuantity(user, 0, '1');
       await waitFor(() => expect(addItemMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
@@ -530,11 +555,10 @@ describe('ProjectBuilderPage', () => {
         headerOrder.set(el.textContent ?? '', Number((el as HTMLElement).style.order));
       });
 
-      // "Без категории" is always last, regardless of first-appearance order
-      // (same rule as TemplateItemsPanel/groupByCategory) — filled in second
-      // here but expected after "Двери", filled in third.
-      expect(headerOrder.get('Окна')).toBeLessThan(headerOrder.get('Двери')!);
-      expect(headerOrder.get('Двери')).toBeLessThan(headerOrder.get('Без категории')!);
+      // Двери (display_order 0) before Окна (display_order 1), even though
+      // Окна was filled first — and "Без категории" always last.
+      expect(headerOrder.get('Двери')).toBeLessThan(headerOrder.get('Окна')!);
+      expect(headerOrder.get('Окна')).toBeLessThan(headerOrder.get('Без категории')!);
     });
 
     it('does not block adding a material already used in another row, and highlights both as duplicates', async () => {

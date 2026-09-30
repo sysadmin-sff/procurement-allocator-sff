@@ -1,15 +1,32 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TemplateItemsPanel } from './TemplateItemsPanel';
+import { categoriesApi } from '../../api/categories';
 import { materialsApi } from '../../api/materials';
-import type { Material, ProjectTemplate } from '../../api/types';
+import type { Category, Material, ProjectTemplate } from '../../api/types';
 
 vi.mock('../../api/materials', () => ({
   materialsApi: { list: vi.fn() },
 }));
+vi.mock('../../api/categories', () => ({
+  categoriesApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+}));
 
 const materialsListMock = vi.mocked(materialsApi.list);
+const categoriesListMock = vi.mocked(categoriesApi.list);
+
+function category(name: string, display_order: number): Category {
+  return {
+    id: `cat-${name}`,
+    name,
+    sku_prefix: name.slice(0, 4).toUpperCase(),
+    requires_single_supplier: false,
+    next_sku_number: 1,
+    display_order,
+    created_at: '2026-01-01T00:00:00Z',
+  };
+}
 
 const doorHandle: Material = {
   id: 'mat-1',
@@ -34,8 +51,16 @@ function template(items: ProjectTemplate['items']): ProjectTemplate {
 }
 
 describe('TemplateItemsPanel', () => {
-  it('groups items by category in first-appearance order, with items missing a category last', () => {
+  beforeEach(() => {
+    categoriesListMock.mockResolvedValue([category('Двери', 0), category('Окна', 1)]);
+  });
+
+  it('groups items by Category.display_order (ADR-0042), not first-appearance, with items missing a category last', async () => {
     materialsListMock.mockResolvedValue([doorHandle, windowSeal]);
+    // display_order says Двери (0) before Окна (1) -- input order is the
+    // opposite (Окна's item comes first), so a regression to first-appearance
+    // ordering would put Окна first and fail this test.
+    categoriesListMock.mockResolvedValue([category('Двери', 0), category('Окна', 1)]);
     const t = template([
       { id: 'i1', material_id: 'mat-2', canonical_name: 'Уплотнитель окна', unit: 'м', category_name: 'Окна' },
       { id: 'i2', material_id: 'mat-3', canonical_name: 'Без категории материал', unit: 'шт', category_name: '' },
@@ -52,8 +77,45 @@ describe('TemplateItemsPanel', () => {
       />,
     );
 
+    // useCategories() resolves asynchronously -- wait for its result to
+    // reach the DOM (groupByCategory can't sort by display_order until
+    // categoriesListMock's promise settles) before reading row order.
+    await screen.findByText('Двери');
+
     const headers = screen.getAllByRole('row').map((row) => row.textContent ?? '');
-    // Group headers appear in first-appearance order: Окна, Двери, then "Без категории" last.
+    // Group headers appear in display_order: Двери (0), Окна (1), then "Без категории" last.
+    const groupHeaderTexts = ['Двери', 'Окна', 'Без категории'];
+    const positions = groupHeaderTexts.map((text) => headers.findIndex((h) => h.includes(text)));
+
+    expect(positions.every((p) => p !== -1)).toBe(true);
+    expect(positions[0]).toBeLessThan(positions[1]);
+    expect(positions[1]).toBeLessThan(positions[2]);
+  });
+
+  it('puts a category unknown to the loaded categories list last, before "Без категории"', async () => {
+    materialsListMock.mockResolvedValue([doorHandle, windowSeal]);
+    // Only Окна is in the loaded categories list -- Двери is absent (e.g.
+    // stale client cache) and must still render, sorted after every known
+    // category but before "Без категории".
+    categoriesListMock.mockResolvedValue([category('Окна', 0)]);
+    const t = template([
+      { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери' },
+      { id: 'i2', material_id: 'mat-3', canonical_name: 'Без категории материал', unit: 'шт', category_name: '' },
+      { id: 'i3', material_id: 'mat-2', canonical_name: 'Уплотнитель окна', unit: 'м', category_name: 'Окна' },
+    ]);
+
+    render(
+      <TemplateItemsPanel
+        template={t}
+        isAdmin={true}
+        onAddItem={vi.fn()}
+        onRemoveItem={vi.fn()}
+      />,
+    );
+
+    await screen.findByText('Окна');
+
+    const headers = screen.getAllByRole('row').map((row) => row.textContent ?? '');
     const groupHeaderTexts = ['Окна', 'Двери', 'Без категории'];
     const positions = groupHeaderTexts.map((text) => headers.findIndex((h) => h.includes(text)));
 

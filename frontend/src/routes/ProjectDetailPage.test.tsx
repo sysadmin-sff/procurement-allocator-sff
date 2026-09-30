@@ -3,12 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDetailPage } from './ProjectDetailPage';
+import { categoriesApi } from '../api/categories';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
 import { projectsApi } from '../api/projects';
 import { suppliersApi } from '../api/suppliers';
-import type { Material, Order, ProjectWithItems, Supplier } from '../api/types';
+import type { Category, Material, Order, ProjectWithItems, Supplier } from '../api/types';
 
+vi.mock('../api/categories', () => ({
+  categoriesApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+}));
 vi.mock('../api/projects', () => ({
   projectsApi: {
     list: vi.fn(),
@@ -44,6 +48,19 @@ const materialsListMock = vi.mocked(materialsApi.list);
 const materialsSearchMock = vi.mocked(materialsApi.search);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 const ordersListForProjectMock = vi.mocked(ordersApi.listForProject);
+const categoriesListMock = vi.mocked(categoriesApi.list);
+
+function category(name: string, display_order: number): Category {
+  return {
+    id: `cat-${name}`,
+    name,
+    sku_prefix: name.slice(0, 4).toUpperCase(),
+    requires_single_supplier: false,
+    next_sku_number: 1,
+    display_order,
+    created_at: '2026-01-01T00:00:00Z',
+  };
+}
 
 const material: Material = {
   id: 'mat-1',
@@ -112,9 +129,11 @@ describe('ProjectDetailPage', () => {
     materialsSearchMock.mockReset();
     suppliersListMock.mockReset();
     ordersListForProjectMock.mockReset();
+    categoriesListMock.mockReset();
     materialsListMock.mockResolvedValue([material, material2]);
     suppliersListMock.mockResolvedValue([]);
     ordersListForProjectMock.mockResolvedValue([]);
+    categoriesListMock.mockResolvedValue([]);
   });
 
   it('shows "Рассчитать закупку" and no run summary when there is no prior run', async () => {
@@ -621,7 +640,7 @@ describe('ProjectDetailPage', () => {
     expect(screen.queryByText('Ордера')).not.toBeInTheDocument();
   });
 
-  it('groups the spec table by material category with contiguous numbering', async () => {
+  it('groups the spec table by Category.display_order (ADR-0042), not input order, with contiguous numbering', async () => {
     const project: ProjectWithItems = {
       id: 'proj-1',
       title: 'Pool cage — Bayshore Rd',
@@ -638,16 +657,21 @@ describe('ProjectDetailPage', () => {
     };
     getMock.mockResolvedValue(project);
     materialsListMock.mockResolvedValue([material, material2]);
+    // display_order says Сетка (0) before fastener (1) -- the opposite of
+    // input order (fastener's item-1 comes first), so a regression to
+    // first-appearance/input-order grouping would put fastener first and
+    // fail this test.
+    categoriesListMock.mockResolvedValue([category('Сетка', 0), category('fastener', 1)]);
 
     renderPage();
 
     await screen.findAllByText(material2.canonical_name);
 
     const categoryHeaders = screen.getAllByText(/^(fastener|Сетка|Без категории)$/);
-    // First-appearance order: fastener (item-1) before Сетка (item-2) before
-    // "Без категории" (item-3) — even though item-4 (fastener again) comes
-    // later in the input, it must not create a second "fastener" header.
-    expect(categoryHeaders.map((el) => el.textContent)).toEqual(['fastener', 'Сетка', 'Без категории']);
+    // display_order: Сетка (0) before fastener (1) before "Без категории"
+    // (item-3, unconditionally last) — even though item-4 (fastener again)
+    // comes later in the input, it must not create a second "fastener" header.
+    expect(categoryHeaders.map((el) => el.textContent)).toEqual(['Сетка', 'fastener', 'Без категории']);
 
     const rowNumberCells = document.querySelectorAll('td');
     const numbers = [...rowNumberCells]
@@ -674,6 +698,7 @@ describe('ProjectDetailPage', () => {
     };
     getMock.mockResolvedValue(project);
     materialsListMock.mockResolvedValue([material, material2]);
+    categoriesListMock.mockResolvedValue([category('Сетка', 0), category('fastener', 1)]);
 
     renderPage();
 

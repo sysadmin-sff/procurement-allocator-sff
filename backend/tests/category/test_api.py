@@ -270,3 +270,71 @@ def test_list_categories_includes_created_category(
     assert response.status_code == 200
     names = [row["name"] for row in response.json()]
     assert "ListedTestCategory" in names
+
+
+# --- ADR-0042: display_order ---
+
+
+def test_list_categories_sorted_by_display_order_not_alphabetically(
+    db_session, make_category, make_user, make_session
+):
+    # Names deliberately out of alphabetical order relative to display_order,
+    # so a regression to `ORDER BY name` would fail this test.
+    make_category(name="ZZZ First", display_order=100)
+    make_category(name="AAA Second", display_order=101)
+    make_category(name="MMM Third", display_order=102)
+    client = _admin_client(make_user, make_session)
+
+    response = client.get("/categories")
+
+    assert response.status_code == 200
+    names = [row["name"] for row in response.json()]
+    positions = {name: names.index(name) for name in ["ZZZ First", "AAA Second", "MMM Third"]}
+    assert positions["ZZZ First"] < positions["AAA Second"] < positions["MMM Third"]
+
+
+def test_list_categories_breaks_display_order_ties_by_name(
+    db_session, make_category, make_user, make_session
+):
+    make_category(name="Tie B", display_order=200)
+    make_category(name="Tie A", display_order=200)
+    client = _admin_client(make_user, make_session)
+
+    response = client.get("/categories")
+
+    names = [row["name"] for row in response.json()]
+    assert names.index("Tie A") < names.index("Tie B")
+
+
+def test_create_category_defaults_display_order_to_max_plus_one(
+    db_session, make_category, make_user, make_session
+):
+    session, category_ids, _material_ids, _user_ids = db_session
+    make_category(name="ExistingHighest", display_order=500)
+    client = _admin_client(make_user, make_session)
+
+    response = client.post(
+        "/categories",
+        json={"name": "NewAppendedCategory", "sku_prefix": "NEWA"},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    category_ids.append(uuid.UUID(body["id"]))
+    assert body["display_order"] == 501
+
+
+def test_create_category_rejects_explicit_display_order(make_user, make_session):
+    """display_order is never accepted from the client (ADR-0042 п.1) --
+    CategoryCreate has no field for it, so sending it is a hard validation
+    error, same pattern as sku_prefix on CategoryUpdate."""
+    client = _admin_client(make_user, make_session)
+
+    response = client.post(
+        "/categories",
+        json={"name": "TestRejectOrder", "sku_prefix": "TROR", "display_order": 999},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 422

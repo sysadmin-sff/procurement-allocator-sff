@@ -150,7 +150,10 @@ def make_category(db_session):
         name = name or f"Test Category {uuid.uuid4().hex[:12]}"
         sku_prefix = sku_prefix or f"TC{uuid.uuid4().hex[:6].upper()}"
         category = Category(
-            name=name, sku_prefix=sku_prefix, requires_single_supplier=requires_single_supplier
+            name=name,
+            sku_prefix=sku_prefix,
+            requires_single_supplier=requires_single_supplier,
+            display_order=10_000 + counter["n"],
         )
         session.add(category)
         session.flush()

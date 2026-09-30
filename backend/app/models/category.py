@@ -26,6 +26,11 @@ class Category(UUIDPKMixin, Base):
     """Atomically incremented via UPDATE ... RETURNING in the same transaction
     as Material creation — see ADR-0034 п.4. Never read-then-written as two
     separate statements."""
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    """Fixed, admin-controlled ordering used everywhere categories are listed
+    or grouped — see ADR-0042. Not unique: ties break via a secondary
+    ORDER BY name. Set on creation as MAX(display_order) + 1 (app/api/category.py),
+    never accepted from API input; no drag-and-drop UI yet (ADR-0042 п.6)."""
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

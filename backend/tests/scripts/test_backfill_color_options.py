@@ -65,7 +65,11 @@ def make_test_material(savepoint_session):
         # Category.category_id is NOT NULL (ADR-0034) -- a throwaway
         # Category per material needs no cleanup of its own, since the
         # whole savepoint transaction rolls back at teardown.
-        category = Category(name=f"Test Category {counter['n']}", sku_prefix=f"TCX{counter['n']}")
+        category = Category(
+            name=f"Test Category {counter['n']}",
+            sku_prefix=f"TCX{counter['n']}",
+            display_order=10_000 + counter["n"],
+        )
         savepoint_session.add(category)
         savepoint_session.flush()
         material = Material(

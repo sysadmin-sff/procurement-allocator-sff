@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -14,15 +15,20 @@ router = APIRouter(prefix="/categories", dependencies=[Depends(require_role("adm
 
 @router.get("", response_model=list[CategoryOut])
 def list_categories(db: Session = Depends(get_db)) -> list[Category]:
-    return list(db.query(Category).order_by(Category.name).all())
+    return list(db.query(Category).order_by(Category.display_order, Category.name).all())
 
 
 @router.post("", response_model=CategoryOut, status_code=201)
 def create_category(payload: CategoryCreate, db: Session = Depends(get_db)) -> Category:
+    # New categories always append to the end of the fixed order (ADR-0042
+    # п.1) — display_order is never accepted from the client, see CategoryCreate.
+    max_order = db.query(func.max(Category.display_order)).scalar()
+    next_order = 0 if max_order is None else max_order + 1
     category = Category(
         name=payload.name,
         sku_prefix=payload.sku_prefix,
         requires_single_supplier=payload.requires_single_supplier,
+        display_order=next_order,
     )
     db.add(category)
     try:

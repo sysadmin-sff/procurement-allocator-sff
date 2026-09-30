@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
@@ -9,7 +9,13 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useCategories } from '../hooks/useCategories';
 import { KNOWN_COLORS } from '../lib/colors';
+import {
+  buildCategoryOrder,
+  groupByCategory,
+  type CategorizedItem,
+} from '../lib/groupByCategory';
 import { MaterialCombobox } from './project-builder/MaterialCombobox';
 import styles from '../components/CrudScreen.module.css';
 
@@ -37,6 +43,8 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
   const [addingItem, setAddingItem] = useState(false);
   // Default asc (oldest first) — always sorted, not the raw API order.
   const [orderSortDirection, setOrderSortDirection] = useState<'asc' | 'desc'>('asc');
+  const { categories } = useCategories();
+  const categoryOrder = useMemo(() => buildCategoryOrder(categories), [categories]);
 
   function toggleOrderSort() {
     setOrderSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
@@ -294,7 +302,8 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                     </tr>
                   </thead>
                   <tbody>
-                    {groupItemsByCategory(project.items, materials).map((group) => (
+                    {numberedGroups(groupByCategory(toCategorizedItems(project.items, materials), categoryOrder)).map(
+                      (group) => (
                       <Fragment key={group.category ?? '__none__'}>
                         <tr className={styles.categoryRow}>
                           <td colSpan={5} className={styles.categoryCell}>
@@ -392,40 +401,34 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
   );
 }
 
-interface CategoryGroup {
-  category: string | null;
-  items: { item: ProjectItem; number: number }[];
+interface CategorizedProjectItem extends CategorizedItem {
+  item: ProjectItem;
 }
 
-/**
- * Groups project items by Material.category, preserving each category's
- * first-appearance order (not alphabetical — matches how the reference
- * layout ordered chapters by workflow, not name). Items whose material has
- * no category (or isn't loaded yet) fall into a single "Без категории"
- * group, always last regardless of where they'd otherwise sort — grouping
- * with the categorized items would bury the fact that they're missing one.
- * Numbering (`number`) is contiguous across all groups, 1-based.
- */
-function groupItemsByCategory(items: ProjectItem[], materials: Material[]): CategoryGroup[] {
-  const categoryById = new Map(materials.map((m) => [m.id, m.category_name]));
-  const order: (string | null)[] = [];
-  const byCategory = new Map<string | null, ProjectItem[]>();
+/** Adapts ProjectItem -> CategorizedItem by resolving category_name through
+ * the loaded materials list, so the shared groupByCategory (ADR-0042,
+ * ordered by Category.display_order) can be reused here instead of a
+ * separately maintained copy of the same grouping logic. Items whose
+ * material isn't loaded yet resolve to category_name undefined, which
+ * groupByCategory already treats as "Без категории". */
+function toCategorizedItems(items: ProjectItem[], materials: Material[]): CategorizedProjectItem[] {
+  const categoryNameById = new Map(materials.map((m) => [m.id, m.category_name]));
+  return items.map((item) => ({
+    item,
+    material_id: item.material_id,
+    category_name: categoryNameById.get(item.material_id),
+  }));
+}
 
-  for (const item of items) {
-    const category = categoryById.get(item.material_id) ?? null;
-    if (!byCategory.has(category)) {
-      byCategory.set(category, []);
-      order.push(category);
-    }
-    byCategory.get(category)!.push(item);
-  }
-
-  const orderedCategories = [...order.filter((c) => c !== null), ...(byCategory.has(null) ? [null] : [])];
-
+/** Numbers items contiguously 1-based across all groups, in group-then-item
+ * order — the spec table's "№" column, independent of category grouping. */
+function numberedGroups(
+  groups: { category: string | null; items: CategorizedProjectItem[] }[],
+): { category: string | null; items: { item: ProjectItem; number: number }[] }[] {
   let number = 0;
-  return orderedCategories.map((category) => ({
-    category,
-    items: byCategory.get(category)!.map((item) => {
+  return groups.map((group) => ({
+    category: group.category,
+    items: group.items.map(({ item }) => {
       number += 1;
       return { item, number };
     }),

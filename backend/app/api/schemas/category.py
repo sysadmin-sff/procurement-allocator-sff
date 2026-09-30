@@ -32,4 +32,5 @@ class CategoryOut(BaseModel):
     sku_prefix: str
     requires_single_supplier: bool
     next_sku_number: int
+    display_order: int
     created_at: datetime

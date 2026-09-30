@@ -31,6 +31,7 @@ const categories: Category[] = [
     sku_prefix: 'MESH',
     requires_single_supplier: true,
     next_sku_number: 58,
+    display_order: 0,
     created_at: '2026-01-10T12:00:00Z',
   },
 ];

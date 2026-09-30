@@ -19,6 +19,7 @@ const categories: Category[] = [
     sku_prefix: 'DOOR',
     requires_single_supplier: true,
     next_sku_number: 27,
+    display_order: 0,
     created_at: '2026-01-10T12:00:00Z',
   },
   {
@@ -27,6 +28,7 @@ const categories: Category[] = [
     sku_prefix: 'CONN',
     requires_single_supplier: false,
     next_sku_number: 310,
+    display_order: 1,
     created_at: '2026-01-10T12:00:00Z',
   },
 ];
@@ -68,6 +70,7 @@ describe('CategoriesPage', () => {
       sku_prefix: 'CAUL2',
       requires_single_supplier: false,
       next_sku_number: 1,
+      display_order: 2,
       created_at: '2026-09-16T00:00:00Z',
     });
     const user = userEvent.setup();

@@ -2,7 +2,8 @@ import { Fragment, useMemo, useState } from 'react';
 import type { Material, ProjectTemplate, ProjectTemplateItem } from '../../api/types';
 import { Button } from '../../components/Button';
 import { MaterialCombobox } from '../project-builder/MaterialCombobox';
-import { countByMaterialId, groupByCategory } from '../../lib/groupByCategory';
+import { buildCategoryOrder, countByMaterialId, groupByCategory } from '../../lib/groupByCategory';
+import { useCategories } from '../../hooks/useCategories';
 import styles from '../../components/CrudScreen.module.css';
 
 interface TemplateItemsPanelProps {
@@ -22,6 +23,8 @@ export function TemplateItemsPanel({
   const [selected, setSelected] = useState<Material | null>(null);
   const [adding, setAdding] = useState(false);
 
+  const { categories } = useCategories();
+  const categoryOrder = useMemo(() => buildCategoryOrder(categories), [categories]);
   const duplicateCounts = useMemo(() => countByMaterialId(template.items), [template.items]);
 
   async function handleAdd() {
@@ -53,7 +56,7 @@ export function TemplateItemsPanel({
               </tr>
             </thead>
             <tbody>
-              {groupByCategory<ProjectTemplateItem>(template.items).map((group) => (
+              {groupByCategory<ProjectTemplateItem>(template.items, categoryOrder).map((group) => (
                 <Fragment key={group.category ?? '__none__'}>
                   <tr className={styles.categoryRow}>
                     <td colSpan={3} className={styles.categoryCell}>

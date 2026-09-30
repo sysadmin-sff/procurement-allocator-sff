@@ -7,9 +7,10 @@ import { templatesApi } from '../api/templates';
 import type { Material, ProjectTemplate, ProjectWithItems } from '../api/types';
 import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useCategories } from '../hooks/useCategories';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { usePerKeyDebounce } from '../hooks/usePerKeyDebounce';
-import { countByMaterialId, groupByCategory, type CategorizedItem } from '../lib/groupByCategory';
+import { buildCategoryOrder, countByMaterialId, groupByCategory, type CategorizedItem } from '../lib/groupByCategory';
 import { MaterialCombobox } from './project-builder/MaterialCombobox';
 import styles from './project-builder/ProjectBuilder.module.css';
 import crudStyles from '../components/CrudScreen.module.css';
@@ -140,8 +141,13 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
     return { categorized, drafts };
   }, [rows]);
 
+  const { categories } = useCategories();
+  const categoryOrder = useMemo(() => buildCategoryOrder(categories), [categories]);
   const duplicateCounts = useMemo(() => countByMaterialId(categorized), [categorized]);
-  const groupedRows = useMemo(() => groupByCategory(categorized), [categorized]);
+  const groupedRows = useMemo(
+    () => groupByCategory(categorized, categoryOrder),
+    [categorized, categoryOrder],
+  );
 
   // Row's "#" column and Enter/focus behavior key off its position in the
   // input order (rows), not its position in the category-grouped display —

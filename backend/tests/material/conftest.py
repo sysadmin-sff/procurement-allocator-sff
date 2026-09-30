@@ -117,6 +117,7 @@ def make_category(db_session):
             sku_prefix=sku_prefix,
             requires_single_supplier=requires_single_supplier,
             next_sku_number=next_sku_number,
+            display_order=10_000 + counter["n"],
         )
         session.add(category)
         session.flush()

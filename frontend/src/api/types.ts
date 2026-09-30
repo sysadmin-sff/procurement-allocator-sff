@@ -162,6 +162,11 @@ export interface Category {
   sku_prefix: string;
   requires_single_supplier: boolean;
   next_sku_number: number;
+  /** Fixed display order (ADR-0042) — GET /categories is already sorted by
+   * this field, so consumers don't need to re-sort the list itself; exposed
+   * here so category-grouping UIs (groupByCategory) can build a name →
+   * display_order lookup from useCategories(). Never sent on create/update. */
+  display_order: number;
   created_at: string;
 }
 

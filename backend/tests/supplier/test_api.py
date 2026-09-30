@@ -231,7 +231,9 @@ def test_delete_supplier_returns_409_when_referenced_by_price(
 
     supplier = make_supplier(name="Referenced Supplier")
     category = Category(
-        name=f"Test Category {uuid.uuid4().hex[:8]}", sku_prefix=f"TC{uuid.uuid4().hex[:6]}"
+        name=f"Test Category {uuid.uuid4().hex[:8]}",
+        sku_prefix=f"TC{uuid.uuid4().hex[:6]}",
+        display_order=10_000 + uuid.uuid4().int % 1000,
     )
     session.add(category)
     session.flush()

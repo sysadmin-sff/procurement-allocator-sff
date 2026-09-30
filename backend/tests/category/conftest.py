@@ -90,12 +90,21 @@ def make_category(db_session):
     session, category_ids, _material_ids, _user_ids = db_session
     counter = {"n": 0}
 
-    def _make(name=None, sku_prefix=None, requires_single_supplier=False):
+    def _make(name=None, sku_prefix=None, requires_single_supplier=False, display_order=None):
         counter["n"] += 1
         name = name or f"Test Category {uuid.uuid4().hex[:12]}"
         sku_prefix = sku_prefix or f"TC{uuid.uuid4().hex[:6].upper()}"
+        if display_order is None:
+            # High, per-fixture-call-unique range -- keeps ad-hoc test
+            # categories from colliding with the real ADR-0042 backfilled
+            # values (0-7) or with each other, without callers needing to
+            # care about ordering unless a test is specifically about it.
+            display_order = 10_000 + counter["n"]
         category = Category(
-            name=name, sku_prefix=sku_prefix, requires_single_supplier=requires_single_supplier
+            name=name,
+            sku_prefix=sku_prefix,
+            requires_single_supplier=requires_single_supplier,
+            display_order=display_order,
         )
         session.add(category)
         session.flush()

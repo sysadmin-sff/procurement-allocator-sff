@@ -78,8 +78,10 @@ def db_session():
 def make_category(db_session):
     session, *_ = db_session
     created_ids: list = []
+    counter = {"n": 0}
 
     def _make(name=None, sku_prefix=None, requires_single_supplier=False, next_sku_number=1):
+        counter["n"] += 1
         name = name or f"Test Category {uuid.uuid4().hex[:12]}"
         sku_prefix = sku_prefix or f"TC{uuid.uuid4().hex[:6].upper()}"
         category = Category(
@@ -87,6 +89,7 @@ def make_category(db_session):
             sku_prefix=sku_prefix,
             requires_single_supplier=requires_single_supplier,
             next_sku_number=next_sku_number,
+            display_order=10_000 + counter["n"],
         )
         session.add(category)
         session.flush()

@@ -419,7 +419,7 @@ describe('ProjectDetailPage', () => {
       return rows.map((row) => within(row).getAllByRole('cell')[0].textContent ?? '');
     }
 
-    it('shows orders in the order the API returned them, unsorted by default', async () => {
+    it('shows orders oldest-first by default', async () => {
       getMock.mockResolvedValue(projectFixture());
       suppliersListMock.mockResolvedValue([supplierEarly, supplierMid, supplierLate]);
       ordersListForProjectMock.mockResolvedValue(threeOrdersOutOfDateOrder());
@@ -427,7 +427,7 @@ describe('ProjectDetailPage', () => {
       renderPage();
 
       await screen.findByText('Ордера');
-      expect(supplierNamesInRowOrder()).toEqual(['Mid Supplier', 'Late Supplier', 'Early Supplier']);
+      expect(supplierNamesInRowOrder()).toEqual(['Early Supplier', 'Mid Supplier', 'Late Supplier']);
     });
 
     it('sorts newest-first on the first click of the "Создан" header', async () => {
@@ -443,7 +443,7 @@ describe('ProjectDetailPage', () => {
       expect(supplierNamesInRowOrder()).toEqual(['Late Supplier', 'Mid Supplier', 'Early Supplier']);
     });
 
-    it('sorts oldest-first on the second click of the "Создан" header', async () => {
+    it('toggles back to oldest-first on a second click', async () => {
       getMock.mockResolvedValue(projectFixture());
       suppliersListMock.mockResolvedValue([supplierEarly, supplierMid, supplierLate]);
       ordersListForProjectMock.mockResolvedValue(threeOrdersOutOfDateOrder());
@@ -456,22 +456,6 @@ describe('ProjectDetailPage', () => {
       await user.click(header);
 
       expect(supplierNamesInRowOrder()).toEqual(['Early Supplier', 'Mid Supplier', 'Late Supplier']);
-    });
-
-    it('toggles back to newest-first on a third click', async () => {
-      getMock.mockResolvedValue(projectFixture());
-      suppliersListMock.mockResolvedValue([supplierEarly, supplierMid, supplierLate]);
-      ordersListForProjectMock.mockResolvedValue(threeOrdersOutOfDateOrder());
-
-      renderPage();
-      await screen.findByText('Ордера');
-      const user = userEvent.setup();
-      const header = screen.getByRole('columnheader', { name: /Создан/ });
-      await user.click(header);
-      await user.click(header);
-      await user.click(header);
-
-      expect(supplierNamesInRowOrder()).toEqual(['Late Supplier', 'Mid Supplier', 'Early Supplier']);
     });
   });
 

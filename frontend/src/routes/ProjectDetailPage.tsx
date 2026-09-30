@@ -35,13 +35,11 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
   const [newMaterial, setNewMaterial] = useState<Material | null>(null);
   const [newQuantity, setNewQuantity] = useState('');
   const [addingItem, setAddingItem] = useState(false);
-  // null = unsorted, the order the API returned (default). First click on
-  // "Создан" goes straight to desc (newest first) — that's the whole point
-  // of the feature, not an asc-first toggle like MaterialsPage's columns.
-  const [orderSortDirection, setOrderSortDirection] = useState<'asc' | 'desc' | null>(null);
+  // Default asc (oldest first) — always sorted, not the raw API order.
+  const [orderSortDirection, setOrderSortDirection] = useState<'asc' | 'desc'>('asc');
 
   function toggleOrderSort() {
-    setOrderSortDirection((current) => (current === 'desc' ? 'asc' : 'desc'));
+    setOrderSortDirection((current) => (current === 'asc' ? 'desc' : 'asc'));
   }
 
   useEffect(() => {
@@ -167,13 +165,10 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
     return <ErrorBanner error="Не указан проект." />;
   }
 
-  const sortedOrders =
-    orderSortDirection == null
-      ? orders
-      : [...orders].sort((a, b) => {
-          const delta = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-          return orderSortDirection === 'asc' ? delta : -delta;
-        });
+  const sortedOrders = [...orders].sort((a, b) => {
+    const delta = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return orderSortDirection === 'asc' ? delta : -delta;
+  });
 
   return (
     <div className={styles.page}>
@@ -245,12 +240,8 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                         <th>Доставка</th>
                         <th className={styles.sortableHeader} onClick={toggleOrderSort}>
                           Создан
-                          <span
-                            className={`${styles.sortIndicator} ${
-                              orderSortDirection != null ? styles.sortIndicatorActive : ''
-                            }`}
-                          >
-                            {orderSortDirection == null ? '⇅' : orderSortDirection === 'asc' ? '▲' : '▼'}
+                          <span className={`${styles.sortIndicator} ${styles.sortIndicatorActive}`}>
+                            {orderSortDirection === 'asc' ? '▲' : '▼'}
                           </span>
                         </th>
                         <th></th>

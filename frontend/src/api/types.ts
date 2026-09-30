@@ -51,6 +51,9 @@ export interface Supplier {
   payment_terms: string | null;
   portal_url: string | null;
   comments: string | null;
+  /** Admin-only participation gate for the ILP allocation solver — not the
+   * same as "has an active price" (see ADR-0041). */
+  is_active_for_allocation: boolean;
 }
 
 export interface SupplierCreate {
@@ -74,6 +77,7 @@ export interface SupplierUpdate {
   payment_terms?: string | null;
   portal_url?: string | null;
   comments?: string | null;
+  is_active_for_allocation?: boolean;
 }
 
 export interface Office {

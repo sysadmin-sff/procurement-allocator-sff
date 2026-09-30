@@ -76,6 +76,7 @@ const supplierA: Supplier = {
   payment_terms: null,
   portal_url: null,
   comments: null,
+  is_active_for_allocation: true,
 };
 
 const supplierB: Supplier = {
@@ -92,6 +93,7 @@ const supplierB: Supplier = {
   payment_terms: null,
   portal_url: null,
   comments: null,
+  is_active_for_allocation: true,
 };
 
 const materialScreen: Material = {

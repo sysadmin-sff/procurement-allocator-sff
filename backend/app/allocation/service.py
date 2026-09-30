@@ -129,10 +129,20 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
         for price in prices
     ]
 
+    supplier_ids = {p.supplier_id for p in prices}
+    suppliers = db.scalars(
+        select(Supplier).where(
+            Supplier.id.in_(supplier_ids),
+            Supplier.is_active_for_allocation.is_(True),
+        )
+    ).all()
+    active_supplier_ids = {s.id for s in suppliers}
+    price_inputs = [
+        p for p in price_inputs if uuid.UUID(p.supplier_id) in active_supplier_ids
+    ]
+
     solvable_materials, orphaned = split_orphaned_materials(materials, price_inputs)
 
-    supplier_ids = {p.supplier_id for p in prices}
-    suppliers = db.scalars(select(Supplier).where(Supplier.id.in_(supplier_ids))).all()
     supplier_inputs = [
         SupplierInput(
             supplier_id=str(supplier.id),

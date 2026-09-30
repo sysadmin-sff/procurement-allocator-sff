@@ -132,6 +132,7 @@ export function SuppliersPage() {
                     <tr>
                       <th>Название</th>
                       <th>Статус</th>
+                      <th>Участвует в расчёте</th>
                       <th>Валюта</th>
                       <th>Доставка</th>
                       <th></th>
@@ -142,6 +143,13 @@ export function SuppliersPage() {
                       <tr key={supplier.id} onClick={() => navigate(`/suppliers/${supplier.id}`)}>
                         <td>{supplier.name}</td>
                         <td>{supplier.status ?? <span className={styles.muted}>—</span>}</td>
+                        <td>
+                          {supplier.is_active_for_allocation ? (
+                            'Да'
+                          ) : (
+                            <span className={styles.muted}>Отключён</span>
+                          )}
+                        </td>
                         <td>{supplier.currency}</td>
                         <td>{summarizeDeliveryPolicy(supplier.delivery_policy)}</td>
                         <td onClick={(e) => e.stopPropagation()}>

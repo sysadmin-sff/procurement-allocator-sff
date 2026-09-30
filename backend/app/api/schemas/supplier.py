@@ -45,6 +45,7 @@ class SupplierUpdate(BaseModel):
     payment_terms: str | None = None
     portal_url: str | None = None
     comments: str | None = None
+    is_active_for_allocation: bool | None = None
 
 
 class SupplierOut(BaseModel):
@@ -63,6 +64,7 @@ class SupplierOut(BaseModel):
     payment_terms: str | None
     portal_url: str | None
     comments: str | None
+    is_active_for_allocation: bool
 
 
 class OfficeCreate(BaseModel):

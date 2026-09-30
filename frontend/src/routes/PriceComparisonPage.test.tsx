@@ -63,6 +63,7 @@ function supplierFixture(overrides: Partial<Supplier> = {}): Supplier {
     payment_terms: null,
     portal_url: null,
     comments: null,
+    is_active_for_allocation: true,
     ...overrides,
   };
 }

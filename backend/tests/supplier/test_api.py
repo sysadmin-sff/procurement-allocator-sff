@@ -284,3 +284,67 @@ def test_list_suppliers_as_admin_succeeds(make_user, make_session):
     admin_session = make_session(admin)
     response = _client_as(admin_session).get("/suppliers")
     assert response.status_code == 200
+
+
+def test_create_supplier_defaults_is_active_for_allocation_true(
+    db_session, make_user, make_session
+):
+    session, supplier_ids, _user_ids = db_session
+    client = _admin_client(make_user, make_session)
+
+    response = client.post(
+        "/suppliers", json={"name": "Default Active Supplier"}, headers={"X-CSRF-Token": CSRF}
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    supplier_ids.append(uuid.UUID(body["id"]))
+    assert body["is_active_for_allocation"] is True
+
+
+def test_update_supplier_changes_is_active_for_allocation(
+    db_session, make_supplier, make_user, make_session
+):
+    supplier = make_supplier(name="Toggle Me")
+    client = _admin_client(make_user, make_session)
+
+    response = client.put(
+        f"/suppliers/{supplier.id}",
+        json={"is_active_for_allocation": False},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["is_active_for_allocation"] is False
+
+
+def test_update_supplier_is_active_for_allocation_as_employee_returns_403(
+    db_session, make_supplier, make_user, make_session
+):
+    supplier = make_supplier(name="Guarded Supplier")
+    employee = make_user(role="employee")
+    employee_session = make_session(employee)
+    client = _client_as(employee_session)
+
+    response = client.put(
+        f"/suppliers/{supplier.id}",
+        json={"is_active_for_allocation": False},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 403
+
+
+def test_update_supplier_is_active_for_allocation_no_session_returns_401(
+    db_session, make_supplier
+):
+    supplier = make_supplier(name="Unguarded Supplier")
+    client = TestClient(app)
+
+    response = client.put(
+        f"/suppliers/{supplier.id}",
+        json={"is_active_for_allocation": False},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 401

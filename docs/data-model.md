@@ -45,6 +45,7 @@ erDiagram
         string payment_terms "NET 30 и т.п.; отдельно от delivery_policy"
         string portal_url
         string comments
+        boolean is_active_for_allocation "admin-флаг участия в ILP-расчёте, default true, ADR-0041"
     }
     Office {
         uuid id
@@ -305,11 +306,20 @@ ADR-0034 §4/§7).
 свободный текст) добавлено отдельно, см. `docs/decisions/0017-supplier-short-name.md` —
 используется только в шапке таблиц `PriceComparisonPage` (ADR-0016), с fallback на `name`.
 Все справочные поля, ни одно не читается
-ILP-солвером — единственное поле `Supplier`, влияющее на расчёт, по-прежнему `delivery_policy`.
+ILP-солвером — поля `Supplier`, влияющие на расчёт: `delivery_policy` (условия доставки) и
+`is_active_for_allocation` (административный gate участия, см. ниже).
 `SupplierContact.office_id` nullable и удаление `Office` переводит `office_id` его контактов
 в `NULL` (не блокирует и не каскадит удаление контактов) — офис не обязателен для контакта.
 `SupplierContact.supplier_id` — намеренная денормализация поверх `office_id → Office.supplier_id`,
 не выводится через join, чтобы "все контакты поставщика" не зависело от наличия office_id.
+
+`Supplier.is_active_for_allocation` (`BOOLEAN NOT NULL DEFAULT true`) — см.
+`docs/decisions/0041-supplier-active-for-allocation-flag.md`. Административный переключатель,
+отдельный от `status` (который остаётся свободнотекстовой заметкой, не машинным флагом).
+`run_allocation` (`backend/app/allocation/service.py`) фильтрует кандидатов-поставщиков по этому
+полю сразу после того, как собрал их из активных `Price` — поставщик без флага не попадает в
+`AllocationInput.suppliers`, даже если у него есть актуальная цена. Не ретроактивно: смена флага
+не меняет уже существующие `AllocationLine`/`Order`, только будущие вызовы `run_allocation`.
 
 `PurchaseRecord` добавлена сверх исходной диаграммы — см.
 `docs/decisions/0008-actual-purchase-record.md`. Журнал того, что реально

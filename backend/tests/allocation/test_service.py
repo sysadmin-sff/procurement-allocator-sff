@@ -81,6 +81,109 @@ def test_run_allocation_skips_supplier_below_min_order_amount_for_single_item(
     assert lines[0].supplier_id == fallback.id
 
 
+def test_run_allocation_excludes_supplier_deactivated_for_allocation_even_with_active_price(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0041: Supplier.is_active_for_allocation=False must remove the
+    supplier from candidates even though it still has an active Price —
+    the two exclusion paths (no price vs flagged off) are independent."""
+    session, *_ = db_session
+    deactivated = make_supplier(
+        name="Deactivated Supplier",
+        flat_fee=0.0,
+        free_shipping_threshold=0.0,
+        is_active_for_allocation=False,
+    )
+    fallback = make_supplier(name="Fallback Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, deactivated, price=1.00, availability=10)
+    make_price(material, fallback, price=2.00, availability=10)
+    project = make_project([(material, 10)])
+
+    run = run_allocation(session, project.id)
+
+    lines = session.query(AllocationLine).filter_by(allocation_run_id=run.id).all()
+    assert len(lines) == 1
+    assert lines[0].supplier_id == fallback.id
+    assert run.orphaned_materials == []
+    supplier_ids_in_summaries = {s["supplier_id"] for s in run.supplier_summaries}
+    assert str(deactivated.id) not in supplier_ids_in_summaries
+
+
+def test_run_allocation_marks_material_orphaned_when_only_supplier_is_deactivated(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """A material whose only priced supplier is deactivated behaves exactly
+    like a material with no active price at all (ADR-0041 п.2 — both paths
+    must give the same result: the supplier is simply not a candidate)."""
+    session, *_ = db_session
+    deactivated = make_supplier(
+        name="Only Supplier", flat_fee=0.0, free_shipping_threshold=0.0,
+        is_active_for_allocation=False,
+    )
+    material = make_material()
+    make_price(material, deactivated, price=1.00, availability=10)
+    project = make_project([(material, 10)])
+
+    run = run_allocation(session, project.id)
+
+    lines = session.query(AllocationLine).filter_by(allocation_run_id=run.id).all()
+    assert len(lines) == 0
+    assert len(run.orphaned_materials) == 1
+    assert run.orphaned_materials[0]["material_id"] == str(material.id)
+
+
+def test_run_allocation_still_excludes_supplier_with_no_active_price_when_flag_true(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Regression guard: a supplier with is_active_for_allocation=True (the
+    default) but without any active Price on the needed materials must
+    remain absent — the new flag only adds a second, independent exclusion
+    path, it never makes a priceless supplier a candidate."""
+    session, *_ = db_session
+    priceless = make_supplier(
+        name="Priceless Supplier", flat_fee=0.0, free_shipping_threshold=0.0,
+        is_active_for_allocation=True,
+    )
+    priced = make_supplier(name="Priced Supplier", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, priced, price=2.00, availability=10)
+    project = make_project([(material, 10)])
+
+    run = run_allocation(session, project.id)
+
+    lines = session.query(AllocationLine).filter_by(allocation_run_id=run.id).all()
+    assert len(lines) == 1
+    assert lines[0].supplier_id == priced.id
+    supplier_ids_in_summaries = {s["supplier_id"] for s in run.supplier_summaries}
+    assert str(priceless.id) not in supplier_ids_in_summaries
+
+
+def test_run_allocation_deactivating_supplier_does_not_change_past_allocation_line(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0041 п.3: the flag governs future run_allocation calls only — an
+    existing AllocationLine referencing a since-deactivated supplier is not
+    retroactively changed or removed."""
+    session, *_ = db_session
+    supplier = make_supplier(name="Later Deactivated", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=5.00, availability=10)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+    lines_before = session.query(AllocationLine).filter_by(allocation_run_id=run.id).all()
+    assert len(lines_before) == 1
+    line_id = lines_before[0].id
+
+    supplier.is_active_for_allocation = False
+    session.commit()
+
+    persisted_line = session.get(AllocationLine, line_id)
+    assert persisted_line is not None
+    assert persisted_line.supplier_id == supplier.id
+
+
 def test_run_allocation_records_supplier_summary_with_delivery_fee(
     db_session, make_supplier, make_material, make_price, make_project
 ):

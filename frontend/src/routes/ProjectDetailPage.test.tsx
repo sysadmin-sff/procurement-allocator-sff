@@ -283,6 +283,7 @@ describe('ProjectDetailPage', () => {
       payment_terms: null,
       portal_url: null,
       comments: null,
+      is_active_for_allocation: true,
     };
     const order: Order = orderFixture({
       id: 'order-1',
@@ -328,6 +329,7 @@ describe('ProjectDetailPage', () => {
       payment_terms: null,
       portal_url: null,
       comments: null,
+      is_active_for_allocation: true,
     };
     const order: Order = orderFixture(
       {
@@ -375,6 +377,7 @@ describe('ProjectDetailPage', () => {
       payment_terms: null,
       portal_url: null,
       comments: null,
+      is_active_for_allocation: true,
     };
     const supplierMid: Supplier = { ...supplierEarly, id: 'sup-mid', name: 'Mid Supplier' };
     const supplierLate: Supplier = { ...supplierEarly, id: 'sup-late', name: 'Late Supplier' };
@@ -496,6 +499,7 @@ describe('ProjectDetailPage', () => {
       payment_terms: null,
       portal_url: null,
       comments: null,
+      is_active_for_allocation: true,
     };
     const fullyDeclinedOrder: Order = orderFixture(
       {
@@ -543,6 +547,7 @@ describe('ProjectDetailPage', () => {
       payment_terms: null,
       portal_url: null,
       comments: null,
+      is_active_for_allocation: true,
     };
     const partiallyDeclinedOrder: Order = orderFixture(
       {
@@ -581,6 +586,7 @@ describe('ProjectDetailPage', () => {
       payment_terms: null,
       portal_url: null,
       comments: null,
+      is_active_for_allocation: true,
     };
     const order: Order = orderFixture({
       id: 'order-1',

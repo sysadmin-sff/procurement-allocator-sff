@@ -127,6 +127,7 @@ interface BasicInfoFormValues {
   payment_terms: string;
   portal_url: string;
   contacts: string;
+  is_active_for_allocation: boolean;
 }
 
 function toBasicInfoValues(supplier: Supplier): BasicInfoFormValues {
@@ -140,6 +141,7 @@ function toBasicInfoValues(supplier: Supplier): BasicInfoFormValues {
     payment_terms: supplier.payment_terms ?? '',
     portal_url: supplier.portal_url ?? '',
     contacts: supplier.contacts ?? '',
+    is_active_for_allocation: supplier.is_active_for_allocation,
   };
 }
 
@@ -178,6 +180,7 @@ function BasicInfoSection({
       payment_terms: values.payment_terms.trim() || null,
       portal_url: values.portal_url.trim() || null,
       contacts: values.contacts.trim() || null,
+      is_active_for_allocation: values.is_active_for_allocation,
     };
 
     setSaving(true);
@@ -294,6 +297,21 @@ function BasicInfoSection({
               onChange={(e) => update('portal_url', e.target.value)}
               placeholder="https://…"
             />
+          </div>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="basic-is-active-for-allocation">
+              <input
+                id="basic-is-active-for-allocation"
+                type="checkbox"
+                checked={values.is_active_for_allocation}
+                onChange={(e) => update('is_active_for_allocation', e.target.checked)}
+              />{' '}
+              Участвует в расчёте распределения
+            </label>
+            <div className={styles.fieldHint}>
+              Если выключено, поставщик не попадёт в список кандидатов ILP-расчёта, даже если у
+              него есть активные цены. Не влияет на уже созданные ордера и прошлые расчёты.
+            </div>
           </div>
           <div className={`${styles.field} ${styles.fieldFull}`}>
             <label className={styles.label} htmlFor="basic-contacts">

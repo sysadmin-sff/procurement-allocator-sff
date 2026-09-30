@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, String, Text
+from sqlalchemy import JSON, Boolean, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, UUIDPKMixin
@@ -35,6 +35,9 @@ class Supplier(UUIDPKMixin, Base):
     """"NET 30" и т.п. — не то же самое, что delivery_policy, см. ADR-0010 п.3."""
     portal_url: Mapped[str | None] = mapped_column(String(500))
     comments: Mapped[str | None] = mapped_column(Text)
+    is_active_for_allocation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    """Административный флаг участия в ILP-расчёте (ADR-0041). Не то же самое,
+    что отсутствие активных Price — см. ADR-0041 п.2 про различие причин."""
 
     prices: Mapped[list["Price"]] = relationship(back_populates="supplier")
     aliases: Mapped[list["SupplierMaterialAlias"]] = relationship(back_populates="supplier")

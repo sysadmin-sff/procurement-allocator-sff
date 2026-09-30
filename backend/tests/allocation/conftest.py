@@ -155,6 +155,7 @@ def make_supplier(db_session):
         flat_fee=0.0,
         free_shipping_threshold=0.0,
         per_order_min_amount=0.0,
+        is_active_for_allocation=True,
     ):
         supplier = Supplier(
             name=name,
@@ -165,6 +166,7 @@ def make_supplier(db_session):
                 "per_order_min_amount": per_order_min_amount,
                 "lead_time_days": 1,
             },
+            is_active_for_allocation=is_active_for_allocation,
         )
         session.add(supplier)
         session.flush()

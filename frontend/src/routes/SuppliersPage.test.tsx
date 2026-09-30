@@ -25,6 +25,7 @@ const suppliers: Supplier[] = [
     payment_terms: null,
     portal_url: null,
     comments: null,
+    is_active_for_allocation: true,
   },
 ];
 
@@ -54,5 +55,30 @@ describe('SuppliersPage admin-only actions (ADR-0024 §7 — UI convenience only
     expect(await screen.findByText('Alutex')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /добавить поставщика/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /удалить/i })).toBeEnabled();
+  });
+});
+
+describe('SuppliersPage allocation participation indicator (ADR-0041)', () => {
+  it('shows "Отключён" for a supplier with is_active_for_allocation=false', async () => {
+    vi.mocked(suppliersApi.list).mockResolvedValue([
+      { ...suppliers[0], id: 's2', name: 'Deactivated Co', is_active_for_allocation: false },
+    ]);
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={{ id: 'u1', email: 'a@b.com', name: 'A', role: 'admin' }}>
+          <SuppliersPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Deactivated Co')).toBeInTheDocument();
+    expect(screen.getByText('Отключён')).toBeInTheDocument();
+  });
+
+  it('shows "Да" for a supplier with is_active_for_allocation=true', async () => {
+    renderAs('admin');
+
+    expect(await screen.findByText('Alutex')).toBeInTheDocument();
+    expect(screen.getByText('Да')).toBeInTheDocument();
   });
 });

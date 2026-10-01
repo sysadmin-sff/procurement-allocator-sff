@@ -659,8 +659,7 @@ function buildFullProjectMaterialListText({
     const material = materialById.get(item.material_id);
     const name = material ? resolveMaterialName(material, colorChoice) : item.material_id;
     const unit = material?.unit ?? '';
-    lines.push(`${index + 1}. ${name}`);
-    lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
+    lines.push(`${index + 1}. ${name} - ${item.quantity} ${unit}`.trimEnd());
   });
   return lines.join('\n');
 }
@@ -693,8 +692,7 @@ function buildOrderText({
     // via resolveMaterialName when the material isn't loaded yet.
     const name = material ? resolveMaterialName(material, colorChoice) : (item.raw_description ?? item.id);
     const unit = material?.unit ?? '';
-    lines.push(`${index + 1}. ${name}`);
-    lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
+    lines.push(`${index + 1}. ${name} - ${item.quantity} ${unit}`.trimEnd());
     if (includePrices) {
       lines.push(`   Price: ${formatMoney(item.quoted_price)}/unit`);
       lines.push(`   Total: ${formatMoney(item.quoted_price * item.quantity)}`);
@@ -760,8 +758,7 @@ function buildTargetPriceOrderText({
     const lineTotal = targetPrice * item.quantity;
     goodsTotal += lineTotal;
 
-    lines.push(`${index + 1}. ${name}`);
-    lines.push(`   Qty: ${item.quantity} ${unit}`.trimEnd());
+    lines.push(`${index + 1}. ${name} - ${item.quantity} ${unit}`.trimEnd());
     lines.push(`   Price: ${formatMoney(targetPrice)}/unit`);
     lines.push(`   Total: ${formatMoney(lineTotal)}`);
     lines.push('');

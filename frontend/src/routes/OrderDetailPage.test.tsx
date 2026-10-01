@@ -725,7 +725,7 @@ describe('OrderDetailPage', () => {
     );
 
     expect(withPricesText?.value).toContain('Order for ABC Supply');
-    expect(withPricesText?.value).toContain('Qty: 10 рулон');
+    expect(withPricesText?.value).toContain('- 10 рулон');
     expect(withPricesText?.value).toContain('Grand total: $275.00');
     expect(withoutPricesText?.value).not.toContain('Total:');
     expect(withoutPricesText?.value).not.toContain('Grand total');
@@ -785,7 +785,7 @@ describe('OrderDetailPage', () => {
       const textarea = fullProjectBlockTextarea();
       expect(textarea.value).toContain(material.canonical_name);
       expect(textarea.value).toContain('Профиль алюминиевый');
-      expect(textarea.value).toContain('Qty: 4 шт');
+      expect(textarea.value).toContain('- 4 шт');
       // Always price-free, regardless of includePrices on any other block.
       expect(textarea.value).not.toContain('Price:');
       expect(textarea.value).not.toContain('Order for ABC Supply');

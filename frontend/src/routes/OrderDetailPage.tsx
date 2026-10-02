@@ -697,7 +697,6 @@ function buildOrderText({
       lines.push(`   Price: ${formatMoney(item.quoted_price)}/unit`);
       lines.push(`   Total: ${formatMoney(item.quoted_price * item.quantity)}`);
     }
-    lines.push('');
   });
 
   if (includePrices) {
@@ -705,11 +704,10 @@ function buildOrderText({
     // items (ADR-0026, computed server-side) — not order.total_amount/
     // delivery_fee (the as-sent snapshot) and not a client-side recompute
     // from includedItems. See ADR-0027 §5.
+    lines.push('');
     lines.push(`Goods total: ${formatMoney(order.expected_goods_total)}`);
     lines.push(`Delivery: ${formatMoney(order.expected_delivery_fee)}`);
     lines.push(`Grand total: ${formatMoney(order.expected_total)}`);
-  } else {
-    lines.pop();
   }
 
   return lines.join('\n');
@@ -761,9 +759,9 @@ function buildTargetPriceOrderText({
     lines.push(`${index + 1}. ${name} - ${item.quantity} ${unit}`.trimEnd());
     lines.push(`   Price: ${formatMoney(targetPrice)}/unit`);
     lines.push(`   Total: ${formatMoney(lineTotal)}`);
-    lines.push('');
   });
 
+  lines.push('');
   lines.push(`Goods total: ${formatMoney(goodsTotal)}`);
   lines.push(`Delivery: ${formatMoney(order.expected_delivery_fee)}`);
   lines.push(`Grand total: ${formatMoney(goodsTotal + order.expected_delivery_fee)}`);

@@ -23,7 +23,7 @@ vi.mock('../api/allocation', () => ({
   allocationApi: { run: vi.fn(), get: vi.fn(), overrideLine: vi.fn() },
 }));
 vi.mock('../api/projects', () => ({
-  projectsApi: { create: vi.fn(), get: vi.fn(), addItem: vi.fn() },
+  projectsApi: { create: vi.fn(), get: vi.fn(), addItem: vi.fn(), updateProject: vi.fn() },
 }));
 vi.mock('../api/suppliers', () => ({
   suppliersApi: { list: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
@@ -47,6 +47,7 @@ const runMock = vi.mocked(allocationApi.run);
 const getRunMock = vi.mocked(allocationApi.get);
 const overrideLineMock = vi.mocked(allocationApi.overrideLine);
 const projectGetMock = vi.mocked(projectsApi.get);
+const updateProjectMock = vi.mocked(projectsApi.updateProject);
 const suppliersListMock = vi.mocked(suppliersApi.list);
 const materialsListMock = vi.mocked(materialsApi.list);
 const pricesListMock = vi.mocked(pricesApi.list);
@@ -160,6 +161,7 @@ describe('AllocationResultPage', () => {
     getRunMock.mockReset();
     overrideLineMock.mockReset();
     projectGetMock.mockReset();
+    updateProjectMock.mockReset();
     suppliersListMock.mockReset();
     materialsListMock.mockReset();
     pricesListMock.mockReset();
@@ -1319,6 +1321,78 @@ describe('AllocationResultPage', () => {
 
       const button = await screen.findByRole('button', { name: /Подтвердить и создать ордера/ });
       expect(button).toBeEnabled();
+    });
+
+    it('lets the employee pick a color right on this page, enabling the button without leaving for the project page', async () => {
+      runMock.mockResolvedValue(colorRun());
+      materialsListMock.mockResolvedValue([colorMaterial]);
+      pricesListMock.mockResolvedValue([
+        { id: 'p1', material_id: 'mat-color', supplier_id: 'sup-a', price: 50, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      ] satisfies Price[]);
+      projectGetMock.mockResolvedValue({ ...project, color_choice: null });
+      updateProjectMock.mockResolvedValue({ ...project, color_choice: 'White' });
+
+      renderPage();
+
+      const button = await screen.findByRole('button', { name: /Подтвердить и создать ордера/ });
+      expect(button).toBeDisabled();
+
+      const colorSelect = screen.getByLabelText('Цвет проекта:');
+      const user = userEvent.setup();
+      await user.selectOptions(colorSelect, 'White');
+
+      expect(updateProjectMock).toHaveBeenCalledWith('proj-1', project.title, 'White');
+      expect(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ })).toBeEnabled();
+    });
+
+    it('rolls back the color selection on this page if saving it fails', async () => {
+      runMock.mockResolvedValue(colorRun());
+      materialsListMock.mockResolvedValue([colorMaterial]);
+      pricesListMock.mockResolvedValue([
+        { id: 'p1', material_id: 'mat-color', supplier_id: 'sup-a', price: 50, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      ] satisfies Price[]);
+      projectGetMock.mockResolvedValue({ ...project, color_choice: null });
+      updateProjectMock.mockRejectedValue(new Error('network error'));
+
+      renderPage();
+
+      const colorSelect = await screen.findByLabelText('Цвет проекта:');
+      const user = userEvent.setup();
+      await user.selectOptions(colorSelect, 'Bronze');
+
+      const button = await screen.findByRole('button', { name: /Подтвердить и создать ордера/ });
+      await screen.findByText(/network error/i);
+      expect(button).toBeDisabled();
+      expect(colorSelect).toHaveValue('');
+    });
+
+    it('does not show the color picker for a project with no color-choice materials', async () => {
+      runMock.mockResolvedValue(colorRun({
+        lines: [
+          {
+            id: 'line-1',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            quantity: 10,
+            unit_price: 12,
+            line_total: 120,
+            overridden_at: null,
+            original_supplier_id: null,
+            original_unit_price: null,
+            ordered_at: null,
+          },
+        ],
+      }));
+      materialsListMock.mockResolvedValue([materialScreen]);
+      pricesListMock.mockResolvedValue([
+        { id: 'p1', material_id: 'mat-1', supplier_id: 'sup-a', price: 12, currency: 'USD', availability: 100, min_order_qty: null, valid_from: '2026-01-01', valid_to: null, source_import_id: null },
+      ] satisfies Price[]);
+      projectGetMock.mockResolvedValue({ ...project, color_choice: null });
+
+      renderPage();
+
+      await screen.findByRole('button', { name: /Подтвердить и создать ордера/ });
+      expect(screen.queryByLabelText('Цвет проекта:')).not.toBeInTheDocument();
     });
 
     it('leaves the button enabled for a project with no color-choice materials, color_choice unset (regression)', async () => {

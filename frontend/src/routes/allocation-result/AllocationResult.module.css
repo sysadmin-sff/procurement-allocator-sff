@@ -388,6 +388,39 @@
   padding: 0 var(--space-8) var(--space-4);
 }
 
+.colorChoiceRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-2) 0;
+}
+
+.colorChoiceLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.colorChoiceSelect {
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-control-fill);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+.colorChoiceHint {
+  font-size: var(--text-sm-alt);
+  color: var(--color-danger-text);
+  font-weight: 500;
+}
+
 .footer {
   display: flex;
   align-items: center;

@@ -21,7 +21,7 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { OrderDraftConflictModal } from '../components/OrderDraftConflictModal';
-import { hasColorChoiceMaterial } from '../lib/colors';
+import { hasColorChoiceMaterial, KNOWN_COLORS } from '../lib/colors';
 import styles from './allocation-result/AllocationResult.module.css';
 
 function isOrderDraftConflict(err: unknown): err is ApiError & { body: OrderDraftConflict } {
@@ -129,6 +129,7 @@ export function AllocationResultPage() {
       data={data}
       onBack={() => navigate(`/projects/${projectId}`)}
       onRunChange={(run) => setData((prev) => (prev ? { ...prev, run } : prev))}
+      onProjectChange={(project) => setData((prev) => (prev ? { ...prev, project } : prev))}
       onOrdersCreated={() => navigate(`/projects/${projectId}`)}
     />
   );
@@ -138,11 +139,13 @@ function AllocationResultOk({
   data,
   onBack,
   onRunChange,
+  onProjectChange,
   onOrdersCreated,
 }: {
   data: LoadedData;
   onBack: () => void;
   onRunChange: (run: AllocationRun) => void;
+  onProjectChange: (project: ProjectWithItems) => void;
   onOrdersCreated: () => void;
 }) {
   const { run, project, suppliers, materials, prices } = data;
@@ -167,12 +170,12 @@ function AllocationResultOk({
   const [createOrdersError, setCreateOrdersError] = useState<unknown>(null);
   const [draftConflict, setDraftConflict] = useState<OrderDraftConflict | null>(null);
 
+  const hasColorMaterial = hasColorChoiceMaterial(run.lines.map((l) => materialById.get(l.material_id)));
+
   // UX mirror of the backend's hard block (ADR-0031 п.3) — the backend still
   // validates at order creation regardless, this is only so the employee
   // sees why the button is disabled before clicking it.
-  const needsColorChoice =
-    hasColorChoiceMaterial(run.lines.map((l) => materialById.get(l.material_id))) &&
-    project.color_choice == null;
+  const needsColorChoice = hasColorMaterial && project.color_choice == null;
 
   async function handleOverride(lineId: string, supplierId: string) {
     setOverrideError(null);
@@ -185,6 +188,18 @@ function AllocationResultOk({
       setOverrideError(err);
     } finally {
       setSavingLineId(null);
+    }
+  }
+
+  async function handleColorChoiceChange(colorChoice: string | null) {
+    setOverrideError(null);
+    const previous = project.color_choice;
+    onProjectChange({ ...project, color_choice: colorChoice });
+    try {
+      await projectsApi.updateProject(project.id, project.title, colorChoice);
+    } catch (err) {
+      setOverrideError(err);
+      onProjectChange({ ...project, color_choice: previous });
     }
   }
 
@@ -378,6 +393,31 @@ function AllocationResultOk({
         })}
 
         {createOrdersError != null && <ErrorBanner error={createOrdersError} />}
+
+        {hasColorMaterial && (
+          <div className={styles.colorChoiceRow}>
+            <label className={styles.colorChoiceLabel}>
+              Цвет проекта:
+              <select
+                className={styles.colorChoiceSelect}
+                value={project.color_choice ?? ''}
+                onChange={(e) => void handleColorChoiceChange(e.target.value === '' ? null : e.target.value)}
+              >
+                <option value="">Не выбран</option>
+                {KNOWN_COLORS.map((color) => (
+                  <option key={color} value={color}>
+                    {color}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {needsColorChoice && (
+              <span className={styles.colorChoiceHint}>
+                Нужно выбрать цвет, чтобы создать ордера
+              </span>
+            )}
+          </div>
+        )}
 
         <div className={styles.footer}>
           <span className={styles.footerHint}>

@@ -1424,4 +1424,93 @@ describe('AllocationResultPage', () => {
       expect(button).toBeEnabled();
     });
   });
+
+  describe('MOQ surplus warning (ADR-0045)', () => {
+    it('shows a warning when needed_quantity is set on a line', async () => {
+      const okRun: AllocationRun = {
+        id: 'run-moq',
+        project_id: 'proj-1',
+        created_at: '2026-08-17T00:00:00Z',
+        algorithm_version: 'v1',
+        status: 'ok',
+        split_categories: [],
+        lines: [
+          {
+            id: 'line-1',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            quantity: 100,
+            needed_quantity: 37,
+            unit_price: 0.5,
+            line_total: 50,
+            overridden_at: null,
+            original_supplier_id: null,
+            original_unit_price: null,
+            ordered_at: null,
+          },
+        ],
+        orphaned_materials: [],
+        supplier_summaries: [
+          {
+            supplier_id: 'sup-a',
+            goods_total: 50,
+            delivery_fee: 0,
+            tax_amount: 3.5,
+            total_with_tax: 53.5,
+            free_shipping_achieved: true,
+            below_min_order: false,
+          },
+        ],
+      };
+      runMock.mockResolvedValue(okRun);
+
+      renderPage();
+
+      expect(await screen.findByText(/37/)).toBeInTheDocument();
+    });
+
+    it('shows no warning when needed_quantity is null', async () => {
+      const okRun: AllocationRun = {
+        id: 'run-no-moq',
+        project_id: 'proj-1',
+        created_at: '2026-08-17T00:00:00Z',
+        algorithm_version: 'v1',
+        status: 'ok',
+        split_categories: [],
+        lines: [
+          {
+            id: 'line-1',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            quantity: 37,
+            needed_quantity: null,
+            unit_price: 0.5,
+            line_total: 18.5,
+            overridden_at: null,
+            original_supplier_id: null,
+            original_unit_price: null,
+            ordered_at: null,
+          },
+        ],
+        orphaned_materials: [],
+        supplier_summaries: [
+          {
+            supplier_id: 'sup-a',
+            goods_total: 18.5,
+            delivery_fee: 0,
+            tax_amount: 1.3,
+            total_with_tax: 19.8,
+            free_shipping_achieved: true,
+            below_min_order: false,
+          },
+        ],
+      };
+      runMock.mockResolvedValue(okRun);
+
+      renderPage();
+
+      await screen.findByText(materialScreen.canonical_name);
+      expect(screen.queryByText(/из-за минимального количества заказа/i)).not.toBeInTheDocument();
+    });
+  });
 });

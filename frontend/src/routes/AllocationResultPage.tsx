@@ -529,6 +529,12 @@ function LineRow({
             ⚠ изменено после отправки ордера — это изменение не попало в уже созданный ордер
           </span>
         )}
+        {line.needed_quantity != null && (
+          <span className={styles.availabilityRisk}>
+            заказано {line.quantity} вместо {line.needed_quantity} из-за минимального количества
+            заказа у поставщика
+          </span>
+        )}
       </td>
       <td className={`${styles.numCell} ${styles.qtyCol}`}>
         {line.quantity} {material?.unit ?? ''}

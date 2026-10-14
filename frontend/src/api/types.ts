@@ -319,6 +319,12 @@ export interface AllocationLine {
   material_id: string;
   supplier_id: string;
   quantity: number;
+  /** Исходная потребность материала, когда MOQ выбранного поставщика
+   * создал излишек (quantity > needed_quantity). NULL/undefined = MOQ не
+   * действовал. Optional (не только nullable) потому что AllocationLine
+   * is constructed inline across many existing test fixtures without a
+   * shared builder — see ADR-0045. */
+  needed_quantity?: number | null;
   unit_price: number;
   line_total: number;
   overridden_at: string | null;
@@ -371,6 +377,10 @@ export interface OrderItem {
   /** Non-null exactly when material_id is null — see ADR-0033 §1. */
   raw_description: string | null;
   quantity: number;
+  /** Перенесено из AllocationLine.needed_quantity при создании Order --
+   * исходная потребность материала, когда MOQ создал излишек. NULL = MOQ
+   * не действовал на момент расчёта. См. ADR-0045. */
+  needed_quantity: number | null;
   quoted_price: number;
   received_price: number | null;
   /** Количество, которое поставщик прислал в ответе для этой уже сматченной

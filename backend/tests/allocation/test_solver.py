@@ -1009,3 +1009,64 @@ def test_moq_much_larger_than_demand_does_not_break_free_shipping_bigm():
     assert summary.goods_total_cents == 1_000_000
     assert summary.free_shipping_achieved is True
     assert summary.delivery_fee_cents == 0
+
+
+def test_moq_interaction_with_requires_single_supplier():
+    """Строгая категория (ADR-0028) плюс MOQ-излишек у одного из
+    поставщиков категории -- мягкий штраф за разброс считается как обычно
+    (от x, не от количества), не ломается наличием MOQ."""
+    materials = [
+        MaterialInput(
+            material_id="m1", quantity=10, category_id="cat1",
+            requires_single_supplier=True,
+        ),
+        MaterialInput(
+            material_id="m2", quantity=5, category_id="cat1",
+            requires_single_supplier=True,
+        ),
+    ]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=100, free_shipping_threshold_cents=None),
+        SupplierInput(supplier_id="s2", flat_fee_cents=100, free_shipping_threshold_cents=None),
+    ]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=10, availability=100),
+        PriceInput(
+            material_id="m2", supplier_id="s1", unit_price_cents=10, availability=100,
+            min_order_qty=50,
+        ),
+        PriceInput(material_id="m1", supplier_id="s2", unit_price_cents=15, availability=100),
+        PriceInput(material_id="m2", supplier_id="s2", unit_price_cents=15, availability=100),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    assert len(result.lines) == 2
+
+
+def test_moq_does_not_require_any_special_handling_for_supplier_filtering():
+    """solve_allocation сам по себе не фильтрует поставщиков по активности
+    (ADR-0041) -- это ответственность service.py, выполняется до вызова
+    солвера. Здесь подтверждаем, что присутствие MOQ не меняет это: любой
+    PriceInput, дошедший до солвера, участвует в расчёте независимо от
+    флагов активности, которых PriceInput даже не содержит."""
+    materials = [MaterialInput(material_id="m1", quantity=10)]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=None)
+    ]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=10, availability=100,
+            min_order_qty=100,
+        ),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    assert result.lines[0].quantity == 100

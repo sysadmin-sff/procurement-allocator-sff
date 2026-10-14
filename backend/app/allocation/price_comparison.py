@@ -93,6 +93,7 @@ def get_price_comparison(db: Session, project_id: uuid.UUID) -> list[dict]:
                 "supplier_name": names_by_id[p.supplier_id],
                 "price": float(p.price),
                 "availability": p.availability,
+                "min_order_qty": p.min_order_qty,
             }
             for p in material_prices
         ]
@@ -144,6 +145,7 @@ def get_price_comparison(db: Session, project_id: uuid.UUID) -> list[dict]:
             {
                 "project_item_id": item.id,
                 "material_id": item.material_id,
+                "required_quantity": item.quantity,
                 "plan": plan,
                 "supplier_responses": supplier_responses,
             }

@@ -94,6 +94,10 @@ class PlanCandidateOut(BaseModel):
     supplier_name: str
     price: float
     availability: int | None
+    min_order_qty: int | None = None
+    """Price.min_order_qty для этой пары -- см. ADR-0045. Используется
+    фронтендом, чтобы предупредить, когда MOQ выше required_quantity
+    этой строки."""
     is_cheapest: bool
 
 
@@ -125,6 +129,9 @@ class MaterialComparisonRowOut(BaseModel):
 
     project_item_id: uuid.UUID
     material_id: uuid.UUID
+    required_quantity: int
+    """ProjectItem.quantity -- см. ADR-0045. Нужно фронтенду, чтобы
+    сравнить с min_order_qty каждого кандидата в plan."""
     plan: list[PlanCandidateOut]
     supplier_responses: list[SupplierResponseOut]
 

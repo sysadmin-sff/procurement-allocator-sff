@@ -288,3 +288,25 @@ def test_returns_404_for_missing_project(make_user, make_session):
     response = client.get(f"/projects/{uuid.uuid4()}/price-comparison")
 
     assert response.status_code == 404
+
+
+def test_row_includes_required_quantity_and_plan_includes_min_order_qty(
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
+):
+    """ADR-0045: PriceComparisonPage needs the project's required quantity
+    and each candidate's MOQ to warn when MOQ exceeds the requirement."""
+    session, *_ = db_session
+    material = make_material()
+    project = make_project([(material, 37)])
+    item = project.items[0]
+
+    supplier = make_supplier()
+    make_price(material, supplier, price=0.50, availability=1000, min_order_qty=100)
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/projects/{project.id}/price-comparison")
+
+    row = _row_for(response.json(), item.id)
+    assert row["required_quantity"] == 37
+    plan_by_supplier = {c["supplier_id"]: c for c in row["plan"]}
+    assert plan_by_supplier[str(supplier.id)]["min_order_qty"] == 100

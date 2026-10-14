@@ -980,15 +980,24 @@ def test_moq_much_larger_than_demand_does_not_break_free_shipping_bigm():
     free_shipping_threshold. max_order_total должен считаться от order_qty
     (10000 * 100 центов = 1_000_000), не от qty[m_id] (1 * 100 = 100) --
     иначе big_m = threshold + max_order_total окажется слишком маленьким
-    относительно реального order_total, и линеаризация free[s]/z[s] может
-    дать содержательно неверный (но математически допустимый) free_var.
-    threshold=500_000 центов -- order_total (10000*100=1_000_000) ЕГО
-    превышает, значит free_shipping_achieved должно быть True."""
+    относительно реального order_total, и big-M линеаризация не сможет
+    корректно установить free_var=1 для заказа, который объективно
+    превышает порог.
+
+    threshold=400_000 выбран не произвольно: со старым (багованным)
+    max_order_total = qty[m_id]*price = 100, порог линеаризации для free=1
+    был бы order_total <= 2*threshold + 99 = 800_099 -- наш order_total
+    (1_000_000) ЭТУ границу превышает, то есть при багованном big_m
+    free_shipping_achieved=True здесь физически недостижимо. Проверено
+    эмпирически (временный revert max_order_total на qty[m_id] в этом же
+    PR делает этот тест RED, см. историю коммитов) -- более ранняя версия
+    этого теста с threshold=500_000 была вакуумной (проходила и с багом, и
+    без него), эта версия реально различает оба случая."""
     materials = [MaterialInput(material_id="m1", quantity=1)]
     suppliers = [
         SupplierInput(
             supplier_id="s1", flat_fee_cents=1000,
-            free_shipping_threshold_cents=500_000,
+            free_shipping_threshold_cents=400_000,
         )
     ]
     prices = [
@@ -1002,6 +1011,7 @@ def test_moq_much_larger_than_demand_does_not_break_free_shipping_bigm():
         AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
     )
 
+    assert result.status == "OPTIMAL"
     line = result.lines[0]
     assert line.quantity == 10000
     assert line.line_total_cents == 1_000_000
@@ -1009,6 +1019,8 @@ def test_moq_much_larger_than_demand_does_not_break_free_shipping_bigm():
     assert summary.goods_total_cents == 1_000_000
     assert summary.free_shipping_achieved is True
     assert summary.delivery_fee_cents == 0
+
+
 
 
 def test_moq_interaction_with_requires_single_supplier():

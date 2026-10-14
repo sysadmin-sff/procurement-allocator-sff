@@ -64,6 +64,12 @@ class AllocationLine(UUIDPKMixin, Base):
         UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=False
     )
     quantity: Mapped[int] = mapped_column(nullable=False)
+    needed_quantity: Mapped[int | None] = mapped_column()
+    """Исходная потребность материала (MaterialInput.quantity на момент
+    расчёта), когда она отличается от quantity (реально заказываемого) из-за
+    MOQ выбранного поставщика. NULL = MOQ не действовал (quantity ==
+    потребность) -- тот же принцип "NULL = нет особого случая", что у
+    OrderItem.received_quantity (ADR-0039). См. ADR-0045."""
     unit_price: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
     line_total: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
     overridden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

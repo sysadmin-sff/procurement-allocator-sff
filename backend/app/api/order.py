@@ -85,6 +85,7 @@ def _to_order_item_out(
         material_id=item.material_id,
         raw_description=item.raw_description,
         quantity=item.quantity,
+        needed_quantity=item.needed_quantity,
         quoted_price=item.quoted_price,
         received_price=item.received_price,
         received_quantity=item.received_quantity,

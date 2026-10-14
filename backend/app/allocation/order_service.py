@@ -277,6 +277,14 @@ def find_replacement_candidates(
     ).all()
     names_by_id = {s.id: s.name for s in suppliers}
 
+    # ADR-0045: для каждого кандидата считаем его СОБСТВЕННЫЙ order_qty --
+    # line.quantity текущего (заменяемого) поставщика мог уже включать его
+    # MOQ-излишек, который не обязан совпадать с тем, что заказали бы у
+    # кандидата (у кандидата свой, другой MOQ). Потребность берётся из
+    # needed_quantity, если она зафиксирована, иначе line.quantity сам по
+    # себе является потребностью (MOQ текущего поставщика не действовал).
+    demand = line.needed_quantity if line.needed_quantity is not None else line.quantity
+
     candidates = [
         {
             "supplier_id": price.supplier_id,
@@ -284,7 +292,7 @@ def find_replacement_candidates(
             "price": float(price.price),
             "availability": price.availability,
             "availability_risk": price.availability is not None
-            and price.availability < line.quantity,
+            and price.availability < max(demand, price.min_order_qty or 0),
         }
         for price in prices
     ]
@@ -454,6 +462,7 @@ def replace_and_sync_order(
             order_id=target_order.id,
             material_id=line.material_id,
             quantity=line.quantity,
+            needed_quantity=line.needed_quantity,
             quoted_price=candidate["price"],
         )
     )
@@ -661,6 +670,7 @@ def create_orders_for_run(
                     order_id=order.id,
                     material_id=line.material_id,
                     quantity=line.quantity,
+                    needed_quantity=line.needed_quantity,
                     quoted_price=line.unit_price,
                 )
             )

@@ -389,3 +389,76 @@ def test_replacement_draft_order_id_null_when_new_supplier_has_no_draft(
     response = client.get(f"/orders/{order.id}")
     declined_item_out = next(i for i in response.json()["items"] if i["id"] == str(item.id))
     assert declined_item_out["replacement_draft_order_id"] is None
+
+
+def test_availability_risk_uses_candidate_own_moq_not_line_quantity(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """line.quantity у текущего (заменяемого) поставщика уже включает его
+    собственный MOQ-излишек (200, при потребности 37). Кандидат с
+    availability=50 должен сравниваться не с line.quantity=200 текущего
+    поставщика, а со своим собственным order_qty = max(needed_quantity=37,
+    candidate.min_order_qty=1) = 37 -- у кандидата своего MOQ-требования
+    выше потребности нет, значит availability=50 >= 37 -> risk=False, хотя
+    50 < line.quantity(200) -- регрессия против сегодняшнего
+    order_service.py (сравнение с line.quantity заменяемого поставщика,
+    не со своим собственным order_qty кандидата)."""
+    session, *_ = db_session
+    high_moq_current = make_supplier(name="CurrentHighMOQ", flat_fee=0.0, free_shipping_threshold=0.0)
+    low_availability_candidate = make_supplier(name="Candidate", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, high_moq_current, price=0.50, availability=1000, min_order_qty=200)
+    make_price(material, low_availability_candidate, price=5.00, availability=50, min_order_qty=1)
+    project = make_project([(material, 37)])
+
+    run = run_allocation(session, project.id)
+    line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    assert line.supplier_id == high_moq_current.id
+    assert line.quantity == 200
+    assert line.needed_quantity == 37
+
+    orders = create_orders_for_run(session, project.id, run.id)
+    order = orders[0]
+    item = order.items[0]
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/orders/{order.id}/items/{item.id}/find-replacement",
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    candidates = {c["supplier_id"]: c for c in response.json()["candidates"]}
+    assert candidates[str(low_availability_candidate.id)]["availability_risk"] is False
+
+
+def test_availability_risk_true_when_candidate_cannot_cover_its_own_moq_demand(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """Кандидат с MOQ выше своей собственной потребности и недостаточным
+    availability относительно этого MOQ -- risk=True, посчитанный от его
+    собственного order_qty, не от line.quantity текущего поставщика."""
+    session, *_ = db_session
+    current = make_supplier(name="Current", flat_fee=0.0, free_shipping_threshold=0.0)
+    risky_candidate = make_supplier(name="RiskyCandidate", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, current, price=1.00, availability=1000, min_order_qty=1)
+    make_price(material, risky_candidate, price=0.80, availability=50, min_order_qty=100)
+    project = make_project([(material, 37)])
+
+    run = run_allocation(session, project.id)
+    line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    assert line.quantity == 37  # MOQ=1 у текущего, нет излишка
+
+    orders = create_orders_for_run(session, project.id, run.id)
+    order = orders[0]
+    item = order.items[0]
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/orders/{order.id}/items/{item.id}/find-replacement",
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    candidates = {c["supplier_id"]: c for c in response.json()["candidates"]}
+    # candidate_order_qty = max(37, 100) = 100; availability=50 < 100 -> risk=True
+    assert candidates[str(risky_candidate.id)]["availability_risk"] is True

@@ -275,7 +275,18 @@ export interface PlanCandidate {
   supplier_name: string;
   price: number;
   availability: number | null;
+  /** Price.min_order_qty для этой пары -- см. ADR-0045. */
+  min_order_qty?: number | null;
+  /** max(required_quantity, min_order_qty) -- считается на backend,
+   * CLAUDE.md принцип 4. См. ADR-0045. */
+  order_qty?: number;
+  /** order_qty * price -- реальная стоимость закупки, считается на
+   * backend. См. ADR-0045. */
+  order_total?: number;
   is_cheapest: boolean;
+  /** availability задан и меньше order_qty (не required_quantity) --
+   * считается на backend. См. ADR-0045. */
+  availability_risk?: boolean;
 }
 
 /** One supplier's Order-derived response for a material — "Ответы поставщиков"
@@ -295,6 +306,8 @@ export interface SupplierResponse {
 export interface MaterialComparisonRow {
   project_item_id: string;
   material_id: string;
+  /** ProjectItem.quantity -- см. ADR-0045. */
+  required_quantity?: number;
   plan: PlanCandidate[];
   supplier_responses: SupplierResponse[];
 }
@@ -319,6 +332,12 @@ export interface AllocationLine {
   material_id: string;
   supplier_id: string;
   quantity: number;
+  /** Исходная потребность материала, когда MOQ выбранного поставщика
+   * создал излишек (quantity > needed_quantity). NULL/undefined = MOQ не
+   * действовал. Optional (не только nullable) потому что AllocationLine
+   * is constructed inline across many existing test fixtures without a
+   * shared builder — see ADR-0045. */
+  needed_quantity?: number | null;
   unit_price: number;
   line_total: number;
   overridden_at: string | null;
@@ -332,6 +351,10 @@ export interface OrphanedMaterial {
   required_quantity: number;
   best_partial_supplier_id: string | null;
   best_partial_available: number | null;
+  /** min_order_qty у best_partial_supplier_id, когда его availability
+   * покрывает required_quantity, но материал всё равно orphaned из-за
+   * MOQ -- см. ADR-0045. NULL/undefined = MOQ не является причиной. */
+  best_partial_min_order_qty?: number | null;
 }
 
 export interface SupplierAllocationSummary {
@@ -371,6 +394,10 @@ export interface OrderItem {
   /** Non-null exactly when material_id is null — see ADR-0033 §1. */
   raw_description: string | null;
   quantity: number;
+  /** Перенесено из AllocationLine.needed_quantity при создании Order --
+   * исходная потребность материала, когда MOQ создал излишек. NULL = MOQ
+   * не действовал на момент расчёта. См. ADR-0045. */
+  needed_quantity: number | null;
   quoted_price: number;
   received_price: number | null;
   /** Количество, которое поставщик прислал в ответе для этой уже сматченной
@@ -603,6 +630,9 @@ export interface PriceListEntry {
   action: 'match' | 'new' | 'skip' | null;
   possible_duplicate_of: string[];
   current_active_price: number | null;
+  /** Активный Price.min_order_qty для (поставщика, matched_material_id)
+   * -- симметрично current_active_price. См. ADR-0045. */
+  current_active_min_order_qty?: number | null;
 }
 
 export type PriceListImportStatus = 'pending_review' | 'approved' | 'rejected';

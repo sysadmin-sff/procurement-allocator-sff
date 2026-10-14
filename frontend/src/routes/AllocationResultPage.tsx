@@ -298,6 +298,13 @@ function AllocationResultOk({
                           — частично доступно {o.best_partial_available} у{' '}
                           {supplierById.get(o.best_partial_supplier_id)?.name ??
                             o.best_partial_supplier_id}
+                          {o.best_partial_min_order_qty != null && (
+                            <>
+                              {' '}
+                              (мин. заказ {o.best_partial_min_order_qty} — поэтому недостаточно,
+                              хотя доступно больше требуемого)
+                            </>
+                          )}
                         </>
                       )}
                     </span>
@@ -527,6 +534,12 @@ function LineRow({
         {changedAfterOrder && (
           <span className={styles.orderStaleWarning}>
             ⚠ изменено после отправки ордера — это изменение не попало в уже созданный ордер
+          </span>
+        )}
+        {line.needed_quantity != null && (
+          <span className={styles.availabilityRisk}>
+            заказано {line.quantity} вместо {line.needed_quantity} из-за минимального количества
+            заказа у поставщика
           </span>
         )}
       </td>

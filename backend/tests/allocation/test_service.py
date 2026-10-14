@@ -61,6 +61,28 @@ def test_run_allocation_records_orphaned_material_not_a_line(
     assert lines[0].material_id == solvable_material.id
 
 
+def test_run_allocation_orphaned_material_explains_moq_when_availability_covers_demand(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0045: a material orphaned because availability covers the raw
+    demand but not order_qty (MOQ-driven) must carry
+    best_partial_min_order_qty end-to-end, through run_allocation --
+    otherwise "требуется 37 -- частично доступно 50" reads as
+    self-contradictory on AllocationResultPage."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=50, min_order_qty=100)
+    project = make_project([(material, 37)])
+
+    run = run_allocation(session, project.id)
+
+    assert len(run.orphaned_materials) == 1
+    orphaned_entry = run.orphaned_materials[0]
+    assert orphaned_entry["best_partial_available"] == 50
+    assert orphaned_entry["best_partial_min_order_qty"] == 100
+
+
 def test_run_allocation_skips_supplier_below_min_order_amount_for_single_item(
     db_session, make_supplier, make_material, make_price, make_project
 ):
@@ -423,3 +445,82 @@ def test_compute_split_categories_matches_solver_requires_single_supplier(
     override_allocation_line_supplier(session, lax_run.id, lax_line.id, s2.id)
     session.refresh(lax_run)
     assert lax_run.split_categories == []
+
+
+def test_run_allocation_persists_needed_quantity_when_moq_creates_surplus(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Потребность 37, единственный поставщик с min_order_qty=100 ->
+    AllocationLine.quantity == 100, needed_quantity == 37, line_total
+    считается от 100 * price."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=1000, min_order_qty=100)
+    project = make_project([(material, 37)])
+
+    run = run_allocation(session, project.id)
+
+    assert run.status == "ok"
+    line = run.lines[0]
+    assert line.quantity == 100
+    assert line.needed_quantity == 37
+    assert float(line.line_total) == 100.00
+
+
+def test_run_allocation_leaves_needed_quantity_null_when_moq_not_exceeded(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Потребность (200) >= MOQ (100) -> needed_quantity остаётся NULL (не
+    0 и не равно quantity явно записанным числом)."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=1000, min_order_qty=100)
+    project = make_project([(material, 200)])
+
+    run = run_allocation(session, project.id)
+
+    line = run.lines[0]
+    assert line.quantity == 200
+    assert line.needed_quantity is None
+
+
+def test_run_allocation_moq_surplus_included_in_per_order_min_amount(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Ограничение 4 (per_order_min_amount) считается от order_total,
+    включающего MOQ-излишек -- поставщик, который без учёта излишка не
+    набирал бы минимум заказа, с учётом излишка набирает его."""
+    session, *_ = db_session
+    supplier = make_supplier(
+        flat_fee=0.0, free_shipping_threshold=0.0, per_order_min_amount=50.0,
+    )
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=1000, min_order_qty=100)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+
+    assert run.status == "ok"
+    line = run.lines[0]
+    assert line.quantity == 100
+    assert line.needed_quantity == 1
+
+
+def test_run_allocation_moq_surplus_included_in_free_shipping_threshold(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Порог бесплатной доставки учитывает MOQ-излишек, не исходную
+    потребность."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=10.0, free_shipping_threshold=90.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=1000, min_order_qty=100)
+    project = make_project([(material, 1)])
+
+    run = run_allocation(session, project.id)
+
+    summary = run.supplier_summaries[0]
+    assert summary["free_shipping_achieved"] is True
+    assert summary["delivery_fee"] == 0.0

@@ -456,6 +456,12 @@ function EntryRow({
       </td>
       <td className={styles.numCell}>
         <span className={priceComparisonClassName(entry)}>{formatMoney(entry.price)}</span>
+        {entry.min_order_qty == null && entry.current_active_min_order_qty != null && (
+          <span className={styles.duplicateBadge}>
+            ⚠ MOQ не был указан в этом прайсе, но у активной цены стоит{' '}
+            {entry.current_active_min_order_qty}
+          </span>
+        )}
       </td>
       <td>
         {entry.confidence != null ? (

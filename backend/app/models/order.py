@@ -60,6 +60,10 @@ class OrderItem(UUIDPKMixin, Base):
     из material_id/raw_description всегда заполнено (CHECK
     ck_order_items_material_xor_raw_description). См. ADR-0033 §1."""
     quantity: Mapped[int] = mapped_column(nullable=False)
+    needed_quantity: Mapped[int | None] = mapped_column()
+    """Перенесено из AllocationLine.needed_quantity при создании OrderItem
+    без изменений -- см. ADR-0045. NULL = MOQ не действовал на момент
+    расчёта (quantity == исходная потребность)."""
     received_quantity: Mapped[int | None] = mapped_column()
     """Количество, которое поставщик прислал в ответе для уже сматченной
     строки — вводится сотрудником вручную после ответа (тот же путь, что

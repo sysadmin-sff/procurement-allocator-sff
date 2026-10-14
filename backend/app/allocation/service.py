@@ -125,6 +125,7 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
             supplier_id=str(price.supplier_id),
             unit_price_cents=_to_cents(price.price),
             availability=price.availability,
+            min_order_qty=price.min_order_qty or 1,
         )
         for price in prices
     ]
@@ -213,6 +214,9 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
                     material_id=uuid.UUID(line.material_id),
                     supplier_id=uuid.UUID(line.supplier_id),
                     quantity=line.quantity,
+                    needed_quantity=(
+                        line.needed_quantity if line.needed_quantity != line.quantity else None
+                    ),
                     unit_price=_from_cents(line.unit_price_cents),
                     line_total=_from_cents(line.line_total_cents),
                 )
@@ -345,9 +349,18 @@ def override_allocation_line_supplier(
         line.original_supplier_id = line.supplier_id
         line.original_unit_price = line.unit_price
 
+    # ADR-0045: потребность берётся из needed_quantity, если она уже была
+    # зафиксирована предыдущим MOQ-расхождением (строка уже заказывалась с
+    # излишком у другого поставщика), иначе из текущего line.quantity (MOQ
+    # ещё не действовал, значит line.quantity сам по себе -- потребность).
+    demand = line.needed_quantity if line.needed_quantity is not None else line.quantity
+    new_quantity = max(demand, new_price.min_order_qty or 0)
+
     line.supplier_id = new_supplier_id
     line.unit_price = new_price.price
-    line.line_total = float(new_price.price) * line.quantity
+    line.quantity = new_quantity
+    line.needed_quantity = demand if new_quantity != demand else None
+    line.line_total = float(new_price.price) * new_quantity
     line.overridden_at = datetime.now(timezone.utc)
     line.overridden_via_order_item_id = source_order_item_id
     line.overridden_by_user_id = overridden_by_user_id

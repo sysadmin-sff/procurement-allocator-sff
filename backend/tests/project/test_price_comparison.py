@@ -288,3 +288,121 @@ def test_returns_404_for_missing_project(make_user, make_session):
     response = client.get(f"/projects/{uuid.uuid4()}/price-comparison")
 
     assert response.status_code == 404
+
+
+def test_row_includes_required_quantity_and_plan_includes_min_order_qty(
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
+):
+    """ADR-0045: PriceComparisonPage needs the project's required quantity
+    and each candidate's MOQ to warn when MOQ exceeds the requirement."""
+    session, *_ = db_session
+    material = make_material()
+    project = make_project([(material, 37)])
+    item = project.items[0]
+
+    supplier = make_supplier()
+    make_price(material, supplier, price=0.50, availability=1000, min_order_qty=100)
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/projects/{project.id}/price-comparison")
+
+    row = _row_for(response.json(), item.id)
+    assert row["required_quantity"] == 37
+    plan_by_supplier = {c["supplier_id"]: c for c in row["plan"]}
+    assert plan_by_supplier[str(supplier.id)]["min_order_qty"] == 100
+
+
+def test_plan_includes_order_qty_and_order_total_reflecting_moq(
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
+):
+    """ADR-0045: the backend computes order_qty = max(required_quantity,
+    min_order_qty) and order_total = order_qty * price per candidate, so
+    PriceComparisonPage never multiplies money on the frontend (CLAUDE.md
+    principle 4) -- demand 37, MOQ 100, price 0.50 -> order_qty=100,
+    order_total=$50.00."""
+    session, *_ = db_session
+    material = make_material()
+    project = make_project([(material, 37)])
+    item = project.items[0]
+
+    supplier = make_supplier()
+    make_price(material, supplier, price=0.50, availability=1000, min_order_qty=100)
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/projects/{project.id}/price-comparison")
+
+    row = _row_for(response.json(), item.id)
+    plan_by_supplier = {c["supplier_id"]: c for c in row["plan"]}
+    candidate = plan_by_supplier[str(supplier.id)]
+    assert candidate["order_qty"] == 100
+    assert candidate["order_total"] == 50.00
+
+
+def test_plan_is_cheapest_reflects_real_cost_including_moq_surplus(
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
+):
+    """ADR-0045 §Warnings п.6: cheap-per-unit-but-high-MOQ supplier must not
+    be marked is_cheapest when its real purchase cost (order_total) is
+    higher than a pricier-per-unit supplier with no MOQ surplus -- the same
+    comparison the solver itself makes (see
+    test_moq_expensive_but_no_moq_supplier_beats_cheap_high_moq_supplier in
+    test_solver.py). demand=37: cheap_high_moq costs 1000*0.10=$100.00,
+    pricier_no_moq costs 37*0.50=$18.50 -> pricier_no_moq is cheapest."""
+    session, *_ = db_session
+    material = make_material()
+    project = make_project([(material, 37)])
+    item = project.items[0]
+
+    cheap_high_moq = make_supplier(name="CheapHighMOQ")
+    make_price(material, cheap_high_moq, price=0.10, availability=10000, min_order_qty=1000)
+    pricier_no_moq = make_supplier(name="PricierNoMOQ")
+    make_price(material, pricier_no_moq, price=0.50, availability=100, min_order_qty=1)
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/projects/{project.id}/price-comparison")
+
+    row = _row_for(response.json(), item.id)
+    plan_by_supplier = {c["supplier_id"]: c for c in row["plan"]}
+    assert plan_by_supplier[str(pricier_no_moq.id)]["is_cheapest"] is True
+    assert plan_by_supplier[str(cheap_high_moq.id)]["is_cheapest"] is False
+
+
+def test_plan_availability_risk_checked_against_order_qty_not_demand(
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
+):
+    """ADR-0045: availability_risk compares availability against order_qty
+    (max(demand, MOQ)), not the raw demand -- a candidate with availability
+    50, MOQ 100 and demand 37 must be flagged at risk, even though 50 > 37."""
+    session, *_ = db_session
+    material = make_material()
+    project = make_project([(material, 37)])
+    item = project.items[0]
+
+    supplier = make_supplier()
+    make_price(material, supplier, price=0.50, availability=50, min_order_qty=100)
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/projects/{project.id}/price-comparison")
+
+    row = _row_for(response.json(), item.id)
+    plan_by_supplier = {c["supplier_id"]: c for c in row["plan"]}
+    assert plan_by_supplier[str(supplier.id)]["availability_risk"] is True
+
+
+def test_plan_availability_risk_false_when_availability_covers_order_qty(
+    db_session, make_project, make_material, make_supplier, make_price, make_user, make_session
+):
+    session, *_ = db_session
+    material = make_material()
+    project = make_project([(material, 37)])
+    item = project.items[0]
+
+    supplier = make_supplier()
+    make_price(material, supplier, price=0.50, availability=1000, min_order_qty=100)
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/projects/{project.id}/price-comparison")
+
+    row = _row_for(response.json(), item.id)
+    plan_by_supplier = {c["supplier_id"]: c for c in row["plan"]}
+    assert plan_by_supplier[str(supplier.id)]["availability_risk"] is False

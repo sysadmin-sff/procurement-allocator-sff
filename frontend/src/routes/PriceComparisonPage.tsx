@@ -233,17 +233,28 @@ function PlanCell({
     );
   }
 
-  const showRisk =
-    candidate.is_cheapest &&
-    quantity != null &&
-    candidate.availability != null &&
-    candidate.availability < quantity;
+  // availability_risk/order_qty/order_total are computed on the backend
+  // (CLAUDE.md principle 4) -- against order_qty = max(required_quantity,
+  // min_order_qty), not the raw requirement, see ADR-0045.
+  const showRisk = candidate.is_cheapest && candidate.availability_risk === true;
+
+  const moq = candidate.min_order_qty ?? null;
+  const showMoqWarning =
+    quantity != null && moq != null && moq > quantity && candidate.order_qty != null;
 
   return (
     <td className={`${styles.priceCell} ${candidate.is_cheapest ? styles.cheapest : ''}`}>
       {formatMoney(candidate.price)}
       {showRisk && (
         <AvailabilityWarning availability={candidate.availability!} unit={unit} required={quantity!} />
+      )}
+      {showMoqWarning && (
+        <MoqWarning
+          orderQty={candidate.order_qty!}
+          required={quantity!}
+          unit={unit}
+          totalCost={candidate.order_total!}
+        />
       )}
     </td>
   );
@@ -345,6 +356,29 @@ function AvailabilityWarning({
   return (
     <span className={styles.availabilityRisk}>
       ⚠ у поставщика доступно {availability} {unit}, требуется {required}
+    </span>
+  );
+}
+
+/** ADR-0045: выбор этого поставщика означает закупку max(required, MOQ),
+ * не required -- показываем реальное количество и итоговую стоимость на
+ * нём, чтобы сравнение цен между кандидатами было честным на этом экране
+ * точно так же, как в solver. */
+function MoqWarning({
+  orderQty,
+  required,
+  unit,
+  totalCost,
+}: {
+  orderQty: number;
+  required: number;
+  unit: string;
+  totalCost: number;
+}) {
+  return (
+    <span className={styles.availabilityRisk}>
+      ⚠ минимальный заказ у поставщика — {orderQty} {unit} вместо {required}, итоговая стоимость{' '}
+      {formatMoney(totalCost)}
     </span>
   );
 }

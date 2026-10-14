@@ -1090,3 +1090,44 @@ def test_quantity_delta_computed_from_received_quantity_via_api(
     item = response.json()["items"][0]
     assert item["received_quantity"] == 4
     assert item["quantity_delta"] == 2
+
+
+def test_order_item_out_exposes_needed_quantity_from_allocation_line(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """create_orders_for_run переносит AllocationLine.needed_quantity в
+    OrderItem.needed_quantity без изменений -- see ADR-0045."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=1000, min_order_qty=100)
+    project = make_project([(material, 37)])
+    client = _employee_client(make_user, make_session)
+
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+    order_id = orders[0].id
+
+    response = client.get(f"/orders/{order_id}")
+    item = response.json()["items"][0]
+    assert item["quantity"] == 100
+    assert item["needed_quantity"] == 37
+
+
+def test_create_orders_copies_null_needed_quantity_when_no_moq_surplus(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Перенос needed_quantity=None (нет MOQ-расхождения) в OrderItem
+    остаётся None, не становится 0 и не становится line.quantity."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=1000, min_order_qty=1)
+    project = make_project([(material, 37)])
+
+    run = run_allocation(session, project.id)
+    orders = create_orders_for_run(session, project.id, run.id)
+
+    item = orders[0].items[0]
+    assert item.quantity == 37
+    assert item.needed_quantity is None

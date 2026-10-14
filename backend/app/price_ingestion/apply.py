@@ -66,13 +66,22 @@ def _apply_match(
     if active_price is not None:
         active_price.valid_to = datetime.date.today()
 
+    # ADR-0045: если выгрузка не упоминает MOQ в этой строке, наследуем от
+    # закрываемой строки -- симметрично version_price() (app/api/price.py:67),
+    # которая уже делает это для всех остальных путей записи Price. Без
+    # этого PDF-реимпорт тихо затирал ранее сохранённый MOQ в NULL каждый
+    # раз, когда парсер не извлёк его из текущей выгрузки.
+    min_order_qty = entry.min_order_qty
+    if min_order_qty is None and active_price is not None:
+        min_order_qty = active_price.min_order_qty
+
     new_price = Price(
         material_id=material_id,
         supplier_id=supplier_id,
         price=entry.price,
         currency=entry.currency,
         availability=entry.availability,
-        min_order_qty=entry.min_order_qty,
+        min_order_qty=min_order_qty,
         valid_from=datetime.date.today(),
         valid_to=None,
         source_import_id=entry.import_id,

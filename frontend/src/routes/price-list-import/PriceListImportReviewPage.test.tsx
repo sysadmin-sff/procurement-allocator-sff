@@ -307,4 +307,52 @@ describe('PriceListImportReviewPage', () => {
       expect(screen.getByRole('button', { name: /Пропустить/ })).toBeEnabled();
     });
   });
+
+  describe('MOQ warning when entry omits MOQ but active price has one (ADR-0045)', () => {
+    it('shows warning when entry.min_order_qty is null and current_active_min_order_qty is set', async () => {
+      const priceListImport: PriceListImport = {
+        import_id: 'import-1',
+        status: 'pending_review',
+        entries: [
+          entryFixture({
+            id: 'a',
+            min_order_qty: null,
+            current_active_min_order_qty: 250,
+          }),
+        ],
+      };
+      renderPage(priceListImport);
+
+      await screen.findByText('Screen mesh 18x14');
+      expect(screen.getByText(/250/)).toBeInTheDocument();
+    });
+
+    it('shows no warning when both are null', async () => {
+      const priceListImport: PriceListImport = {
+        import_id: 'import-1',
+        status: 'pending_review',
+        entries: [
+          entryFixture({ id: 'a', min_order_qty: null, current_active_min_order_qty: null }),
+        ],
+      };
+      renderPage(priceListImport);
+
+      await screen.findByText('Screen mesh 18x14');
+      expect(screen.queryByText(/MOQ не был указан/i)).not.toBeInTheDocument();
+    });
+
+    it('shows no warning when entry already has its own min_order_qty', async () => {
+      const priceListImport: PriceListImport = {
+        import_id: 'import-1',
+        status: 'pending_review',
+        entries: [
+          entryFixture({ id: 'a', min_order_qty: 100, current_active_min_order_qty: 250 }),
+        ],
+      };
+      renderPage(priceListImport);
+
+      await screen.findByText('Screen mesh 18x14');
+      expect(screen.queryByText(/MOQ не был указан/i)).not.toBeInTheDocument();
+    });
+  });
 });

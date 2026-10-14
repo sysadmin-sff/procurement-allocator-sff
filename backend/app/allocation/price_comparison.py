@@ -87,19 +87,32 @@ def get_price_comparison(db: Session, project_id: uuid.UUID) -> list[dict]:
     rows = []
     for item in items:
         material_prices = prices_by_material.get(item.material_id, [])
-        plan = [
-            {
-                "supplier_id": p.supplier_id,
-                "supplier_name": names_by_id[p.supplier_id],
-                "price": float(p.price),
-                "availability": p.availability,
-            }
-            for p in material_prices
-        ]
+        plan = []
+        for p in material_prices:
+            # ADR-0045: order_qty/order_total считаются от реального
+            # MOQ-излишка (max(потребность, MOQ)), той же формулой, что
+            # solver.py -- is_cheapest ниже сравнивается по order_total
+            # (реальная стоимость закупки), не по price за штуку, иначе
+            # дешёвый-за-штуку-но-с-большим-MOQ поставщик выглядел бы
+            # дешевле, чем он есть на самом деле (та же ошибка, которую
+            # ADR-0045 исправил в самом солвере).
+            order_qty = max(item.quantity, p.min_order_qty or 0)
+            plan.append(
+                {
+                    "supplier_id": p.supplier_id,
+                    "supplier_name": names_by_id[p.supplier_id],
+                    "price": float(p.price),
+                    "availability": p.availability,
+                    "min_order_qty": p.min_order_qty,
+                    "order_qty": order_qty,
+                    "order_total": float(p.price) * order_qty,
+                    "availability_risk": p.availability is not None and p.availability < order_qty,
+                }
+            )
         if plan:
-            min_price = min(c["price"] for c in plan)
+            min_order_total = min(c["order_total"] for c in plan)
             for c in plan:
-                c["is_cheapest"] = c["price"] == min_price
+                c["is_cheapest"] = c["order_total"] == min_order_total
 
         latest_by_supplier = _latest_item_per_supplier(orders, item.material_id)
         supplier_responses = []
@@ -144,6 +157,7 @@ def get_price_comparison(db: Session, project_id: uuid.UUID) -> list[dict]:
             {
                 "project_item_id": item.id,
                 "material_id": item.material_id,
+                "required_quantity": item.quantity,
                 "plan": plan,
                 "supplier_responses": supplier_responses,
             }

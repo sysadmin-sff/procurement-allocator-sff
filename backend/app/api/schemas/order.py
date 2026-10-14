@@ -43,6 +43,10 @@ class OrderItemOut(BaseModel):
     """Заполнено вместо material_id для лёгкой строки без материала из
     каталога — ровно одно из двух всегда непусто. См. ADR-0033 §1."""
     quantity: int
+    needed_quantity: int | None = None
+    """Перенесено из AllocationLine.needed_quantity при создании Order --
+    исходная потребность материала, когда MOQ создал излишек. NULL = MOQ
+    не действовал на момент расчёта. См. ADR-0045."""
     quoted_price: float
     received_price: float | None = None
     received_quantity: int | None = None

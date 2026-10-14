@@ -32,19 +32,21 @@ router = APIRouter(dependencies=[Depends(require_role("admin"))])
 MAX_PRICE_LIST_FILE_SIZE = 10 * 1024 * 1024
 
 
-def _current_active_price(
+def _current_active_price_row(
     db: Session, *, supplier_id: uuid.UUID, material_id: uuid.UUID | None
-) -> float | None:
-    """Active Price.price for this supplier + material — see ADR-0040.
-    None when material_id is None (action="new" candidate, nothing to
-    compare against) or when this supplier has never priced that material
-    before (no active Price row for the pair, e.g. a first-time position).
+) -> Price | None:
+    """Active Price row for this supplier + material — see ADR-0040. None
+    when material_id is None (action="new" candidate, nothing to compare
+    against) or when this supplier has never priced that material before
+    (no active Price row for the pair, e.g. a first-time position).
     Computed fresh on every read, not persisted — a manual /prices update
     between upload and the next GET must be reflected, unlike the
-    ADR-0020 fields which are deliberate one-time snapshots."""
+    ADR-0020 fields which are deliberate one-time snapshots. Returns the
+    whole row (not just .price) so current_active_min_order_qty (ADR-0045)
+    can read .min_order_qty off the same lookup, not a second query."""
     if material_id is None:
         return None
-    active_price = (
+    return (
         db.query(Price)
         .filter(
             Price.material_id == material_id,
@@ -53,10 +55,12 @@ def _current_active_price(
         )
         .first()
     )
-    return float(active_price.price) if active_price is not None else None
 
 
 def _entry_out(db: Session, entry, *, supplier_id: uuid.UUID) -> PriceListEntryOut:
+    active_price = _current_active_price_row(
+        db, supplier_id=supplier_id, material_id=entry.matched_material_id
+    )
     return PriceListEntryOut(
         id=entry.id,
         supplier_raw_name=entry.supplier_raw_name,
@@ -75,8 +79,9 @@ def _entry_out(db: Session, entry, *, supplier_id: uuid.UUID) -> PriceListEntryO
             else []
         ),
         processing_status=entry.processing_status,
-        current_active_price=_current_active_price(
-            db, supplier_id=supplier_id, material_id=entry.matched_material_id
+        current_active_price=float(active_price.price) if active_price is not None else None,
+        current_active_min_order_qty=(
+            active_price.min_order_qty if active_price is not None else None
         ),
     )
 

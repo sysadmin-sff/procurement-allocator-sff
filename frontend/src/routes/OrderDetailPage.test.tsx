@@ -137,6 +137,7 @@ function itemFixture(overrides: Partial<OrderItem> = {}): OrderItem {
     material_id: 'mat-1',
     raw_description: null,
     quantity: 10,
+    needed_quantity: null,
     quoted_price: 25,
     received_price: null,
     received_quantity: null,
@@ -2008,6 +2009,90 @@ describe('OrderDetailPage', () => {
       expect(withPricesText).toContain('Order for ABC Supply');
       expect(withPricesText).toContain('1. ' + material.canonical_name);
       expect(withPricesText).toContain('Grand total: $275.00');
+    });
+  });
+
+  describe('MOQ surplus warning on OrderItem (ADR-0045)', () => {
+    it('shows a warning when needed_quantity is set on an item', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 100,
+        delivery_fee: 0,
+        items: [
+          itemFixture({ id: 'item-1', material_id: 'mat-1', quantity: 100, needed_quantity: 37 }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      expect(await screen.findByText(/37/)).toBeInTheDocument();
+    });
+
+    it('shows no warning when needed_quantity is null', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 100,
+        delivery_fee: 0,
+        items: [itemFixture({ id: 'item-1', material_id: 'mat-1', quantity: 37, needed_quantity: null })],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText(material.canonical_name);
+      expect(screen.queryByText(/из-за минимального количества заказа/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('buildOrderText/buildTargetPriceOrderText never include needed_quantity (ADR-0045)', () => {
+    it('shows only quantity (what we order), never needed_quantity (our internal demand), in all three copy blocks', async () => {
+      const order: Order = orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 100,
+        delivery_fee: 0,
+        items: [
+          itemFixture({
+            id: 'item-1',
+            material_id: 'mat-1',
+            quantity: 100,
+            needed_quantity: 37,
+            target_price: 0.45,
+          }),
+        ],
+      });
+      getOrderMock.mockResolvedValue(order);
+
+      renderPage();
+
+      await screen.findByText('Список материалов (с ценами)');
+      const textareas = screen.getAllByRole('textbox') as HTMLTextAreaElement[];
+
+      const withPricesText = textareas.find((t) => t.value.includes('Price:'))!.value;
+      expect(withPricesText).toContain('100');
+      expect(withPricesText).not.toContain('37');
+
+      const withoutPricesText = textareas.find(
+        (t) => t.value.includes('Order for') && !t.value.includes('Price:') && !t.value.includes('Total:'),
+      )!.value;
+      expect(withoutPricesText).toContain('100');
+      expect(withoutPricesText).not.toContain('37');
+
+      // buildTargetPriceOrderText only renders items with target_price set --
+      // this item has one, so it must appear in that third textarea too, with
+      // the same quantity, never needed_quantity.
+      const targetPriceText = textareas.find((t) => t.value.includes('0.45'))!.value;
+      expect(targetPriceText).toContain('100');
+      expect(targetPriceText).not.toContain('37');
     });
   });
 

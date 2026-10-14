@@ -799,6 +799,12 @@ function OrderItemRow({
       </td>
       <td className={styles.numCell}>
         {item.quantity} {material?.unit ?? ''}
+        {item.needed_quantity != null && (
+          <div className={styles.parseConfidenceWarning}>
+            заказано {item.quantity} вместо {item.needed_quantity} из-за минимального количества
+            заказа у поставщика
+          </div>
+        )}
       </td>
       <td className={styles.numCell}>
         {formatMoney(item.quoted_price)}

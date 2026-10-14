@@ -39,17 +39,25 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
     qty = {m.material_id: m.quantity for m in data.materials}
     material_ids = list(qty.keys())
 
-    # price[m][s], только для допустимых пар (Ограничение 2: недопустимые пары
-    # исключаются из модели, а не запрещаются ограничением). availability=NULL
-    # трактуется как "доступно" — см. ADR-0005; исключаем пару только когда
-    # availability явно задан и его недостаточно.
+    # price[m][s] и order_qty[m][s], только для допустимых пар (Ограничение 2:
+    # недопустимые пары исключаются из модели, а не запрещаются ограничением).
+    # order_qty[m][s] = max(потребность материала, Price.min_order_qty) --
+    # ADR-0045: не переменная решения, обычная константа на входе в модель,
+    # посчитанная здесь по каждой паре (материал, поставщик), не по одному
+    # материалу. availability сравнивается с order_qty, не с потребностью:
+    # поставщик с MOQ=100 и availability=50 не должен считаться достаточным
+    # для потребности 37, потому что реально закажут 100, а в наличии только
+    # 50. availability=NULL трактуется как "доступно" — см. ADR-0005.
     price: dict[tuple[str, str], int] = {}
+    order_qty: dict[tuple[str, str], int] = {}
     for p in data.prices:
         if p.material_id not in qty:
             continue
-        if p.availability is not None and p.availability < qty[p.material_id]:
+        candidate_order_qty = max(qty[p.material_id], p.min_order_qty)
+        if p.availability is not None and p.availability < candidate_order_qty:
             continue
         price[(p.material_id, p.supplier_id)] = p.unit_price_cents
+        order_qty[(p.material_id, p.supplier_id)] = candidate_order_qty
 
     suppliers_by_id = {s.supplier_id: s for s in data.suppliers}
     supplier_ids = sorted({s for (_, s) in price})
@@ -119,18 +127,26 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
     for (_m_id, s_id), var in x.items():
         model.add(var <= y[s_id])
 
-    # order_total[s] = Σ_m x[m][s] * price[m][s] * qty[m]
+    # order_total[s] = Σ_m x[m][s] * price[m][s] * order_qty[m][s]. ADR-0045:
+    # раньше умножалось на qty[m_id] (потребность) -- теперь на order_qty[(m,s)]
+    # (заказываем, с учётом MOQ-излишка этой конкретной пары). max_order_total[s_id]
+    # -- верхняя граница для big-M линеаризации free[s]/z[s] ниже -- ОБЯЗАНА
+    # считаться от той же величины (order_qty), иначе при большом MOQ она
+    # окажется заниженной относительно order_total[s] и сломает линеаризацию
+    # без видимой ошибки (см. test_moq_much_larger_than_demand_does_not_break_free_shipping_bigm).
     order_total: dict[str, cp_model.LinearExpr] = {}
     max_order_total: dict[str, int] = {}
     for s_id in supplier_ids:
         terms = [
-            x[(m_id, s_id)] * price[(m_id, s_id)] * qty[m_id]
+            x[(m_id, s_id)] * price[(m_id, s_id)] * order_qty[(m_id, s_id)]
             for m_id in material_ids
             if (m_id, s_id) in x
         ]
         order_total[s_id] = sum(terms)
         max_order_total[s_id] = sum(
-            price[(m_id, s_id)] * qty[m_id] for m_id in material_ids if (m_id, s_id) in x
+            price[(m_id, s_id)] * order_qty[(m_id, s_id)]
+            for m_id in material_ids
+            if (m_id, s_id) in x
         )
 
     # Ограничение 4: минимальная сумма заказа (опционально).
@@ -171,7 +187,13 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
     # категории (ADR-0028 §2). category_split_penalty масштабируется от
     # среднего flat_fee поставщиков проекта, не абсолютной суммой — см.
     # CATEGORY_SPLIT_PENALTY_K.
-    price_terms = [x[(m_id, s_id)] * price[(m_id, s_id)] * qty[m_id] for (m_id, s_id) in x]
+    # ADR-0045: price_terms теперь от order_qty, не qty[m_id] -- солвер
+    # должен минимизировать реальную стоимость закупки (цена * фактически
+    # заказываемое количество), иначе недооценивает дорогих по факту
+    # поставщиков с большим MOQ.
+    price_terms = [
+        x[(m_id, s_id)] * price[(m_id, s_id)] * order_qty[(m_id, s_id)] for (m_id, s_id) in x
+    ]
     delivery_terms = [z[s_id] * suppliers_by_id[s_id].flat_fee_cents for s_id in supplier_ids]
 
     penalty_terms: list[cp_model.LinearExpr] = []
@@ -201,12 +223,13 @@ def solve_allocation(data: AllocationInput) -> AllocationResult:
     for (m_id, s_id), var in x.items():
         if solver.value(var):
             unit_price = price[(m_id, s_id)]
-            quantity = qty[m_id]
+            quantity = order_qty[(m_id, s_id)]
             lines.append(
                 AllocationLineResult(
                     material_id=m_id,
                     supplier_id=s_id,
                     quantity=quantity,
+                    needed_quantity=qty[m_id],
                     unit_price_cents=unit_price,
                     line_total_cents=unit_price * quantity,
                 )

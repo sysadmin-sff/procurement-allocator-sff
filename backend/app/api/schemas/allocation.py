@@ -20,6 +20,10 @@ class AllocationLineOut(BaseModel):
     material_id: uuid.UUID
     supplier_id: uuid.UUID
     quantity: int
+    needed_quantity: int | None = None
+    """Исходная потребность материала, когда MOQ выбранного поставщика
+    создал излишек (quantity > needed_quantity). NULL = MOQ не действовал.
+    См. AllocationLine.needed_quantity, ADR-0045."""
     unit_price: float
     line_total: float
     overridden_at: datetime | None = None
@@ -53,6 +57,11 @@ class OrphanedMaterialOut(BaseModel):
     required_quantity: int
     best_partial_supplier_id: uuid.UUID | None = None
     best_partial_available: int | None = None
+    best_partial_min_order_qty: int | None = None
+    """min_order_qty у best_partial_supplier_id, заполняется только когда
+    его availability покрывает required_quantity, но материал всё равно
+    orphaned из-за MOQ (availability < order_qty) -- иначе "требуется 37 --
+    частично доступно 50" выглядело бы самопротиворечиво. См. ADR-0045."""
 
 
 class SupplierAllocationSummaryOut(BaseModel):

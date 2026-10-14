@@ -812,3 +812,273 @@ def test_multiple_materials_each_get_a_line():
     assert result.status == "OPTIMAL"
     assert len(result.lines) == 2
     assert result.total_cents == 2 * 100 + 3 * 200
+
+
+def test_price_input_min_order_qty_defaults_to_one():
+    """min_order_qty — новое поле PriceInput (ADR-0045), с нейтральным
+    дефолтом 1, чтобы не ломать существующие construction sites без MOQ."""
+    price = PriceInput(
+        material_id="m1", supplier_id="s1", unit_price_cents=500, availability=10,
+    )
+    assert price.min_order_qty == 1
+
+
+def test_price_input_accepts_explicit_min_order_qty():
+    price = PriceInput(
+        material_id="m1", supplier_id="s1", unit_price_cents=500, availability=10,
+        min_order_qty=100,
+    )
+    assert price.min_order_qty == 100
+
+
+def test_allocation_line_result_carries_needed_quantity():
+    """needed_quantity — исходная потребность материала, независимо от
+    quantity, который солвер реально выбрал для этой пары (может быть
+    выше needed_quantity из-за MOQ)."""
+    from app.allocation.types import AllocationLineResult
+
+    line = AllocationLineResult(
+        material_id="m1",
+        supplier_id="s1",
+        quantity=100,
+        needed_quantity=37,
+        unit_price_cents=500,
+        line_total_cents=50000,
+    )
+    assert line.needed_quantity == 37
+    assert line.quantity == 100
+
+
+def test_moq_not_set_behavior_unchanged():
+    """min_order_qty не задан (дефолт 1) -> order_qty == qty[m_id] -- тот
+    же результат, что без этого ADR."""
+    materials = [MaterialInput(material_id="m1", quantity=10)]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=None)
+    ]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=500, availability=100)
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    line = result.lines[0]
+    assert line.quantity == 10
+    assert line.needed_quantity == 10
+    assert line.line_total_cents == 5000
+
+
+def test_moq_below_demand_no_surplus():
+    """Потребность (37) >= MOQ (10) -> order_qty == потребность, нет
+    излишка."""
+    materials = [MaterialInput(material_id="m1", quantity=37)]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=None)
+    ]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=100,
+            availability=100, min_order_qty=10,
+        )
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    line = result.lines[0]
+    assert line.quantity == 37
+    assert line.needed_quantity == 37
+
+
+def test_moq_above_demand_produces_surplus_in_quantity_and_cost():
+    """Потребность 37, MOQ=100 у выбранного поставщика (единственного) ->
+    AllocationLine.quantity == 100 (order_qty, не потребность),
+    needed_quantity == 37, line_total считается от 100, не от 37 -- прямая
+    регрессия против ошибки первой версии ADR (солвер считал от потребности)."""
+    materials = [MaterialInput(material_id="m1", quantity=37)]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=None)
+    ]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=100,
+            availability=1000, min_order_qty=100,
+        )
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    line = result.lines[0]
+    assert line.quantity == 100
+    assert line.needed_quantity == 37
+    assert line.line_total_cents == 100 * 100  # 100 центов * 100 шт
+
+
+def test_moq_expensive_but_no_moq_supplier_beats_cheap_high_moq_supplier():
+    """Поставщик A: дешевле за штуку (10 центов), но MOQ=1000 (потребность
+    37 -> реально 1000 * 10 = 10000 центов). Поставщик B: дороже за штуку
+    (50 центов), без MOQ (37 * 50 = 1850 центов). Солвер должен выбрать B,
+    хотя его цена за штуку выше -- честная экономика ADR-0045."""
+    materials = [MaterialInput(material_id="m1", quantity=37)]
+    suppliers = [
+        SupplierInput(supplier_id="cheap_high_moq", flat_fee_cents=0, free_shipping_threshold_cents=None),
+        SupplierInput(supplier_id="pricier_no_moq", flat_fee_cents=0, free_shipping_threshold_cents=None),
+    ]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="cheap_high_moq", unit_price_cents=10,
+            availability=10000, min_order_qty=1000,
+        ),
+        PriceInput(
+            material_id="m1", supplier_id="pricier_no_moq", unit_price_cents=50,
+            availability=100,
+        ),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    line = result.lines[0]
+    assert line.supplier_id == "pricier_no_moq"
+    assert line.quantity == 37
+    assert line.line_total_cents == 1850
+
+
+def test_moq_availability_checked_against_order_qty_not_demand():
+    """availability=50, min_order_qty=100 (потребность=37) -> order_qty=100
+    -> пара недопустима (50 < 100), хотя по потребности (37) availability
+    казалось бы достаточным."""
+    materials = [MaterialInput(material_id="m1", quantity=37)]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=None)
+    ]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=100,
+            availability=50, min_order_qty=100,
+        )
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status == "INFEASIBLE"
+    assert result.lines == []
+
+
+def test_moq_much_larger_than_demand_does_not_break_free_shipping_bigm():
+    """Прямой тест на риск из ADR-0045 §Контекст: MOQ намного больше
+    потребности (потребность 1, MOQ 10000) у поставщика с настроенным
+    free_shipping_threshold. max_order_total должен считаться от order_qty
+    (10000 * 100 центов = 1_000_000), не от qty[m_id] (1 * 100 = 100) --
+    иначе big_m = threshold + max_order_total окажется слишком маленьким
+    относительно реального order_total, и big-M линеаризация не сможет
+    корректно установить free_var=1 для заказа, который объективно
+    превышает порог.
+
+    threshold=400_000 выбран не произвольно: со старым (багованным)
+    max_order_total = qty[m_id]*price = 100, порог линеаризации для free=1
+    был бы order_total <= 2*threshold + 99 = 800_099 -- наш order_total
+    (1_000_000) ЭТУ границу превышает, то есть при багованном big_m
+    free_shipping_achieved=True здесь физически недостижимо. Проверено
+    эмпирически (временный revert max_order_total на qty[m_id] в этом же
+    PR делает этот тест RED, см. историю коммитов) -- более ранняя версия
+    этого теста с threshold=500_000 была вакуумной (проходила и с багом, и
+    без него), эта версия реально различает оба случая."""
+    materials = [MaterialInput(material_id="m1", quantity=1)]
+    suppliers = [
+        SupplierInput(
+            supplier_id="s1", flat_fee_cents=1000,
+            free_shipping_threshold_cents=400_000,
+        )
+    ]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=100,
+            availability=20000, min_order_qty=10000,
+        )
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status == "OPTIMAL"
+    line = result.lines[0]
+    assert line.quantity == 10000
+    assert line.line_total_cents == 1_000_000
+    summary = result.supplier_summaries[0]
+    assert summary.goods_total_cents == 1_000_000
+    assert summary.free_shipping_achieved is True
+    assert summary.delivery_fee_cents == 0
+
+
+
+
+def test_moq_interaction_with_requires_single_supplier():
+    """Строгая категория (ADR-0028) плюс MOQ-излишек у одного из
+    поставщиков категории -- мягкий штраф за разброс считается как обычно
+    (от x, не от количества), не ломается наличием MOQ."""
+    materials = [
+        MaterialInput(
+            material_id="m1", quantity=10, category_id="cat1",
+            requires_single_supplier=True,
+        ),
+        MaterialInput(
+            material_id="m2", quantity=5, category_id="cat1",
+            requires_single_supplier=True,
+        ),
+    ]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=100, free_shipping_threshold_cents=None),
+        SupplierInput(supplier_id="s2", flat_fee_cents=100, free_shipping_threshold_cents=None),
+    ]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=10, availability=100),
+        PriceInput(
+            material_id="m2", supplier_id="s1", unit_price_cents=10, availability=100,
+            min_order_qty=50,
+        ),
+        PriceInput(material_id="m1", supplier_id="s2", unit_price_cents=15, availability=100),
+        PriceInput(material_id="m2", supplier_id="s2", unit_price_cents=15, availability=100),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    assert len(result.lines) == 2
+
+
+def test_moq_does_not_require_any_special_handling_for_supplier_filtering():
+    """solve_allocation сам по себе не фильтрует поставщиков по активности
+    (ADR-0041) -- это ответственность service.py, выполняется до вызова
+    солвера. Здесь подтверждаем, что присутствие MOQ не меняет это: любой
+    PriceInput, дошедший до солвера, участвует в расчёте независимо от
+    флагов активности, которых PriceInput даже не содержит."""
+    materials = [MaterialInput(material_id="m1", quantity=10)]
+    suppliers = [
+        SupplierInput(supplier_id="s1", flat_fee_cents=0, free_shipping_threshold_cents=None)
+    ]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=10, availability=100,
+            min_order_qty=100,
+        ),
+    ]
+
+    result = solve_allocation(
+        AllocationInput(materials=materials, suppliers=suppliers, prices=prices)
+    )
+
+    assert result.status in ("OPTIMAL", "FEASIBLE")
+    assert result.lines[0].quantity == 100

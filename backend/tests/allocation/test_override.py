@@ -418,3 +418,61 @@ def test_override_clears_below_min_order_when_no_longer_applicable(
 
     summaries = {s["supplier_id"]: s for s in run.supplier_summaries}
     assert summaries[str(gated_supplier.id)]["below_min_order"] is False
+
+
+def test_override_recomputes_quantity_and_total_for_moq(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Override строки аллокации на поставщика с MOQ выше needed_quantity
+    пересчитывает и quantity, и line_total, не только unit_price --
+    регрессия против сегодняшнего service.py (override не трогал quantity
+    вообще). Потребность 37, исходный поставщик без MOQ (quantity=37,
+    needed_quantity=NULL), новый поставщик с MOQ=200."""
+    session, *_ = db_session
+    cheap_no_moq = make_supplier(name="Cheap", flat_fee=0.0, free_shipping_threshold=0.0)
+    high_moq = make_supplier(name="HighMOQ", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, cheap_no_moq, price=1.00, availability=1000, min_order_qty=1)
+    make_price(material, high_moq, price=0.50, availability=1000, min_order_qty=200)
+    project = make_project([(material, 37)])
+
+    run = run_allocation(session, project.id)
+    line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    assert line.supplier_id == cheap_no_moq.id
+    assert line.quantity == 37
+    assert line.needed_quantity is None
+
+    updated = override_allocation_line_supplier(session, run.id, line.id, high_moq.id)
+
+    assert updated.supplier_id == high_moq.id
+    assert updated.quantity == 200
+    assert updated.needed_quantity == 37
+    assert float(updated.line_total) == 100.00
+
+
+def test_override_clears_moq_adjustment_when_no_longer_applicable(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """Override на поставщика без MOQ-проблемы очищает needed_quantity
+    обратно в NULL -- из строки, у которой до этого был MOQ-излишек от
+    другого поставщика."""
+    session, *_ = db_session
+    high_moq = make_supplier(name="HighMOQ", flat_fee=0.0, free_shipping_threshold=0.0)
+    no_moq = make_supplier(name="NoMOQ", flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, high_moq, price=0.50, availability=1000, min_order_qty=200)
+    make_price(material, no_moq, price=10.00, availability=1000, min_order_qty=1)
+    project = make_project([(material, 37)])
+
+    run = run_allocation(session, project.id)
+    line = session.query(AllocationLine).filter_by(allocation_run_id=run.id).one()
+    assert line.supplier_id == high_moq.id
+    assert line.quantity == 200
+    assert line.needed_quantity == 37
+
+    updated = override_allocation_line_supplier(session, run.id, line.id, no_moq.id)
+
+    assert updated.supplier_id == no_moq.id
+    assert updated.quantity == 37
+    assert updated.needed_quantity is None
+    assert float(updated.line_total) == 370.00

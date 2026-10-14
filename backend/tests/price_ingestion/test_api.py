@@ -324,6 +324,45 @@ def test_entry_includes_current_active_price_for_this_supplier(
     assert entry["current_active_price"] == 12.5
 
 
+def test_entry_includes_current_active_min_order_qty_for_this_supplier(
+    db_session, make_supplier, make_material, make_user, make_session
+):
+    """ADR-0045, симметрично ADR-0040's current_active_price:
+    current_active_min_order_qty отражает активный Price.min_order_qty для
+    (matched_material_id, этого поставщика импорта), даже если текущая
+    строка импорта не упоминает MOQ вообще."""
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+    session.add(
+        Price(
+            material_id=material.id,
+            supplier_id=supplier.id,
+            price=12.5,
+            currency="USD",
+            min_order_qty=250,
+            valid_from=datetime.date.today(),
+        )
+    )
+    session.commit()
+    client = _admin_client(make_user, make_session)
+
+    matched = [
+        MatchedLine(
+            extracted=_extracted(raw_name="Screen A", price=10.0),
+            decision=MatchDecision(
+                action="match", material_id=material.id, confidence=0.9, reasoning="match",
+            ),
+        )
+    ]
+    mock_match, mock_extract = _mock_pipeline(matched)
+    with mock_match, mock_extract:
+        response = _upload(client, supplier.id)
+
+    entry = response.json()["entries"][0]
+    assert entry["current_active_min_order_qty"] == 250
+
+
 def test_entry_current_active_price_is_null_for_new_material_candidate(
     db_session, make_supplier, make_user, make_session
 ):

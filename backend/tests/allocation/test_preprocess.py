@@ -95,3 +95,64 @@ def test_mix_of_solvable_and_orphaned_materials_are_both_reported():
 
     assert [m.material_id for m in solvable] == ["m1"]
     assert [m.material_id for m in orphaned] == ["m2"]
+
+
+def test_moq_availability_checked_against_order_qty_not_demand():
+    """availability=50, min_order_qty=100 (потребность=37) -> order_qty=100
+    -> материал должен попасть в orphaned, хотя по "наивному" сравнению с
+    потребностью (37) availability казалось бы достаточным. Прямая
+    регрессия против упущения первой версии ADR-0045 (см. §Контекст)."""
+    materials = [MaterialInput(material_id="m1", quantity=37)]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=100,
+            availability=50, min_order_qty=100,
+        )
+    ]
+
+    solvable, orphaned = split_orphaned_materials(materials, prices)
+
+    assert solvable == []
+    assert len(orphaned) == 1
+    assert orphaned[0].material_id == "m1"
+    assert orphaned[0].required_quantity == 37
+
+
+def test_moq_all_suppliers_insufficient_availability_material_orphaned():
+    """Ни у одного поставщика материала availability >= order_qty ->
+    материал в orphaned."""
+    materials = [MaterialInput(material_id="m1", quantity=10)]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=100,
+            availability=5, min_order_qty=50,
+        ),
+        PriceInput(
+            material_id="m1", supplier_id="s2", unit_price_cents=120,
+            availability=3, min_order_qty=50,
+        ),
+    ]
+
+    solvable, orphaned = split_orphaned_materials(materials, prices)
+
+    assert solvable == []
+    assert len(orphaned) == 1
+    assert orphaned[0].best_partial_supplier_id == "s1"
+    assert orphaned[0].best_partial_available == 5
+
+
+def test_moq_sufficient_availability_against_order_qty_keeps_material_solvable():
+    """availability >= order_qty (не только >= потребности) -> материал
+    остаётся решаемым, как и раньше в обычном случае без MOQ."""
+    materials = [MaterialInput(material_id="m1", quantity=37)]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=100,
+            availability=150, min_order_qty=100,
+        )
+    ]
+
+    solvable, orphaned = split_orphaned_materials(materials, prices)
+
+    assert len(solvable) == 1
+    assert orphaned == []

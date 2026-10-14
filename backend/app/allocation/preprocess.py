@@ -24,8 +24,14 @@ def split_orphaned_materials(
 
     for material in materials:
         candidate_prices = prices_by_material.get(material.material_id, [])
+        # ADR-0045: сравниваем с order_qty этой конкретной пары (max(потребность,
+        # min_order_qty)), не с исходной потребностью material.quantity --
+        # поставщик с MOQ выше того, что у него физически есть в наличии, не
+        # должен считаться достаточным просто потому что наличие покрывает
+        # исходную (меньшую) потребность.
         has_sufficient = any(
-            price.availability is None or price.availability >= material.quantity
+            price.availability is None
+            or price.availability >= max(material.quantity, price.min_order_qty)
             for price in candidate_prices
         )
         if has_sufficient:

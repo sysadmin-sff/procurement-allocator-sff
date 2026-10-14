@@ -275,6 +275,8 @@ export interface PlanCandidate {
   supplier_name: string;
   price: number;
   availability: number | null;
+  /** Price.min_order_qty для этой пары -- см. ADR-0045. */
+  min_order_qty?: number | null;
   is_cheapest: boolean;
 }
 
@@ -295,6 +297,8 @@ export interface SupplierResponse {
 export interface MaterialComparisonRow {
   project_item_id: string;
   material_id: string;
+  /** ProjectItem.quantity -- см. ADR-0045. */
+  required_quantity?: number;
   plan: PlanCandidate[];
   supplier_responses: SupplierResponse[];
 }
@@ -613,6 +617,9 @@ export interface PriceListEntry {
   action: 'match' | 'new' | 'skip' | null;
   possible_duplicate_of: string[];
   current_active_price: number | null;
+  /** Активный Price.min_order_qty для (поставщика, matched_material_id)
+   * -- симметрично current_active_price. См. ADR-0045. */
+  current_active_min_order_qty?: number | null;
 }
 
 export type PriceListImportStatus = 'pending_review' | 'approved' | 'rejected';

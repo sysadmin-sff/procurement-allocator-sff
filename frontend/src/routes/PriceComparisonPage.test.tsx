@@ -170,6 +170,60 @@ describe('PriceComparisonPage', () => {
     expect(await screen.findByText(/у поставщика доступно 3 рулон, требуется 10/)).toBeInTheDocument();
   });
 
+  it('shows a MOQ warning with the surplus cost when candidate min_order_qty exceeds required quantity (ADR-0045)', async () => {
+    const rows: MaterialComparisonRow[] = [
+      {
+        project_item_id: 'item-1',
+        material_id: 'mat-1',
+        plan: [
+          {
+            supplier_id: 'sup-a',
+            supplier_name: 'ABC Supply',
+            price: 0.5,
+            availability: 1000,
+            min_order_qty: 100,
+            is_cheapest: true,
+          },
+        ],
+        supplier_responses: [],
+      },
+    ];
+    getComparisonMock.mockResolvedValue({ rows });
+
+    renderPage();
+
+    // required_quantity (project item) is 10 in this test's project fixture;
+    // MOQ=100 > 10 -> order_qty=100, total cost on that quantity = $50.00.
+    expect(await screen.findByText(/100/)).toBeInTheDocument();
+    expect(screen.getByText(/\$50\.00/)).toBeInTheDocument();
+  });
+
+  it('shows no MOQ warning when candidate min_order_qty does not exceed required quantity', async () => {
+    const rows: MaterialComparisonRow[] = [
+      {
+        project_item_id: 'item-1',
+        material_id: 'mat-1',
+        plan: [
+          {
+            supplier_id: 'sup-a',
+            supplier_name: 'ABC Supply',
+            price: 25,
+            availability: 50,
+            min_order_qty: 1,
+            is_cheapest: true,
+          },
+        ],
+        supplier_responses: [],
+      },
+    ];
+    getComparisonMock.mockResolvedValue({ rows });
+
+    renderPage();
+
+    await screen.findByText('$25.00');
+    expect(screen.queryByText(/закупку/i)).not.toBeInTheDocument();
+  });
+
   it('shows a dash for a supplier response with neither received_price nor confirmed_price set', async () => {
     const rows: MaterialComparisonRow[] = [
       {

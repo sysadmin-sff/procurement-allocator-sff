@@ -64,6 +64,13 @@ class OrphanedMaterial:
     required_quantity: int
     best_partial_supplier_id: str | None = None
     best_partial_available: int | None = None
+    best_partial_min_order_qty: int | None = None
+    """min_order_qty у best_partial_supplier_id, когда availability этого
+    поставщика покрывал бы required_quantity, но не покрывает order_qty
+    (max(required_quantity, MOQ)) -- иначе сообщение "требуется 37 --
+    частично доступно 50" выглядело бы самопротиворечиво (availability >
+    required_quantity, но материал всё равно orphaned). NULL, когда MOQ
+    не является причиной недостаточности этого offer. См. ADR-0045."""
 
 
 @dataclass(frozen=True)

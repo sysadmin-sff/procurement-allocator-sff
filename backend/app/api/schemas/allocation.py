@@ -57,6 +57,11 @@ class OrphanedMaterialOut(BaseModel):
     required_quantity: int
     best_partial_supplier_id: uuid.UUID | None = None
     best_partial_available: int | None = None
+    best_partial_min_order_qty: int | None = None
+    """min_order_qty у best_partial_supplier_id, заполняется только когда
+    его availability покрывает required_quantity, но материал всё равно
+    orphaned из-за MOQ (availability < order_qty) -- иначе "требуется 37 --
+    частично доступно 50" выглядело бы самопротиворечиво. См. ADR-0045."""
 
 
 class SupplierAllocationSummaryOut(BaseModel):

@@ -61,6 +61,28 @@ def test_run_allocation_records_orphaned_material_not_a_line(
     assert lines[0].material_id == solvable_material.id
 
 
+def test_run_allocation_orphaned_material_explains_moq_when_availability_covers_demand(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0045: a material orphaned because availability covers the raw
+    demand but not order_qty (MOQ-driven) must carry
+    best_partial_min_order_qty end-to-end, through run_allocation --
+    otherwise "требуется 37 -- частично доступно 50" reads as
+    self-contradictory on AllocationResultPage."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=50, min_order_qty=100)
+    project = make_project([(material, 37)])
+
+    run = run_allocation(session, project.id)
+
+    assert len(run.orphaned_materials) == 1
+    orphaned_entry = run.orphaned_materials[0]
+    assert orphaned_entry["best_partial_available"] == 50
+    assert orphaned_entry["best_partial_min_order_qty"] == 100
+
+
 def test_run_allocation_skips_supplier_below_min_order_amount_for_single_item(
     db_session, make_supplier, make_material, make_price, make_project
 ):

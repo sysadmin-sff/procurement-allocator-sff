@@ -298,6 +298,13 @@ function AllocationResultOk({
                           — частично доступно {o.best_partial_available} у{' '}
                           {supplierById.get(o.best_partial_supplier_id)?.name ??
                             o.best_partial_supplier_id}
+                          {o.best_partial_min_order_qty != null && (
+                            <>
+                              {' '}
+                              (мин. заказ {o.best_partial_min_order_qty} — поэтому недостаточно,
+                              хотя доступно больше требуемого)
+                            </>
+                          )}
                         </>
                       )}
                     </span>

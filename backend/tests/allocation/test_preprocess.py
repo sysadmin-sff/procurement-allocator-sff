@@ -141,6 +141,41 @@ def test_moq_all_suppliers_insufficient_availability_material_orphaned():
     assert orphaned[0].best_partial_available == 5
 
 
+def test_moq_orphaned_best_partial_offer_records_blocking_moq():
+    """availability=50 covers the raw demand (37) but not order_qty (100,
+    from MOQ=100) -- the message "требуется 37 -- частично доступно 50"
+    would be self-contradictory (50 > 37) without knowing MOQ is the real
+    reason the offer doesn't qualify. best_partial_min_order_qty must
+    carry that MOQ so the UI can explain it."""
+    materials = [MaterialInput(material_id="m1", quantity=37)]
+    prices = [
+        PriceInput(
+            material_id="m1", supplier_id="s1", unit_price_cents=100,
+            availability=50, min_order_qty=100,
+        )
+    ]
+
+    solvable, orphaned = split_orphaned_materials(materials, prices)
+
+    assert orphaned[0].best_partial_supplier_id == "s1"
+    assert orphaned[0].best_partial_available == 50
+    assert orphaned[0].best_partial_min_order_qty == 100
+
+
+def test_moq_orphaned_best_partial_offer_min_order_qty_null_when_not_the_cause():
+    """Ordinary stock shortfall (no MOQ involved, or MOQ not the binding
+    constraint) must leave best_partial_min_order_qty as NULL -- not every
+    orphaned material is caused by MOQ."""
+    materials = [MaterialInput(material_id="m1", quantity=10)]
+    prices = [
+        PriceInput(material_id="m1", supplier_id="s1", unit_price_cents=100, availability=3)
+    ]
+
+    solvable, orphaned = split_orphaned_materials(materials, prices)
+
+    assert orphaned[0].best_partial_min_order_qty is None
+
+
 def test_moq_sufficient_availability_against_order_qty_keeps_material_solvable():
     """availability >= order_qty (не только >= потребности) -> материал
     остаётся решаемым, как и раньше в обычном случае без MOQ."""

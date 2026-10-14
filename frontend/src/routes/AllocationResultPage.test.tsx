@@ -1513,4 +1513,61 @@ describe('AllocationResultPage', () => {
       expect(screen.queryByText(/из-за минимального количества заказа/i)).not.toBeInTheDocument();
     });
   });
+
+  describe('orphaned material MOQ explanation (ADR-0045)', () => {
+    it('explains that MOQ, not insufficient stock, is why the material is orphaned', async () => {
+      const okRun: AllocationRun = {
+        id: 'run-orphan-moq',
+        project_id: 'proj-1',
+        created_at: '2026-08-17T00:00:00Z',
+        algorithm_version: 'v1',
+        status: 'ok',
+        split_categories: [],
+        lines: [],
+        orphaned_materials: [
+          {
+            material_id: 'mat-1',
+            required_quantity: 37,
+            best_partial_supplier_id: 'sup-a',
+            best_partial_available: 50,
+            best_partial_min_order_qty: 100,
+          },
+        ],
+        supplier_summaries: [],
+      };
+      runMock.mockResolvedValue(okRun);
+
+      renderPage();
+
+      expect(await screen.findByText(/мин\.?\s*заказ.*100/i)).toBeInTheDocument();
+    });
+
+    it('does not show a MOQ explanation for an ordinary stock shortfall', async () => {
+      const okRun: AllocationRun = {
+        id: 'run-orphan-stock',
+        project_id: 'proj-1',
+        created_at: '2026-08-17T00:00:00Z',
+        algorithm_version: 'v1',
+        status: 'ok',
+        split_categories: [],
+        lines: [],
+        orphaned_materials: [
+          {
+            material_id: 'mat-1',
+            required_quantity: 10,
+            best_partial_supplier_id: 'sup-a',
+            best_partial_available: 3,
+            best_partial_min_order_qty: null,
+          },
+        ],
+        supplier_summaries: [],
+      };
+      runMock.mockResolvedValue(okRun);
+
+      renderPage();
+
+      await screen.findByText(materialScreen.canonical_name);
+      expect(screen.queryByText(/мин\.?\s*заказ/i)).not.toBeInTheDocument();
+    });
+  });
 });

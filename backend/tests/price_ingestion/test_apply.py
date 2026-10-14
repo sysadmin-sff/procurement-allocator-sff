@@ -262,3 +262,77 @@ def test_apply_raises_entry_not_found_for_unknown_entry(db_session, make_supplie
         apply_price_list_entry(
             session, price_list_import.id, uuid.uuid4(), action="match", material_id=uuid.uuid4()
         )
+
+
+def test_apply_match_inherits_moq_from_closed_price_when_entry_has_none(
+    db_session, make_supplier, make_material
+):
+    """Реимпорт прайса без указанного MOQ в строке не стирает ранее
+    сохранённый Price.min_order_qty активной строки -- симметрично
+    version_price() (app/api/price.py:67). Регрессия против дефекта,
+    зафиксированного в ADR-0045 §Решение/Модель данных."""
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+
+    old_price = Price(
+        material_id=material.id, supplier_id=supplier.id,
+        price=1.00, currency="USD", availability=None,
+        min_order_qty=250,
+        valid_from=datetime.date(2026, 1, 1), valid_to=None,
+    )
+    session.add(old_price)
+    session.flush()
+
+    price_list_import = _make_import(session, supplier)
+    entry = _make_entry(
+        session, price_list_import, supplier_raw_name="Raw Name", price=1.10,
+        min_order_qty=None,
+    )
+
+    apply_price_list_entry(
+        session, price_list_import.id, entry.id, action="match", material_id=material.id
+    )
+
+    new_price = (
+        session.query(Price)
+        .filter(Price.material_id == material.id, Price.supplier_id == supplier.id, Price.valid_to.is_(None))
+        .one()
+    )
+    assert new_price.min_order_qty == 250
+
+
+def test_apply_match_overwrites_moq_when_entry_has_explicit_value(
+    db_session, make_supplier, make_material
+):
+    """Явное новое значение в выгрузке перезаписывает старое -- поведение
+    без изменений относительно сегодняшнего."""
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+
+    old_price = Price(
+        material_id=material.id, supplier_id=supplier.id,
+        price=1.00, currency="USD", availability=None,
+        min_order_qty=250,
+        valid_from=datetime.date(2026, 1, 1), valid_to=None,
+    )
+    session.add(old_price)
+    session.flush()
+
+    price_list_import = _make_import(session, supplier)
+    entry = _make_entry(
+        session, price_list_import, supplier_raw_name="Raw Name", price=1.10,
+        min_order_qty=500,
+    )
+
+    apply_price_list_entry(
+        session, price_list_import.id, entry.id, action="match", material_id=material.id
+    )
+
+    new_price = (
+        session.query(Price)
+        .filter(Price.material_id == material.id, Price.supplier_id == supplier.id, Price.valid_to.is_(None))
+        .one()
+    )
+    assert new_price.min_order_qty == 500

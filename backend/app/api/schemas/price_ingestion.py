@@ -28,6 +28,12 @@ class PriceListEntryOut(BaseModel):
     matched_material_id is NULL (action="new" candidate, no material to
     compare against yet) or when this supplier has never priced that
     material before (no active Price row for the pair)."""
+    current_active_min_order_qty: int | None = None
+    """Active Price.min_order_qty (valid_to IS NULL) for this supplier +
+    matched_material_id, at read time -- симметрично current_active_price
+    (ADR-0040). NULL по тем же причинам: matched_material_id NULL, или нет
+    активной Price для пары, или активная Price сама имеет min_order_qty=NULL.
+    См. ADR-0045."""
 
 
 class PriceListImportOut(BaseModel):

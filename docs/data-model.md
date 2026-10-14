@@ -114,7 +114,7 @@ erDiagram
         decimal price
         string currency
         int availability
-        int min_order_qty
+        int min_order_qty "nullable — минимум заказа у этой пары (материал, поставщик), см. ADR-0045"
         date valid_from
         date valid_to
         uuid source_import_id "nullable"
@@ -145,6 +145,7 @@ erDiagram
         uuid material_id
         uuid supplier_id
         int quantity
+        int needed_quantity "nullable — исходная потребность, когда MOQ выбранного поставщика создал излишек; NULL = MOQ не действовал, см. ADR-0045"
         decimal unit_price
         uuid overridden_via_order_item_id "nullable, FK -> OrderItem — добавлено сверх исходной диаграммы, см. ADR-0014"
         uuid overridden_by_user_id "nullable, FK -> User, см. ADR-0024 §6"
@@ -161,6 +162,7 @@ erDiagram
         uuid order_id
         uuid material_id
         int quantity
+        int needed_quantity "nullable — перенесено из AllocationLine.needed_quantity, см. ADR-0045"
         decimal quoted_price
         decimal received_price "nullable — первый ответ поставщика, до торга"
         int received_quantity "nullable — количество из первого ответа, см. ADR-0039"
@@ -398,3 +400,30 @@ ordered → completed`. Первые три перехода — автомат�
 `ProjectItem`). `ProjectItem`, созданные из шаблона, ничем не отличаются
 от добавленных вручную — нет обратной ссылки на `ProjectTemplate`
 (`ProjectItem.source_template_id` сознательно отложено, см. ADR-0032 §5).
+
+`Price.min_order_qty` — минимальное количество заказа на связке
+(материал, поставщик), используется в расчёте аллокации с ADR-0045 (до
+этого присутствовало в схеме с ADR-0019, но солвер его не читал). `NULL`
+= минимум не задан, солвер трактует это как MOQ=1 (нейтральное значение,
+не создающее излишка для любой потребности ≥ 1). Единица измерения
+`min_order_qty` принимается равной единице измерения `Price`/
+`ProjectItem.quantity` для той же пары (материал, поставщик) — это
+допущение, не проверяемое кодом (нет отдельного поля "единица MOQ"): если
+парсер прайс-листа извлечёт MOQ в другой единице (например, "мин. заказ:
+1 паллета" при единице материала "шт."), оно будет неверно интерпретировано
+как число штук. Наследуется при реимпорте прайса (`_apply_match`), если
+новая выгрузка не упоминает MOQ в строке — симметрично тому, как
+`version_price()` уже наследует его для остальных путей записи `Price`.
+
+`AllocationLine.needed_quantity`/`OrderItem.needed_quantity` добавлены
+сверх исходной диаграммы ADR-0045, по прецеденту `received_quantity`
+(ADR-0039): `NULL` = нет особого случая (MOQ выбранного поставщика не
+создал излишка, `quantity` равен исходной потребности), заполнено =
+исходная потребность материала на момент расчёта, когда она ниже
+`quantity` (реально заказываемого количества) из-за MOQ. `OrderItem.
+needed_quantity` переносится из `AllocationLine.needed_quantity` при
+создании `Order` без изменений — отдельная колонка, не вычисляемое поле,
+потому что `OrderItem` переживает конкретный `AllocationRun`, из которого
+он создан. Строго внутреннее поле: видно на `AllocationResultPage`/
+`OrderDetailPage`, никогда не попадает в исходящий поставщику текст
+ордера (`buildOrderText`/`buildTargetPriceOrderText`).

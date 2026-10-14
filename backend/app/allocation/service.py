@@ -125,6 +125,7 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
             supplier_id=str(price.supplier_id),
             unit_price_cents=_to_cents(price.price),
             availability=price.availability,
+            min_order_qty=price.min_order_qty or 1,
         )
         for price in prices
     ]
@@ -213,6 +214,9 @@ def run_allocation(db: Session, project_id: uuid.UUID) -> AllocationRun:
                     material_id=uuid.UUID(line.material_id),
                     supplier_id=uuid.UUID(line.supplier_id),
                     quantity=line.quantity,
+                    needed_quantity=(
+                        line.needed_quantity if line.needed_quantity != line.quantity else None
+                    ),
                     unit_price=_from_cents(line.unit_price_cents),
                     line_total=_from_cents(line.line_total_cents),
                 )

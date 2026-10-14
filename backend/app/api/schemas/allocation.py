@@ -20,6 +20,10 @@ class AllocationLineOut(BaseModel):
     material_id: uuid.UUID
     supplier_id: uuid.UUID
     quantity: int
+    needed_quantity: int | None = None
+    """Исходная потребность материала, когда MOQ выбранного поставщика
+    создал излишек (quantity > needed_quantity). NULL = MOQ не действовал.
+    См. AllocationLine.needed_quantity, ADR-0045."""
     unit_price: float
     line_total: float
     overridden_at: datetime | None = None

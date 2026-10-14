@@ -454,6 +454,7 @@ def replace_and_sync_order(
             order_id=target_order.id,
             material_id=line.material_id,
             quantity=line.quantity,
+            needed_quantity=line.needed_quantity,
             quoted_price=candidate["price"],
         )
     )
@@ -661,6 +662,7 @@ def create_orders_for_run(
                     order_id=order.id,
                     material_id=line.material_id,
                     quantity=line.quantity,
+                    needed_quantity=line.needed_quantity,
                     quoted_price=line.unit_price,
                 )
             )

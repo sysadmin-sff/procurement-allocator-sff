@@ -431,3 +431,46 @@ def test_patch_override_returns_404_when_run_belongs_to_different_project(
     )
 
     assert response.status_code == 404
+
+
+def test_allocation_line_out_exposes_needed_quantity_when_moq_creates_surplus(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """GET .../allocations/{run_id} отдаёт needed_quantity != null, когда у
+    выбранного поставщика MOQ выше потребности."""
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=1000, min_order_qty=100)
+    project = make_project([(material, 37)])
+    client = _employee_client(make_user, make_session)
+
+    allocate_response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
+    run_id = allocate_response.json()["id"]
+
+    response = client.get(f"/projects/{project.id}/allocations/{run_id}")
+
+    line = response.json()["lines"][0]
+    assert line["quantity"] == 100
+    assert line["needed_quantity"] == 37
+
+
+def test_allocation_line_out_needed_quantity_null_when_no_moq_surplus(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    supplier = make_supplier(flat_fee=0.0, free_shipping_threshold=0.0)
+    material = make_material()
+    make_price(material, supplier, price=1.00, availability=1000, min_order_qty=1)
+    project = make_project([(material, 37)])
+    client = _employee_client(make_user, make_session)
+
+    allocate_response = client.post(
+        f"/projects/{project.id}/allocate", headers={"X-CSRF-Token": CSRF}
+    )
+    run_id = allocate_response.json()["id"]
+
+    response = client.get(f"/projects/{project.id}/allocations/{run_id}")
+
+    line = response.json()["lines"][0]
+    assert line["needed_quantity"] is None

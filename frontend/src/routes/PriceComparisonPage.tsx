@@ -233,15 +233,14 @@ function PlanCell({
     );
   }
 
-  const showRisk =
-    candidate.is_cheapest &&
-    quantity != null &&
-    candidate.availability != null &&
-    candidate.availability < quantity;
+  // availability_risk/order_qty/order_total are computed on the backend
+  // (CLAUDE.md principle 4) -- against order_qty = max(required_quantity,
+  // min_order_qty), not the raw requirement, see ADR-0045.
+  const showRisk = candidate.is_cheapest && candidate.availability_risk === true;
 
   const moq = candidate.min_order_qty ?? null;
-  const showMoqWarning = quantity != null && moq != null && moq > quantity;
-  const orderQty = showMoqWarning ? Math.max(quantity!, moq!) : null;
+  const showMoqWarning =
+    quantity != null && moq != null && moq > quantity && candidate.order_qty != null;
 
   return (
     <td className={`${styles.priceCell} ${candidate.is_cheapest ? styles.cheapest : ''}`}>
@@ -251,10 +250,10 @@ function PlanCell({
       )}
       {showMoqWarning && (
         <MoqWarning
-          orderQty={orderQty!}
+          orderQty={candidate.order_qty!}
           required={quantity!}
           unit={unit}
-          totalCost={orderQty! * candidate.price}
+          totalCost={candidate.order_total!}
         />
       )}
     </td>

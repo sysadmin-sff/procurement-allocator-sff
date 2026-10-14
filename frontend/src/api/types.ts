@@ -277,7 +277,16 @@ export interface PlanCandidate {
   availability: number | null;
   /** Price.min_order_qty для этой пары -- см. ADR-0045. */
   min_order_qty?: number | null;
+  /** max(required_quantity, min_order_qty) -- считается на backend,
+   * CLAUDE.md принцип 4. См. ADR-0045. */
+  order_qty?: number;
+  /** order_qty * price -- реальная стоимость закупки, считается на
+   * backend. См. ADR-0045. */
+  order_total?: number;
   is_cheapest: boolean;
+  /** availability задан и меньше order_qty (не required_quantity) --
+   * считается на backend. См. ADR-0045. */
+  availability_risk?: boolean;
 }
 
 /** One supplier's Order-derived response for a material — "Ответы поставщиков"
@@ -342,6 +351,10 @@ export interface OrphanedMaterial {
   required_quantity: number;
   best_partial_supplier_id: string | null;
   best_partial_available: number | null;
+  /** min_order_qty у best_partial_supplier_id, когда его availability
+   * покрывает required_quantity, но материал всё равно orphaned из-за
+   * MOQ -- см. ADR-0045. NULL/undefined = MOQ не является причиной. */
+  best_partial_min_order_qty?: number | null;
 }
 
 export interface SupplierAllocationSummary {

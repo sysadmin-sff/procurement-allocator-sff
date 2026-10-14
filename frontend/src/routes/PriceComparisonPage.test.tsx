@@ -158,7 +158,14 @@ describe('PriceComparisonPage', () => {
         project_item_id: 'item-1',
         material_id: 'mat-1',
         plan: [
-          { supplier_id: 'sup-a', supplier_name: 'ABC Supply', price: 25, availability: 3, is_cheapest: true },
+          {
+            supplier_id: 'sup-a',
+            supplier_name: 'ABC Supply',
+            price: 25,
+            availability: 3,
+            is_cheapest: true,
+            availability_risk: true,
+          },
         ],
         supplier_responses: [],
       },
@@ -182,7 +189,10 @@ describe('PriceComparisonPage', () => {
             price: 0.5,
             availability: 1000,
             min_order_qty: 100,
+            order_qty: 100,
+            order_total: 50,
             is_cheapest: true,
+            availability_risk: false,
           },
         ],
         supplier_responses: [],
@@ -193,8 +203,9 @@ describe('PriceComparisonPage', () => {
     renderPage();
 
     // required_quantity (project item) is 10 in this test's project fixture;
-    // MOQ=100 > 10 -> order_qty=100, total cost on that quantity = $50.00.
-    expect(await screen.findByText(/100/)).toBeInTheDocument();
+    // backend already computed order_qty=100, order_total=$50.00.
+    expect(await screen.findByText(/минимальный заказ у поставщика/i)).toBeInTheDocument();
+    expect(screen.getByText(/100/)).toBeInTheDocument();
     expect(screen.getByText(/\$50\.00/)).toBeInTheDocument();
   });
 
@@ -210,7 +221,10 @@ describe('PriceComparisonPage', () => {
             price: 25,
             availability: 50,
             min_order_qty: 1,
+            order_qty: 10,
+            order_total: 250,
             is_cheapest: true,
+            availability_risk: false,
           },
         ],
         supplier_responses: [],
@@ -221,7 +235,7 @@ describe('PriceComparisonPage', () => {
     renderPage();
 
     await screen.findByText('$25.00');
-    expect(screen.queryByText(/закупку/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/минимальный заказ у поставщика/i)).not.toBeInTheDocument();
   });
 
   it('shows a dash for a supplier response with neither received_price nor confirmed_price set', async () => {

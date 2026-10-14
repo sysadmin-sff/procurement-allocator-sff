@@ -95,10 +95,25 @@ class PlanCandidateOut(BaseModel):
     price: float
     availability: int | None
     min_order_qty: int | None = None
-    """Price.min_order_qty для этой пары -- см. ADR-0045. Используется
-    фронтендом, чтобы предупредить, когда MOQ выше required_quantity
-    этой строки."""
+    """Price.min_order_qty для этой пары -- см. ADR-0045."""
+    order_qty: int
+    """max(required_quantity, min_order_qty) -- реально закупаемое
+    количество у этого поставщика. Считается на backend (CLAUDE.md
+    принцип 4), не на фронте. См. ADR-0045."""
+    order_total: float
+    """order_qty * price -- реальная стоимость закупки у этого поставщика,
+    с учётом MOQ-излишка. is_cheapest сравнивается по этой величине, не
+    по price за штуку -- см. ADR-0045 §Решение/Предупреждения п.6."""
     is_cheapest: bool
+    """True, если order_total этого кандидата минимален среди всех
+    кандидатов строки -- та же экономика, что solver.py считает при
+    расчёте аллокации (ADR-0045), не сравнение цены за штуку без учёта
+    MOQ-излишка."""
+    availability_risk: bool
+    """True, если availability задан и меньше order_qty (не меньше
+    required_quantity) -- та же проверка, что solver.py использует перед
+    допуском пары в модель (ADR-0045), и тот же паттерн, что уже
+    используется в ReplacementCandidateOut (ADR-0014)."""
 
 
 class SupplierResponseOut(BaseModel):

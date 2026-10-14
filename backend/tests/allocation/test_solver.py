@@ -812,3 +812,38 @@ def test_multiple_materials_each_get_a_line():
     assert result.status == "OPTIMAL"
     assert len(result.lines) == 2
     assert result.total_cents == 2 * 100 + 3 * 200
+
+
+def test_price_input_min_order_qty_defaults_to_one():
+    """min_order_qty — новое поле PriceInput (ADR-0045), с нейтральным
+    дефолтом 1, чтобы не ломать существующие construction sites без MOQ."""
+    price = PriceInput(
+        material_id="m1", supplier_id="s1", unit_price_cents=500, availability=10,
+    )
+    assert price.min_order_qty == 1
+
+
+def test_price_input_accepts_explicit_min_order_qty():
+    price = PriceInput(
+        material_id="m1", supplier_id="s1", unit_price_cents=500, availability=10,
+        min_order_qty=100,
+    )
+    assert price.min_order_qty == 100
+
+
+def test_allocation_line_result_carries_needed_quantity():
+    """needed_quantity — исходная потребность материала, независимо от
+    quantity, который солвер реально выбрал для этой пары (может быть
+    выше needed_quantity из-за MOQ)."""
+    from app.allocation.types import AllocationLineResult
+
+    line = AllocationLineResult(
+        material_id="m1",
+        supplier_id="s1",
+        quantity=100,
+        needed_quantity=37,
+        unit_price_cents=500,
+        line_total_cents=50000,
+    )
+    assert line.needed_quantity == 37
+    assert line.quantity == 100

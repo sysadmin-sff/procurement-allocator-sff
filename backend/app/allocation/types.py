@@ -44,6 +44,11 @@ class PriceInput:
     supplier_id: str
     unit_price_cents: int
     availability: int | None
+    min_order_qty: int = 1
+    """Price.min_order_qty, или 1 (нейтральный дефолт — не создаёт излишка
+    для любой потребности >= 1) когда MOQ не задан. solve_allocation
+    считает order_qty = max(qty[material_id], min_order_qty) само, эта
+    величина не предрасчитывается вызывающей стороной. См. ADR-0045."""
 
 
 @dataclass(frozen=True)
@@ -66,6 +71,10 @@ class AllocationLineResult:
     material_id: str
     supplier_id: str
     quantity: int
+    needed_quantity: int
+    """Исходная потребность материала (qty[m_id] на входе в солвер),
+    независимо от того, что реально заказано (quantity, может быть выше
+    из-за MOQ выбранного поставщика). См. ADR-0045."""
     unit_price_cents: int
     line_total_cents: int
 

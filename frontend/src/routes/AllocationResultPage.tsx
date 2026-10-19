@@ -628,16 +628,31 @@ function buildSplitCategorySupplierIndex(
   return index;
 }
 
+/** `Price.price` is stored with 3 decimals (migration c7f2a91b4e0d), but the
+ * allocation solver only ever reasons in whole cents (`_to_cents`/
+ * `_from_cents`, ADR-0045 §Контекст, `_CENTS_PER_UNIT = 100` in
+ * `backend/app/allocation/service.py`) — `AllocationLine.unit_price`, which
+ * this index is compared against, is always a cents-rounded value. Comparing
+ * it to a raw 3-decimal `Price.price` can make a supplier's own line look
+ * more expensive than "the cheapest price for this material" even when both
+ * refer to the same Price row, because the two sides are rounded to
+ * different precisions. Round here the same way the backend does before
+ * comparing, so "cheapest" means the same thing on both sides. */
+function roundToCents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function buildCheapestPriceIndex(
   prices: Price[],
 ): Map<string, { price: number; supplierIds: string[] }> {
   const index = new Map<string, { price: number; supplierIds: string[] }>();
   for (const price of prices) {
     if (price.valid_to != null) continue;
+    const roundedPrice = roundToCents(price.price);
     const existing = index.get(price.material_id);
-    if (!existing || price.price < existing.price) {
-      index.set(price.material_id, { price: price.price, supplierIds: [price.supplier_id] });
-    } else if (price.price === existing.price) {
+    if (!existing || roundedPrice < existing.price) {
+      index.set(price.material_id, { price: roundedPrice, supplierIds: [price.supplier_id] });
+    } else if (roundedPrice === existing.price) {
       existing.supplierIds.push(price.supplier_id);
     }
   }

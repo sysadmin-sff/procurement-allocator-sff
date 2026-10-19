@@ -1514,6 +1514,74 @@ describe('AllocationResultPage', () => {
     });
   });
 
+  describe('cheapest-price comparison at matching precision (sub-cent Price.price)', () => {
+    it('does not flag a line as "не самая дешёвая цена" when its unit_price (cents-rounded by the solver) matches the only Price row for that supplier, which is stored with a 3rd decimal (migration c7f2a91b4e0d)', async () => {
+      // Price.price carries a 3rd decimal (e.g. hardware priced at
+      // fractions of a cent per piece); the solver's _to_cents()/_from_cents()
+      // round that to whole cents for AllocationLine.unit_price. Comparing
+      // the rounded unit_price against the raw 3-decimal Price.price made a
+      // supplier's own cheapest line look more expensive than itself.
+      const okRun: AllocationRun = {
+        id: 'run-subcent',
+        project_id: 'proj-1',
+        created_at: '2026-08-17T00:00:00Z',
+        algorithm_version: 'v1',
+        status: 'ok',
+        split_categories: [],
+        lines: [
+          {
+            id: 'line-1',
+            material_id: 'mat-1',
+            supplier_id: 'sup-a',
+            quantity: 1,
+            unit_price: 25.45,
+            line_total: 25.45,
+            overridden_at: null,
+            original_supplier_id: null,
+            original_unit_price: null,
+            ordered_at: null,
+          },
+        ],
+        orphaned_materials: [],
+        supplier_summaries: [
+          {
+            supplier_id: 'sup-a',
+            goods_total: 25.45,
+            delivery_fee: 0,
+            tax_amount: 1.78,
+            total_with_tax: 27.23,
+            free_shipping_achieved: true,
+            below_min_order: false,
+          },
+        ],
+      };
+      runMock.mockResolvedValue(okRun);
+      pricesListMock.mockResolvedValue([
+        {
+          id: 'p1',
+          material_id: 'mat-1',
+          supplier_id: 'sup-a',
+          // 25.447 rounds UP to 25.45 cents in the solver's _to_cents(),
+          // so AllocationLine.unit_price (25.45) ends up *greater* than
+          // this raw Price.price (25.447) for the very same supplier.
+          price: 25.447,
+          currency: 'USD',
+          availability: 100,
+          min_order_qty: null,
+          valid_from: '2026-01-01',
+          valid_to: null,
+          source_import_id: null,
+        },
+      ] satisfies Price[]);
+
+      renderPage();
+
+      await screen.findByText(materialScreen.canonical_name);
+      expect(screen.queryByText('не самая дешёвая цена')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Дороже на/)).not.toBeInTheDocument();
+    });
+  });
+
   describe('orphaned material MOQ explanation (ADR-0045)', () => {
     it('explains that MOQ, not insufficient stock, is why the material is orphaned', async () => {
       const okRun: AllocationRun = {

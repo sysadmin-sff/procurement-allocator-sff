@@ -58,6 +58,12 @@ def test_apply_match_creates_new_price_version_and_upserts_alias(
     )
 
     assert updated.action == "match"
+    alias = (
+        session.query(SupplierMaterialAlias)
+        .filter_by(supplier_id=supplier.id, material_id=material.id)
+        .one()
+    )
+    assert alias.origin == "price_import"
     active_price = (
         session.query(Price)
         .filter(

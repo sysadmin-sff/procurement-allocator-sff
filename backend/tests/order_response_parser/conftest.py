@@ -7,7 +7,17 @@ import pytest
 from app.auth.constants import SESSION_IDLE_TTL
 from app.core.database import SessionLocal, get_db
 from app.main import app
-from app.models import Category, Material, Order, OrderItem, Project, Supplier, User, UserSession
+from app.models import (
+    Category,
+    Material,
+    Order,
+    OrderItem,
+    Project,
+    Supplier,
+    SupplierMaterialAlias,
+    User,
+    UserSession,
+)
 
 _category_ids_pending_cleanup: list = []
 """Populated by make_category's own teardown when a Category delete can't
@@ -55,6 +65,9 @@ def db_session():
                 synchronize_session=False
             )
         if supplier_ids:
+            session.query(SupplierMaterialAlias).filter(
+                SupplierMaterialAlias.supplier_id.in_(supplier_ids)
+            ).delete(synchronize_session=False)
             session.query(Supplier).filter(Supplier.id.in_(supplier_ids)).delete(
                 synchronize_session=False
             )
@@ -186,6 +199,25 @@ def make_material(db_session, make_category):
         session.flush()
         material_ids.append(material.id)
         return material
+
+    return _make
+
+
+@pytest.fixture
+def make_alias(db_session):
+    session, *_ = db_session
+
+    def _make(supplier, material, raw_name, *, origin="order_response", created_by=None):
+        alias = SupplierMaterialAlias(
+            supplier_id=supplier.id,
+            material_id=material.id,
+            supplier_raw_name=raw_name,
+            origin=origin,
+            created_by_user_id=created_by.id if created_by else None,
+        )
+        session.add(alias)
+        session.flush()
+        return alias
 
     return _make
 

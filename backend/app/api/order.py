@@ -44,19 +44,25 @@ from app.api.schemas.order import (
     ReplaceAndOrderIn,
 )
 from app.api.schemas.order_response_parser import (
+    CreateResponseAliasIn,
+    ExistingAliasOut,
     ExtraLineOut,
     MatchedLineOut,
     MissingItemOut,
     ParseOrderResponseOut,
+    ResponseAliasOut,
 )
 from app.api.schemas.price import PriceOut
 from app.auth.dependencies import get_current_user
 from app.core.database import get_db
 from app.models import Order, Price, Project, User
 from app.order_response_parser.service import (
+    AliasConflictError,
+    MaterialNotFoundError,
     OrderNotFoundError,
     OrderResponseParsingError,
     UnsupportedFileTypeError,
+    create_response_alias,
     parse_order_response,
 )
 
@@ -425,7 +431,7 @@ async def parse_order_response_endpoint(
         raise HTTPException(status_code=413, detail="Файл слишком большой (максимум 10MB).")
 
     try:
-        matched, missing, extra = parse_order_response(
+        matched, missing, extra, alias_matched_ids = parse_order_response(
             db,
             order_id,
             file_bytes=file_bytes,
@@ -450,6 +456,7 @@ async def parse_order_response_endpoint(
                 quantity=line.quantity,
                 confidence=line.confidence,
                 reasoning=line.reasoning,
+                matched_by_alias=line.matched_order_item_id in alias_matched_ids,
             )
             for line in matched
         ],
@@ -475,4 +482,56 @@ async def parse_order_response_endpoint(
             )
             for line in extra
         ],
+    )
+
+
+@router.post(
+    "/orders/{order_id}/response-aliases",
+    response_model=ResponseAliasOut,
+)
+def create_response_alias_endpoint(
+    order_id: uuid.UUID,
+    payload: CreateResponseAliasIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ResponseAliasOut:
+    """ "Связать" button on the order-response review screen — see
+    ADR-0046 §2. Open to the same access level as the rest of this router
+    (get_current_user, not require_role("admin")) — see ADR-0046 "Роли":
+    the whole order-response screen is already open to 'employee'."""
+    try:
+        alias = create_response_alias(
+            db,
+            order_id,
+            supplier_raw_name=payload.supplier_raw_name,
+            supplier_sku=payload.supplier_sku,
+            material_id=payload.material_id,
+            created_by_user_id=current_user.id,
+            force=payload.force,
+        )
+    except OrderNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Order not found") from exc
+    except MaterialNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Material not found") from exc
+    except AliasConflictError as exc:
+        existing = exc.existing
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Alias already exists with a different material_id",
+                "existing": ExistingAliasOut(
+                    material_id=existing.material_id,
+                    canonical_name=existing.material.canonical_name,
+                    created_at=(existing.created_at.isoformat() if existing.created_at else None),
+                ).model_dump(mode="json"),
+            },
+        ) from exc
+
+    return ResponseAliasOut(
+        id=alias.id,
+        supplier_id=alias.supplier_id,
+        material_id=alias.material_id,
+        supplier_raw_name=alias.supplier_raw_name,
+        supplier_sku=alias.supplier_sku,
+        origin=alias.origin,
     )

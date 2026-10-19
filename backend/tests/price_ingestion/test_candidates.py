@@ -55,6 +55,30 @@ def test_find_known_alias_is_scoped_to_supplier(db_session, make_supplier, make_
     assert found is None
 
 
+def test_find_known_alias_ignores_order_response_origin(db_session, make_supplier, make_material):
+    """ADR-0046: an alias created by the order-response "Связать" button
+    (origin='order_response') must not leak into price-ingestion matching
+    — it was confirmed by an employee in the context of one specific
+    order's response document, not as a general statement about how this
+    supplier labels items in its price lists."""
+    session, _material_ids, supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+    session.add(
+        SupplierMaterialAlias(
+            supplier_id=supplier.id,
+            material_id=material.id,
+            supplier_raw_name="S-25-00-00070 3X4 A ELBOW BRONZE",
+            origin="order_response",
+        )
+    )
+    session.commit()
+
+    found = find_known_alias(session, supplier.id, "S-25-00-00070 3X4 A ELBOW BRONZE")
+
+    assert found is None
+
+
 def test_find_top_candidates_orders_by_cosine_distance(db_session, make_material):
     # Note: this dev DB is pre-seeded with ~300 real Material rows that
     # already have embeddings (from prior backfill work), so a small k

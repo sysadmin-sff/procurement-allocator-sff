@@ -28,11 +28,17 @@ def find_known_alias(
     db: Session, supplier_id: uuid.UUID, raw_name: str
 ) -> SupplierMaterialAlias | None:
     """Exact-match short-circuit before any embedding/LLM call — see
-    ADR-0019 §2. Scoped to (supplier_id, supplier_raw_name)."""
+    ADR-0019 §2. Scoped to (supplier_id, supplier_raw_name). Restricted to
+    origin='price_import' — an alias created via the order-response
+    "Связать" button (origin='order_response') was confirmed in the
+    context of one specific order's reply, not as a general statement
+    about this supplier's price-list vocabulary, and must not silently
+    resolve a Price here. See ADR-0046 §4."""
     return db.scalar(
         select(SupplierMaterialAlias).where(
             SupplierMaterialAlias.supplier_id == supplier_id,
             SupplierMaterialAlias.supplier_raw_name == raw_name,
+            SupplierMaterialAlias.origin == "price_import",
         )
     )
 

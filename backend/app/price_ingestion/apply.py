@@ -47,6 +47,7 @@ def _upsert_alias(
                 supplier_id=supplier_id,
                 material_id=material_id,
                 supplier_raw_name=raw_name,
+                origin="price_import",
             )
         )
 

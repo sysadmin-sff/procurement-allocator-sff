@@ -19,6 +19,7 @@ from app.api.schemas.supplier import (
 from app.auth.dependencies import require_role
 from app.core.database import get_db
 from app.models import Office, Supplier, SupplierContact
+from app.order_response_parser.service import AliasNotFoundError, delete_response_alias
 from app.supplier_directory.service import (
     OfficeMismatchError,
     OfficeNotFoundError,
@@ -105,6 +106,22 @@ def delete_supplier(supplier_id: uuid.UUID, db: Session = Depends(get_db)) -> No
         raise HTTPException(
             status_code=409, detail="Supplier is referenced by other records"
         ) from exc
+
+
+@router.delete("/{supplier_id}/aliases/{alias_id}", status_code=204)
+def delete_supplier_alias(
+    supplier_id: uuid.UUID, alias_id: uuid.UUID, db: Session = Depends(get_db)
+) -> None:
+    """Admin-only (router-level require_role("admin")) — see ADR-0046 §5:
+    removes any-origin SupplierMaterialAlias, used both to undo a mistaken
+    "Связать" link (ADR-0046 §6) and to clean up price-ingestion aliases.
+    404 if alias_id doesn't exist or belongs to a different supplier_id
+    than the one in the path — not 403/400, same "don't reveal another
+    resource's existence" principle as the rest of this API."""
+    try:
+        delete_response_alias(db, supplier_id, alias_id)
+    except AliasNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Alias not found") from exc
 
 
 @router.post("/{supplier_id}/offices", response_model=OfficeOut, status_code=201)

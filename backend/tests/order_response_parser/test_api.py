@@ -449,6 +449,51 @@ def test_declined_item_mentioned_by_supplier_falls_into_extra(
     assert refreshed.received_price == before_received
 
 
+def test_matched_by_alias_true_only_for_post_matched_line(
+    db_session, make_supplier, make_material, make_order, make_alias, make_user, make_session
+):
+    """ADR-0046 §1: MatchedLineOut.matched_by_alias is True only for a
+    line the post-match step linked via a stored alias, False for a line
+    the model matched directly — even when both appear in the same
+    response."""
+    session, *_ = db_session
+    supplier = make_supplier()
+    material_a = make_material(canonical_name="Material A")
+    material_b = make_material(canonical_name="3x4 A Elbow")
+    order = make_order(supplier, [(material_a, 10, 5.00), (material_b, 4, 2.52)])
+    item_a, item_b = order.items
+    make_alias(supplier, material_b, "S-25-00-00070 3X4 A ELBOW BRONZE")
+    client = _employee_client(make_user, make_session)
+
+    lines = [
+        ExtractedLine(
+            raw_description="Material A response",
+            matched_order_item_id=item_a.id,
+            price=5.00,
+            quantity=10,
+            confidence="high",
+            reasoning="model matched directly",
+        ),
+        ExtractedLine(
+            raw_description="S-25-00-00070 3X4 A ELBOW BRONZE",
+            matched_order_item_id=None,
+            price=2.52,
+            quantity=4,
+            confidence="medium",
+            reasoning="model could not match",
+        ),
+    ]
+
+    with _mock_extraction(lines):
+        response = _upload(client, order.id)
+
+    assert response.status_code == 200
+    body = response.json()
+    by_item_id = {m["order_item_id"]: m for m in body["matched"]}
+    assert by_item_id[str(item_a.id)]["matched_by_alias"] is False
+    assert by_item_id[str(item_b.id)]["matched_by_alias"] is True
+
+
 def test_parse_response_no_session_returns_401():
     client = TestClient(app)
     response = client.post(

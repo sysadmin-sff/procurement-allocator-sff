@@ -481,27 +481,44 @@ DEFAULT` отдельным шагом, поскольку в этом мини�
    WHERE origin = 'order_response' AND created_by_user_id = :user_id
    ORDER BY created_at DESC NULLS LAST;
 
-   -- Удаление одной конкретной ошибочной записи по id (предпочтительно)
-   DELETE FROM supplier_material_aliases WHERE id = :alias_id;
+   -- Удаление одной конкретной ошибочной записи по id — в транзакции,
+   -- со сверкой перед коммитом (origin в условии WHERE — не полагаться
+   -- на то, что id уже точно принадлежит order-response-записи):
+   BEGIN;
+   DELETE FROM supplier_material_aliases
+   WHERE id = :alias_id AND origin = 'order_response'
+   RETURNING id, supplier_id, supplier_raw_name;
+   -- Сверить напечатанную строку (id/supplier_id/supplier_raw_name)
+   -- с тем, что ожидалось удалить. Совпало -> COMMIT; не совпало или
+   -- ничего не вернулось (0 строк — значит id не было, или он
+   -- принадлежит другому origin) -> ROLLBACK.
+   COMMIT; -- или ROLLBACK;
 
    -- Удаление ВСЕХ order-response-алиасов конкретного поставщика —
    -- крайняя мера, используется только когда точечные id неизвестны
-   -- и восстановление по одной записи нецелесообразно
-   DELETE FROM supplier_material_aliases
+   -- и восстановление по одной записи нецелесообразно. Сначала узнать
+   -- объём, затем удалить в той же транзакции со сверкой числа:
+   SELECT count(*) FROM supplier_material_aliases
    WHERE origin = 'order_response' AND supplier_id = :supplier_id;
+   -- Записать полученное число, затем:
+   BEGIN;
+   DELETE FROM supplier_material_aliases
+   WHERE origin = 'order_response' AND supplier_id = :supplier_id
+   RETURNING id, supplier_raw_name;
+   -- Сверить количество напечатанных строк с числом из предыдущего
+   -- SELECT. Совпало -> COMMIT; не совпало (кто-то создал/удалил
+   -- записи между SELECT и DELETE) -> ROLLBACK и повторить сначала.
+   COMMIT; -- или ROLLBACK;
    ```
-   **Важная граница этого рецепта.** Прямой `DELETE ... WHERE id =
-   :alias_id` затрагивает ровно одну запись независимо от `origin` —
-   если кто-то по ошибке подставит `id` строки с `origin='price_import'`
-   (созданной price-ingestion), этот `DELETE` её тоже удалит, несмотря
-   на то, что раздел "Восстановление" написан в контексте order-response.
-   Ограничение этого риска: два варианта выше (с `WHERE origin =
-   'order_response' AND ...`) **всегда** включают явный фильтр по
-   `origin`, когда удаление не по точному `id` — SQL-рецепт в
-   `known-issues.md` сопровождается явным предупреждением "проверьте
-   `origin` перед `DELETE ... WHERE id = ...`, если не уверены, что `id`
-   принадлежит order-response-записи" (например, предварительным
-   `SELECT origin FROM supplier_material_aliases WHERE id = :alias_id`).
+   **Важная граница этого рецепта.** `RETURNING` в обеих формах — не
+   декоративный шаг: он даёт то, что фактически было удалено, печатается
+   до `COMMIT`, и именно его сверяют глазами перед тем, как коммитить —
+   без него `DELETE` подтверждался бы вслепую. Условие `origin =
+   'order_response'` присутствует в обеих формах всегда, включая удаление
+   по точному `id`: если `id` по ошибке указывает на запись с
+   `origin='price_import'` (созданную price-ingestion), `DELETE` с этим
+   условием не затронет её — вернёт 0 строк в `RETURNING`, что сразу видно
+   перед `COMMIT` и означает `ROLLBACK`, не тихую порчу чужой записи.
    Эндпоинт `DELETE /suppliers/{supplier_id}/aliases/{alias_id}` этой же
    проблемы не имеет — он не фильтрует по `origin` вообще (удаляет
    `alias_id` любого происхождения для указанного `supplier_id`), и это

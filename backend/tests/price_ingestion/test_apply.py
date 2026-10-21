@@ -84,6 +84,62 @@ def test_apply_match_creates_new_price_version_and_upserts_alias(
     assert alias.supplier_raw_name == "ACME Screen"
 
 
+def test_apply_match_does_not_skip_alias_upsert_when_order_response_alias_shares_the_triple(
+    db_session, make_supplier, make_material
+):
+    """ADR-0046 §4: _upsert_alias's existence check must be scoped to
+    origin='price_import', same as find_known_alias. An order_response-
+    origin alias confirmed via the "Связать" button, for the exact same
+    (supplier_id, material_id, raw_name), must not make this price-
+    ingestion apply silently skip creating its own price_import-origin
+    alias — otherwise find_known_alias (which only reads origin=
+    'price_import') would never see a row for this supplier/raw_name,
+    even though the price-ingestion review screen just confirmed it."""
+    session, _material_ids, _supplier_ids, _user_ids = db_session
+    supplier = make_supplier()
+    material = make_material()
+    session.add(
+        SupplierMaterialAlias(
+            supplier_id=supplier.id,
+            material_id=material.id,
+            supplier_raw_name="Shared Raw Name",
+            origin="order_response",
+        )
+    )
+    session.commit()
+
+    price_list_import = _make_import(session, supplier)
+    entry = _make_entry(session, price_list_import, supplier_raw_name="Shared Raw Name")
+
+    apply_price_list_entry(
+        session, price_list_import.id, entry.id, action="match", material_id=material.id
+    )
+
+    price_import_alias = (
+        session.query(SupplierMaterialAlias)
+        .filter_by(
+            supplier_id=supplier.id,
+            material_id=material.id,
+            supplier_raw_name="Shared Raw Name",
+            origin="price_import",
+        )
+        .one_or_none()
+    )
+    assert price_import_alias is not None
+
+    order_response_alias = (
+        session.query(SupplierMaterialAlias)
+        .filter_by(
+            supplier_id=supplier.id,
+            material_id=material.id,
+            supplier_raw_name="Shared Raw Name",
+            origin="order_response",
+        )
+        .one_or_none()
+    )
+    assert order_response_alias is not None, "the pre-existing order_response alias must survive"
+
+
 def test_apply_match_closes_existing_active_price(
     db_session, make_supplier, make_material
 ):
@@ -186,6 +242,7 @@ def test_apply_new_creates_material_alias_and_price_atomically(
 
     alias = session.query(SupplierMaterialAlias).filter_by(material_id=material.id).one()
     assert alias.supplier_raw_name == "Brand New Screen"
+    assert alias.origin == "price_import"
 
     price = session.query(Price).filter_by(material_id=material.id).one()
     assert float(price.price) == 12.0

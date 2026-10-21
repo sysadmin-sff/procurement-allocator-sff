@@ -304,13 +304,18 @@ def create_response_alias(
 
 
 def delete_response_alias(db: Session, supplier_id: uuid.UUID, alias_id: uuid.UUID) -> None:
-    """Deletes any-origin alias by id, scoped to supplier_id — see
-    ADR-0046 §2/§5. Raises AliasNotFoundError if alias_id doesn't exist or
-    belongs to a different supplier_id than the one in the path (same
-    "don't reveal another resource's existence" principle as the rest of
-    order.py's 404s)."""
+    """Deletes an origin='order_response' alias by id, scoped to
+    supplier_id — see ADR-0046 §2/§5/§6. This endpoint exists to undo a
+    mistaken "Связать" click, not to manage price-ingestion's vocabulary
+    — a price_import-origin alias is treated the same as a wrong
+    supplier_id: AliasNotFoundError, not deleted. (The SQL recipe in
+    ADR-0046 §6/known-issues.md is the only path for removing a
+    price_import alias.) Raises AliasNotFoundError if alias_id doesn't
+    exist, belongs to a different supplier_id than the one in the path,
+    or has origin='price_import' — same "don't reveal another resource's
+    existence" principle as the rest of order.py's 404s."""
     alias = db.get(SupplierMaterialAlias, alias_id)
-    if alias is None or alias.supplier_id != supplier_id:
+    if alias is None or alias.supplier_id != supplier_id or alias.origin != "order_response":
         raise AliasNotFoundError(alias_id)
     db.delete(alias)
     db.commit()

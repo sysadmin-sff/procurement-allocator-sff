@@ -113,10 +113,13 @@ def delete_supplier_alias(
     supplier_id: uuid.UUID, alias_id: uuid.UUID, db: Session = Depends(get_db)
 ) -> None:
     """Admin-only (router-level require_role("admin")) — see ADR-0046 §5:
-    removes any-origin SupplierMaterialAlias, used both to undo a mistaken
-    "Связать" link (ADR-0046 §6) and to clean up price-ingestion aliases.
-    404 if alias_id doesn't exist or belongs to a different supplier_id
-    than the one in the path — not 403/400, same "don't reveal another
+    removes an origin='order_response' SupplierMaterialAlias, i.e. undoes
+    a mistaken "Связать" link (ADR-0046 §6). Does NOT touch price_import-
+    origin aliases — those have their own confirmation flow via the
+    price-ingestion review screen, and the SQL recipe in known-issues.md
+    is the only path for removing one. 404 if alias_id doesn't exist,
+    belongs to a different supplier_id than the one in the path, or has
+    origin='price_import' — not 403/400, same "don't reveal another
     resource's existence" principle as the rest of this API."""
     try:
         delete_response_alias(db, supplier_id, alias_id)

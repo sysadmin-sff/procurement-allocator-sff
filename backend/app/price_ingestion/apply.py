@@ -36,9 +36,20 @@ def _get_entry_or_raise(
 def _upsert_alias(
     db: Session, supplier_id: uuid.UUID, material_id: uuid.UUID, raw_name: str
 ) -> None:
+    """Scoped to origin='price_import', same as find_known_alias
+    (ADR-0046 §4) — an order_response-origin alias for the exact same
+    (supplier_id, material_id, raw_name) must not be mistaken for an
+    existing price_import-origin row and silently block this function
+    from creating its own, or find_known_alias (which only ever reads
+    origin='price_import') would never see a row for this pairing."""
     existing = (
         db.query(SupplierMaterialAlias)
-        .filter_by(supplier_id=supplier_id, material_id=material_id, supplier_raw_name=raw_name)
+        .filter_by(
+            supplier_id=supplier_id,
+            material_id=material_id,
+            supplier_raw_name=raw_name,
+            origin="price_import",
+        )
         .first()
     )
     if existing is None:

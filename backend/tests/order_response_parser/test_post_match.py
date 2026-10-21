@@ -4,6 +4,8 @@ see ADR-0046 §1. A deterministic, code-level link between an "extra" line
 SupplierMaterialAlias (origin='order_response') — not an LLM decision.
 """
 
+import logging
+
 from app.models import OrderItem
 from app.order_response_parser.client import ExtractedLine
 from app.order_response_parser.service import parse_order_response
@@ -347,3 +349,60 @@ def test_post_match_normalizes_case_and_collapsed_whitespace(
     assert matched[0].matched_order_item_id == item.id
     assert extra == []
     assert alias_ids == {item.id}
+
+
+def test_parse_order_response_logs_post_match_counts(
+    db_session, make_supplier, make_material, make_order, make_alias, monkeypatch, caplog
+):
+    """ADR-0046 §"Метрика успеха": aliases_loaded/extra_lines_before/
+    post_match_hits are logged once per call, as structured attributes on
+    the "order_response_post_match" log record — not embedded in the
+    message text."""
+    session, *_ = db_session
+    supplier = make_supplier()
+    material = make_material(canonical_name="3x4 A Elbow")
+    order = make_order(supplier, [(material, 4, 2.52)])
+    make_alias(supplier, material, "S-25-00-00070 3X4 A ELBOW BRONZE")
+
+    lines = [_line("S-25-00-00070 3X4 A ELBOW BRONZE")]
+    monkeypatch.setattr(
+        "app.order_response_parser.service.parse_order_response_document",
+        lambda **kwargs: lines,
+    )
+
+    with caplog.at_level(logging.INFO, logger="app.order_response_parser.service"):
+        parse_order_response(session, order.id, file_bytes=b"x", content_type="application/pdf")
+
+    matching = [r for r in caplog.records if r.message == "order_response_post_match"]
+    assert len(matching) == 1
+    record = matching[0]
+    assert record.aliases_loaded == 1
+    assert record.extra_lines_before == 1
+    assert record.post_match_hits == 1
+
+
+def test_parse_order_response_logs_zero_hits_when_no_alias_matches(
+    db_session, make_supplier, make_material, make_order, monkeypatch, caplog
+):
+    """Same log, with no aliases stored at all — aliases_loaded and
+    post_match_hits must both read 0, not be silently absent."""
+    session, *_ = db_session
+    supplier = make_supplier()
+    material = make_material(canonical_name="3x4 A Elbow")
+    order = make_order(supplier, [(material, 4, 2.52)])
+
+    lines = [_line("Something with no alias on record")]
+    monkeypatch.setattr(
+        "app.order_response_parser.service.parse_order_response_document",
+        lambda **kwargs: lines,
+    )
+
+    with caplog.at_level(logging.INFO, logger="app.order_response_parser.service"):
+        parse_order_response(session, order.id, file_bytes=b"x", content_type="application/pdf")
+
+    matching = [r for r in caplog.records if r.message == "order_response_post_match"]
+    assert len(matching) == 1
+    record = matching[0]
+    assert record.aliases_loaded == 0
+    assert record.extra_lines_before == 1
+    assert record.post_match_hits == 0

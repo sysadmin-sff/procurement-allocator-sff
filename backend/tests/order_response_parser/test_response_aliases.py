@@ -101,6 +101,7 @@ def test_create_alias_order_not_found_returns_404(
     )
 
     assert response.status_code == 404
+    assert response.json()["detail"] == "Order not found"
 
 
 def test_create_alias_material_not_found_returns_404(
@@ -121,6 +122,7 @@ def test_create_alias_material_not_found_returns_404(
     )
 
     assert response.status_code == 404
+    assert response.json()["detail"] == "Material not found"
 
 
 def test_create_alias_idempotent_on_exact_triple(
@@ -233,6 +235,8 @@ def test_create_alias_conflict_with_force_overwrites(
     )
     assert len(rows) == 1
     assert rows[0].material_id == material_b.id
+    assert rows[0].origin == "order_response"
+    assert response.json()["origin"] == "order_response"
 
 
 def test_delete_alias_requires_admin(
@@ -277,4 +281,29 @@ def test_delete_alias_wrong_supplier_in_path_returns_404(
     response = _delete_alias(client, supplier_b.id, alias.id)
 
     assert response.status_code == 404
+    assert response.json()["detail"] == "Alias not found"
+    assert session.get(SupplierMaterialAlias, alias.id) is not None
+
+
+def test_delete_alias_refuses_price_import_origin(
+    db_session, make_supplier, make_material, make_alias, make_user, make_session
+):
+    """ADR-0046 §5: this endpoint only ever removes origin='order_response'
+    aliases — it exists to undo a mistaken "Связать" click, not to manage
+    price-ingestion's vocabulary. A price_import-origin alias, even with a
+    correct supplier_id/alias_id pair, is treated as not found (same
+    reasoning as the 404 for a wrong supplier_id: this endpoint has no
+    business touching that row). The SQL recipe in ADR-0046 §6/known-
+    issues.md is the only path for removing a price_import alias."""
+    session, *_ = db_session
+    supplier = make_supplier()
+    material = make_material()
+    alias = make_alias(supplier, material, "Raw Name", origin="price_import")
+
+    client, _admin = _admin_client(make_user, make_session)
+
+    response = _delete_alias(client, supplier.id, alias.id)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Alias not found"
     assert session.get(SupplierMaterialAlias, alias.id) is not None

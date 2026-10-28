@@ -1,12 +1,14 @@
 import { http } from './client';
 import type {
   ConfirmPriceUpdatesOut,
+  CreateResponseAliasIn,
   FindReplacementResult,
   Order,
   OrderItem,
   ParseOrderResponseResult,
   Price,
   PriceUpdateSelection,
+  ResponseAlias,
 } from './types';
 
 export interface OrderItemPatch {
@@ -77,4 +79,10 @@ export const ordersApi = {
    * call from the "Лишнее" category's "Добавить" button. */
   addRawItem: (orderId: string, payload: OrderItemRawIn) =>
     http.post<OrderItem>(`/orders/${orderId}/items/raw`, payload),
+  /** POST .../response-aliases — see ADR-0046 §2. 409 (detail:
+   * ResponseAliasConflict) when this supplier text is already linked to a
+   * different material; retry with force=true to overwrite. 404 for an
+   * unknown order or material. */
+  createResponseAlias: (orderId: string, payload: CreateResponseAliasIn) =>
+    http.post<ResponseAlias>(`/orders/${orderId}/response-aliases`, payload),
 };

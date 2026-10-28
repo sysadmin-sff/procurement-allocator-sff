@@ -807,3 +807,23 @@
   font-weight: 600;
   color: var(--color-success-alt);
 }
+
+.parseExtraActions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.parseExtraButtons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.parseLinkNote {
+  font-size: var(--text-xs-alt);
+  color: var(--color-text-tertiary-alt);
+  text-align: right;
+}

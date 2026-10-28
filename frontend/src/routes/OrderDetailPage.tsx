@@ -20,6 +20,7 @@ import type {
   PriceUpdateResult,
   PriceUpdateSelection,
   ProjectItem,
+  ResponseAliasConflict,
   Supplier,
 } from '../api/types';
 import { Button } from '../components/Button';
@@ -29,7 +30,9 @@ import { OrderDeleteModal } from '../components/OrderDeleteModal';
 import { PriceDivergenceModal } from '../components/PriceDivergenceModal';
 import type { PriceUpdateBatchRow } from '../components/PriceUpdateBatchScreen';
 import { PriceUpdateBatchScreen } from '../components/PriceUpdateBatchScreen';
+import { ResponseAliasModal } from '../components/ResponseAliasModal';
 import { resolveMaterialName } from '../lib/colors';
+import { aliasCandidates, suggestAliasPair } from '../lib/responseAliasSuggestion';
 import styles from './order-detail/OrderDetail.module.css';
 // badgeActive/badgeHistorical are the same "активна"/"историческая" classes
 // MaterialPricesPanel uses (CrudScreen.module.css:288-305) — reused here
@@ -1260,7 +1263,9 @@ function ParseResponseSection({
       const included: Record<string, boolean> = {};
       for (const line of parsed.matched) {
         prices[line.order_item_id] = line.price;
-        included[line.order_item_id] = true; // default-checked, ADR-0018 §3a
+        // default-checked (ADR-0018 §3a), except alias-matched lines — a wrong
+        // stored alias must not ride along on one bulk click (ADR-0046 §1).
+        included[line.order_item_id] = !line.matched_by_alias;
       }
       setMatchedPrices(prices);
       setMatchedIncluded(included);
@@ -1437,7 +1442,7 @@ function ParseResponseSection({
                       line={line}
                       order={order}
                       materialById={materialById}
-                      included={matchedIncluded[line.order_item_id] ?? true}
+                      included={matchedIncluded[line.order_item_id] ?? !line.matched_by_alias}
                       price={matchedPrices[line.order_item_id] ?? line.price}
                       onToggleIncluded={(value) =>
                         setMatchedIncluded((prev) => ({ ...prev, [line.order_item_id]: value }))
@@ -1502,7 +1507,14 @@ function ParseResponseSection({
             {!collapsedCategories.extra && result.extra.length > 0 && (
               <ul className={styles.parseExtraList}>
                 {result.extra.map((line, index) => (
-                  <ExtraLineRow key={index} line={line} order={order} onApplied={onApplied} />
+                  <ExtraLineRow
+                    key={index}
+                    line={line}
+                    order={order}
+                    missing={missing}
+                    materialById={materialById}
+                    onApplied={onApplied}
+                  />
                 ))}
               </ul>
             )}
@@ -1564,6 +1576,7 @@ function MatchedLineRow({
         {lowConfidence && (
           <span className={styles.parseConfidenceWarning}>⚠ низкая уверенность распознавания</span>
         )}
+        {line.matched_by_alias && <span className={styles.parseConfidenceWarning}>по сохранённой связи</span>}
         <span className={styles.parseReasoning}>{line.reasoning}</span>
       </td>
       <td className={styles.numCell}>
@@ -1631,19 +1644,85 @@ function MissingItemMarkUnavailable({
   );
 }
 
+/** User-facing text for a failed POST .../response-aliases other than 409
+ * (which gets its own replace step in the dialog). */
+function responseAliasErrorMessage(err: unknown): string {
+  if (err instanceof ApiError && err.status === 404) {
+    if (err.detail === 'Order not found') return 'Ордер не найден — возможно, он был удалён. Обновите страницу.';
+    if (err.detail === 'Material not found') {
+      return 'Материал не найден в каталоге — возможно, он был удалён. Выберите другую позицию.';
+    }
+    return 'Не найдено — обновите страницу и попробуйте снова.';
+  }
+  return 'Не удалось сохранить связь.';
+}
+
 function ExtraLineRow({
   line,
   order,
+  missing,
+  materialById,
   onApplied,
 }: {
   line: ParsedExtraLine;
   order: Order;
+  /** Current "Отсутствует в ответе" items — "Связать" candidates come from
+   * here, only those with a catalog material_id (ADR-0046 §2). */
+  missing: OrderItem[];
+  materialById: Map<string, Material>;
   onApplied: () => void;
 }) {
   const [quantity, setQuantity] = useState(line.quantity ?? 1);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [added, setAdded] = useState(false);
+
+  // "Связать" dialog state (ADR-0046 §2). A successful link does not touch
+  // the Order — the row stays in "Лишнее" and only shows what it is now
+  // linked to, so no reload is needed.
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkSelectedId, setLinkSelectedId] = useState<string | null>(null);
+  const [linkConflict, setLinkConflict] = useState<ResponseAliasConflict['existing'] | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
+  const [linkedName, setLinkedName] = useState<string | null>(null);
+
+  const candidates = aliasCandidates(missing);
+  const suggestion = suggestAliasPair(line, candidates);
+  const candidateName = (item: OrderItem) =>
+    (item.material_id != null ? materialById.get(item.material_id) : undefined)?.canonical_name ?? item.material_id ?? item.id;
+
+  function openLinkDialog() {
+    setLinkSelectedId(suggestion?.item.id ?? null);
+    setLinkConflict(null);
+    setLinkError(null);
+    setLinkOpen(true);
+  }
+
+  async function submitLink(force: boolean) {
+    const item = candidates.find((candidate) => candidate.id === linkSelectedId);
+    if (item?.material_id == null) return;
+    setLinking(true);
+    setLinkError(null);
+    try {
+      await ordersApi.createResponseAlias(order.id, {
+        supplier_raw_name: line.raw_description,
+        supplier_sku: null,
+        material_id: item.material_id,
+        force,
+      });
+      setLinkedName(candidateName(item));
+      setLinkOpen(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && !force) {
+        setLinkConflict((err.detail as ResponseAliasConflict).existing);
+      } else {
+        setLinkError(responseAliasErrorMessage(err));
+      }
+    } finally {
+      setLinking(false);
+    }
+  }
 
   async function handleAdd() {
     setAdding(true);
@@ -1683,19 +1762,67 @@ function ExtraLineRow({
           />
         </span>
       </span>
-      {added ? (
-        <span className={styles.parseAddedNotice}>Добавлено ✓</span>
-      ) : (
-        <button
-          type="button"
-          className={styles.parseButton}
-          disabled={adding || quantity <= 0}
-          onClick={() => void handleAdd()}
-        >
-          {adding ? 'Добавляем…' : 'Добавить'}
-        </button>
+      <span className={styles.parseExtraActions}>
+        <span className={styles.parseExtraButtons}>
+          {added ? (
+            <span className={styles.parseAddedNotice}>Добавлено ✓</span>
+          ) : (
+            <button
+              type="button"
+              className={styles.parseButton}
+              disabled={adding || quantity <= 0}
+              onClick={() => void handleAdd()}
+            >
+              {adding ? 'Добавляем…' : 'Добавить'}
+            </button>
+          )}
+          {linkedName == null && (
+            <button
+              type="button"
+              className={styles.parseButton}
+              disabled={candidates.length === 0}
+              title={candidates.length === 0 ? 'Нет позиций из каталога в «Отсутствует в ответе»' : undefined}
+              onClick={openLinkDialog}
+            >
+              Связать
+            </button>
+          )}
+        </span>
+        {linkedName != null ? (
+          <span className={styles.parseAddedNotice}>Связано: {linkedName} ✓</span>
+        ) : (
+          <span className={styles.parseLinkNote}>Связь сохранится для следующих документов этого поставщика</span>
+        )}
+        {error != null && <span className={styles.parseConfidenceWarning}>Не удалось добавить.</span>}
+      </span>
+
+      {linkOpen && (
+        <ResponseAliasModal
+          rawDescription={line.raw_description}
+          candidates={candidates.map((item) => ({
+            id: item.id,
+            name: candidateName(item),
+            detail: `${item.quantity} × ${formatMoney(item.quoted_price)}`,
+          }))}
+          selectedId={linkSelectedId}
+          onSelect={setLinkSelectedId}
+          suggestion={
+            suggestion && {
+              id: suggestion.item.id,
+              basis:
+                suggestion.by === 'price_and_quantity'
+                  ? `совпадает цена и количество: ${formatMoney(line.price)} × ${line.quantity}`
+                  : `совпадает цена: ${formatMoney(line.price)}`,
+            }
+          }
+          conflict={linkConflict}
+          error={linkError}
+          submitting={linking}
+          onConfirm={() => void submitLink(false)}
+          onForce={() => void submitLink(true)}
+          onCancel={() => setLinkOpen(false)}
+        />
       )}
-      {error != null && <span className={styles.parseConfidenceWarning}>Не удалось добавить.</span>}
     </li>
   );
 }

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { getDefaultNormalizer, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,7 @@ vi.mock('../api/orders', () => ({
     confirmPriceUpdates: vi.fn(),
     getItemPriceHistory: vi.fn(),
     addRawItem: vi.fn(),
+    createResponseAlias: vi.fn(),
   },
 }));
 vi.mock('../api/materials', () => ({
@@ -58,6 +59,7 @@ const parseResponseMock = vi.mocked(ordersApi.parseResponse);
 const confirmPriceUpdatesMock = vi.mocked(ordersApi.confirmPriceUpdates);
 const getItemPriceHistoryMock = vi.mocked(ordersApi.getItemPriceHistory);
 const addRawItemMock = vi.mocked(ordersApi.addRawItem);
+const createResponseAliasMock = vi.mocked(ordersApi.createResponseAlias);
 const purchaseRecordCreateMock = vi.mocked(purchaseRecordsApi.create);
 const materialsListMock = vi.mocked(materialsApi.list);
 const suppliersListMock = vi.mocked(suppliersApi.list);
@@ -180,6 +182,7 @@ describe('OrderDetailPage', () => {
     parseResponseMock.mockReset();
     confirmPriceUpdatesMock.mockReset();
     addRawItemMock.mockReset();
+    createResponseAliasMock.mockReset();
     purchaseRecordCreateMock.mockReset();
     materialsListMock.mockReset();
     suppliersListMock.mockReset();
@@ -1393,7 +1396,7 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
       parseResponseMock.mockResolvedValue({
         matched: [
-          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '' },
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '', matched_by_alias: false },
         ],
         missing: [],
         extra: [],
@@ -1436,7 +1439,7 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
       parseResponseMock.mockResolvedValue({
         matched: [
-          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '' },
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '', matched_by_alias: false },
         ],
         missing: [],
         extra: [],
@@ -1478,7 +1481,7 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
       parseResponseMock.mockResolvedValue({
         matched: [
-          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '' },
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '', matched_by_alias: false },
         ],
         missing: [],
         extra: [
@@ -1526,7 +1529,7 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
       parseResponseMock.mockResolvedValue({
         matched: [
-          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '' },
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '', matched_by_alias: false },
         ],
         missing: [],
         extra: [],
@@ -1564,7 +1567,7 @@ describe('OrderDetailPage', () => {
         getOrderMock.mockResolvedValue(order);
         parseResponseMock.mockResolvedValue({
           matched: [
-            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '' },
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '', matched_by_alias: false },
           ],
           missing: [],
           extra: [],
@@ -1603,7 +1606,7 @@ describe('OrderDetailPage', () => {
         getOrderMock.mockResolvedValue(order);
         parseResponseMock.mockResolvedValue({
           matched: [
-            { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 4, confidence: 'high', reasoning: '' },
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 4, confidence: 'high', reasoning: '', matched_by_alias: false },
           ],
           missing: [],
           extra: [],
@@ -1644,7 +1647,7 @@ describe('OrderDetailPage', () => {
         getOrderMock.mockResolvedValue(order);
         parseResponseMock.mockResolvedValue({
           matched: [
-            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '' },
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '', matched_by_alias: false },
           ],
           missing: [],
           extra: [],
@@ -1678,7 +1681,7 @@ describe('OrderDetailPage', () => {
         getOrderMock.mockResolvedValue(order);
         parseResponseMock.mockResolvedValue({
           matched: [
-            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '' },
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 4, confidence: 'high', reasoning: '', matched_by_alias: false },
           ],
           missing: [],
           extra: [],
@@ -1712,7 +1715,7 @@ describe('OrderDetailPage', () => {
         getOrderMock.mockResolvedValue(order);
         parseResponseMock.mockResolvedValue({
           matched: [
-            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: null, confidence: 'high', reasoning: '' },
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: null, confidence: 'high', reasoning: '', matched_by_alias: false },
           ],
           missing: [],
           extra: [],
@@ -1747,7 +1750,7 @@ describe('OrderDetailPage', () => {
         getOrderMock.mockResolvedValue(order);
         parseResponseMock.mockResolvedValue({
           matched: [
-            { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 4, confidence: 'high', reasoning: '' },
+            { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 4, confidence: 'high', reasoning: '', matched_by_alias: false },
           ],
           missing: [],
           extra: [],
@@ -1782,7 +1785,7 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
       parseResponseMock.mockResolvedValue({
         matched: [
-          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '' },
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '', matched_by_alias: false },
         ],
         missing: [],
         extra: [],
@@ -1825,8 +1828,8 @@ describe('OrderDetailPage', () => {
       ]);
       parseResponseMock.mockResolvedValue({
         matched: [
-          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '' },
-          { order_item_id: 'item-2', raw_description: 'Профиль', price: 9.99, quantity: 5, confidence: 'high', reasoning: '' },
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '', matched_by_alias: false },
+          { order_item_id: 'item-2', raw_description: 'Профиль', price: 9.99, quantity: 5, confidence: 'high', reasoning: '', matched_by_alias: false },
         ],
         missing: [],
         extra: [],
@@ -1888,7 +1891,7 @@ describe('OrderDetailPage', () => {
       getOrderMock.mockResolvedValue(order);
       parseResponseMock.mockResolvedValue({
         matched: [
-          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '' },
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 22.0, quantity: 10, confidence: 'high', reasoning: '', matched_by_alias: false },
         ],
         missing: [],
         extra: [],
@@ -2593,4 +2596,333 @@ describe('OrderDetailPage', () => {
       expect(screen.queryByText(/Удалить ордер\? Это необратимо\./)).not.toBeInTheDocument();
     });
   });
+
+  describe('"Связать" extra line with a missing item (ADR-0046 §2)', () => {
+    const material2: Material = {
+      id: 'mat-2',
+      internal_sku: 'GUT-ELB-34A',
+      canonical_name: 'Rain Carrying Accessories (3 x 4 A Elbow) (White/Bronze)',
+      category_name: 'Водосток',
+      unit: 'шт',
+      attributes: {},
+    };
+    const material3: Material = {
+      id: 'mat-3',
+      internal_sku: 'GUT-ELB-34B',
+      canonical_name: 'Rain Carrying Accessories (3 x 4 B Elbow) (White/Bronze)',
+      category_name: 'Водосток',
+      unit: 'шт',
+      attributes: {},
+    };
+    // Double space on purpose — supplier_raw_name must be sent verbatim.
+    const extraRaw = 'S-25-00-00070  3X4 A ELBOW BRONZE';
+    const createdAlias = {
+      id: 'alias-1',
+      supplier_id: 'sup-a',
+      material_id: 'mat-2',
+      supplier_raw_name: extraRaw,
+      supplier_sku: null,
+      origin: 'order_response',
+    };
+
+    function orderWith(items: OrderItem[]): Order {
+      return orderFixture({
+        id: 'order-1',
+        project_id: 'proj-1',
+        supplier_id: 'sup-a',
+        status: 'draft',
+        total_amount: 500,
+        delivery_fee: 25,
+        items,
+      });
+    }
+
+    function mockExtra(price: number, quantity: number | null) {
+      parseResponseMock.mockResolvedValue({
+        matched: [],
+        missing: [],
+        extra: [{ raw_description: extraRaw, price, quantity, confidence: 'high', reasoning: '' }],
+      });
+    }
+
+    async function parseFirstBlock() {
+      const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+      const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+      const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const user = userEvent.setup();
+      await user.upload(fileInput, new File(['x'], 'response.pdf', { type: 'application/pdf' }));
+      await user.click(within(firstSection).getByText('Распознать цены из документа'));
+      const extraRow = (
+        await within(firstSection).findByText(extraRaw, { normalizer: getDefaultNormalizer({ collapseWhitespace: false }) })
+      ).closest('li') as HTMLElement;
+      return { firstSection, extraRow, user };
+    }
+
+    async function parseAndOpenLinkDialog() {
+      const parsed = await parseFirstBlock();
+      await parsed.user.click(within(parsed.extraRow).getByRole('button', { name: 'Связать' }));
+      const dialog = await screen.findByRole('dialog');
+      return { ...parsed, dialog };
+    }
+
+    function radioFor(dialog: HTMLElement, m: Material) {
+      return within(dialog).getByRole('radio', { name: new RegExp(escapeRe(m.canonical_name)) });
+    }
+
+    beforeEach(() => {
+      materialsListMock.mockResolvedValue([material, material2, material3]);
+    });
+
+    it('shows "Связать" next to "Добавить" with the persistence note under it', async () => {
+      getOrderMock.mockResolvedValue(orderWith([itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 })]));
+      mockExtra(62.1, 8);
+      renderPage();
+
+      const { extraRow } = await parseFirstBlock();
+
+      expect(within(extraRow).getByRole('button', { name: 'Добавить' })).toBeInTheDocument();
+      expect(within(extraRow).getByRole('button', { name: 'Связать' })).toBeInTheDocument();
+      expect(
+        within(extraRow).getByText('Связь сохранится для следующих документов этого поставщика'),
+      ).toBeInTheDocument();
+    });
+
+    it('preselects the single candidate matching price and quantity, with the basis text', async () => {
+      getOrderMock.mockResolvedValue(
+        orderWith([
+          itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 }),
+          itemFixture({ id: 'item-3', material_id: 'mat-3', quantity: 8, quoted_price: 40 }),
+        ]),
+      );
+      mockExtra(62.1, 8);
+      renderPage();
+
+      const { dialog } = await parseAndOpenLinkDialog();
+
+      expect(radioFor(dialog, material2)).toBeChecked();
+      expect(radioFor(dialog, material3)).not.toBeChecked();
+      expect(within(dialog).getByText('совпадает цена и количество: $62.10 × 8')).toBeInTheDocument();
+      // Preselection only — nothing is written until the explicit click.
+      expect(createResponseAliasMock).not.toHaveBeenCalled();
+    });
+
+    it('basis text mentions price only when the extra line has no quantity', async () => {
+      getOrderMock.mockResolvedValue(orderWith([itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 })]));
+      mockExtra(62.1, null);
+      renderPage();
+
+      const { dialog } = await parseAndOpenLinkDialog();
+
+      expect(radioFor(dialog, material2)).toBeChecked();
+      expect(within(dialog).getByText('совпадает цена: $62.10')).toBeInTheDocument();
+    });
+
+    it('no suggestion when several candidates match — empty selection over the full list', async () => {
+      getOrderMock.mockResolvedValue(
+        orderWith([
+          itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 }),
+          itemFixture({ id: 'item-3', material_id: 'mat-3', quantity: 8, quoted_price: 62.1 }),
+        ]),
+      );
+      mockExtra(62.1, 8);
+      renderPage();
+
+      const { dialog } = await parseAndOpenLinkDialog();
+
+      const radios = within(dialog).getAllByRole('radio');
+      expect(radios).toHaveLength(2);
+      for (const radio of radios) expect(radio).not.toBeChecked();
+      expect(within(dialog).queryByText(/совпадает цена/)).not.toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: 'Связать' })).toBeDisabled();
+    });
+
+    it('no suggestion when no candidate matches — empty selection', async () => {
+      getOrderMock.mockResolvedValue(orderWith([itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 })]));
+      mockExtra(99, 8);
+      renderPage();
+
+      const { dialog } = await parseAndOpenLinkDialog();
+
+      expect(radioFor(dialog, material2)).not.toBeChecked();
+      expect(within(dialog).queryByText(/совпадает цена/)).not.toBeInTheDocument();
+    });
+
+    it('excludes missing items without material_id from the candidate list and the suggestion', async () => {
+      getOrderMock.mockResolvedValue(
+        orderWith([
+          itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 }),
+          itemFixture({ id: 'item-light', material_id: null, raw_description: 'Ручная позиция', quantity: 8, quoted_price: 62.1 }),
+        ]),
+      );
+      mockExtra(62.1, 8);
+      renderPage();
+
+      const { dialog } = await parseAndOpenLinkDialog();
+
+      expect(within(dialog).getAllByRole('radio')).toHaveLength(1);
+      expect(within(dialog).queryByText(/Ручная позиция/)).not.toBeInTheDocument();
+      // With the lightweight item excluded, the material item is the unique match.
+      expect(radioFor(dialog, material2)).toBeChecked();
+    });
+
+    it('compares prices exactly at thousandths (0.1 + 0.2 matches 0.3)', async () => {
+      getOrderMock.mockResolvedValue(orderWith([itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 0.3 })]));
+      mockExtra(0.1 + 0.2, 8);
+      renderPage();
+
+      const { dialog } = await parseAndOpenLinkDialog();
+
+      expect(radioFor(dialog, material2)).toBeChecked();
+    });
+
+    it('POSTs the raw description verbatim on explicit click; the row stays in "Лишнее" without a reload', async () => {
+      getOrderMock.mockResolvedValue(orderWith([itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 })]));
+      mockExtra(62.1, 8);
+      createResponseAliasMock.mockResolvedValue(createdAlias);
+      renderPage();
+
+      const { firstSection, extraRow, dialog, user } = await parseAndOpenLinkDialog();
+      const getCallsBefore = getOrderMock.mock.calls.length;
+      await user.click(within(dialog).getByRole('button', { name: 'Связать' }));
+
+      expect(createResponseAliasMock).toHaveBeenCalledTimes(1);
+      expect(createResponseAliasMock).toHaveBeenCalledWith('order-1', {
+        supplier_raw_name: extraRaw,
+        supplier_sku: null,
+        material_id: 'mat-2',
+        force: false,
+      });
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(within(extraRow).getByText(/Связано/)).toBeInTheDocument();
+      // Price is still entered separately — "Добавить" stays available.
+      expect(within(extraRow).getByRole('button', { name: 'Добавить' })).toBeInTheDocument();
+      expect(within(firstSection).getByText('Лишнее (1)')).toBeInTheDocument();
+      expect(getOrderMock.mock.calls.length).toBe(getCallsBefore);
+    });
+
+    it('409 shows the existing link and "Заменить" retries with force: true', async () => {
+      getOrderMock.mockResolvedValue(orderWith([itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 })]));
+      mockExtra(62.1, 8);
+      createResponseAliasMock
+        .mockRejectedValueOnce(
+          new ApiError(409, {
+            detail: {
+              message: 'Alias already exists with a different material_id',
+              existing: { material_id: 'mat-3', canonical_name: material3.canonical_name, created_at: '2026-10-19T12:00:00+00:00' },
+            },
+          }),
+        )
+        .mockResolvedValueOnce(createdAlias);
+      renderPage();
+
+      const { extraRow, dialog, user } = await parseAndOpenLinkDialog();
+      await user.click(within(dialog).getByRole('button', { name: 'Связать' }));
+
+      const conflict = await screen.findByRole('dialog');
+      expect(await within(conflict).findByText(new RegExp(escapeRe(material3.canonical_name)))).toBeInTheDocument();
+      expect(within(conflict).getByText(/19\.10\.2026/)).toBeInTheDocument();
+      expect(within(conflict).getByRole('button', { name: 'Отмена' })).toBeInTheDocument();
+
+      await user.click(within(conflict).getByRole('button', { name: 'Заменить' }));
+
+      expect(createResponseAliasMock).toHaveBeenCalledTimes(2);
+      expect(createResponseAliasMock).toHaveBeenLastCalledWith('order-1', {
+        supplier_raw_name: extraRaw,
+        supplier_sku: null,
+        material_id: 'mat-2',
+        force: true,
+      });
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(within(extraRow).getByText(/Связано/)).toBeInTheDocument();
+    });
+
+    it('409 "Отмена" closes without retrying', async () => {
+      getOrderMock.mockResolvedValue(orderWith([itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 })]));
+      mockExtra(62.1, 8);
+      createResponseAliasMock.mockRejectedValueOnce(
+        new ApiError(409, {
+          detail: {
+            message: 'Alias already exists with a different material_id',
+            existing: { material_id: 'mat-3', canonical_name: material3.canonical_name, created_at: null },
+          },
+        }),
+      );
+      renderPage();
+
+      const { extraRow, dialog, user } = await parseAndOpenLinkDialog();
+      await user.click(within(dialog).getByRole('button', { name: 'Связать' }));
+      const conflict = await screen.findByRole('dialog');
+      await within(conflict).findByRole('button', { name: 'Заменить' });
+      await user.click(within(conflict).getByRole('button', { name: 'Отмена' }));
+
+      expect(createResponseAliasMock).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(within(extraRow).queryByText(/Связано/)).not.toBeInTheDocument();
+    });
+
+    it('404 shows an understandable message', async () => {
+      getOrderMock.mockResolvedValue(orderWith([itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 8, quoted_price: 62.1 })]));
+      mockExtra(62.1, 8);
+      createResponseAliasMock.mockRejectedValueOnce(new ApiError(404, { detail: 'Material not found' }));
+      renderPage();
+
+      const { dialog, user } = await parseAndOpenLinkDialog();
+      await user.click(within(dialog).getByRole('button', { name: 'Связать' }));
+
+      expect(await within(dialog).findByText(/Материал не найден в каталоге/)).toBeInTheDocument();
+    });
+  });
+
+  describe('matched_by_alias lines in "Совпало" (ADR-0046 §1)', () => {
+    it('alias-matched row is unchecked and labelled, the rest stay checked; "Применить все" skips it', async () => {
+      const material2: Material = { ...material, id: 'mat-2', internal_sku: 'X-2', canonical_name: 'Профиль 1x2' };
+      materialsListMock.mockResolvedValue([material, material2]);
+      getOrderMock.mockResolvedValue(
+        orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 300,
+          delivery_fee: 25,
+          items: [itemFixture({ id: 'item-1' }), itemFixture({ id: 'item-2', material_id: 'mat-2', quantity: 5 })],
+        }),
+      );
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          { order_item_id: 'item-1', raw_description: 'Сетка', price: 23.75, quantity: 10, confidence: 'high', reasoning: '', matched_by_alias: false },
+          { order_item_id: 'item-2', raw_description: 'PROF 1X2', price: 9.99, quantity: 5, confidence: 'high', reasoning: '', matched_by_alias: true },
+        ],
+        missing: [],
+        extra: [],
+      });
+      patchItemMock.mockResolvedValue(itemFixture({ received_price: 23.75 }));
+      renderPage();
+
+      const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+      const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+      const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const user = userEvent.setup();
+      await user.upload(fileInput, new File(['x'], 'response.pdf', { type: 'application/pdf' }));
+      await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+      const table = (await within(firstSection).findByText('Отправленная цена')).closest('table') as HTMLElement;
+      const aliasRow = within(table).getByText('Профиль 1x2').closest('tr') as HTMLElement;
+      const modelRow = within(table).getByText(material.canonical_name).closest('tr') as HTMLElement;
+      expect(within(aliasRow).getByRole('checkbox')).not.toBeChecked();
+      expect(within(aliasRow).getByText('по сохранённой связи')).toBeInTheDocument();
+      expect(within(modelRow).getByRole('checkbox')).toBeChecked();
+      expect(within(modelRow).queryByText('по сохранённой связи')).not.toBeInTheDocument();
+
+      await user.click(within(firstSection).getByText('Применить все совпадения'));
+
+      await waitFor(() => expect(patchItemMock).toHaveBeenCalledTimes(1));
+      expect(patchItemMock).toHaveBeenCalledWith('order-1', 'item-1', { received_price: 23.75, received_quantity: 10 });
+      expect(patchItemMock).not.toHaveBeenCalledWith('order-1', 'item-2', expect.anything());
+    });
+  });
 });
+
+function escapeRe(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

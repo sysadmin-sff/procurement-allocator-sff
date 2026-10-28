@@ -565,12 +565,16 @@ export interface ParsedMatchedLine {
   quantity: number | null;
   confidence: string;
   reasoning: string;
+  /** True only when the backend post-match linked this line via a stored
+   * order-response alias, not the model — see ADR-0046 §1. Such rows start
+   * unchecked in "Применить все совпадения". */
+  matched_by_alias: boolean;
 }
 
 /** One row of POST .../parse-response's "missing" category — see ADR-0018 §3b. */
 export interface ParsedMissingItem {
   order_item_id: string;
-  material_id: string;
+  material_id: string | null;
   canonical_name: string;
   quantity: number;
   quoted_price: number;
@@ -591,6 +595,36 @@ export interface ParseOrderResponseResult {
   matched: ParsedMatchedLine[];
   missing: ParsedMissingItem[];
   extra: ParsedExtraLine[];
+}
+
+/** Body of POST /orders/{order_id}/response-aliases — the "Связать" button,
+ * see ADR-0046 §2. supplier_raw_name is the extra line's raw_description
+ * verbatim. force=true overwrites a conflicting existing alias (after 409). */
+export interface CreateResponseAliasIn {
+  supplier_raw_name: string;
+  supplier_sku: string | null;
+  material_id: string;
+  force: boolean;
+}
+
+export interface ResponseAlias {
+  id: string;
+  supplier_id: string;
+  material_id: string;
+  supplier_raw_name: string;
+  supplier_sku: string | null;
+  origin: string;
+}
+
+/** ApiError.detail of the 409 from POST .../response-aliases — the alias
+ * already stored for this supplier text with a different material_id. */
+export interface ResponseAliasConflict {
+  message: string;
+  existing: {
+    material_id: string;
+    canonical_name: string;
+    created_at: string | null;
+  };
 }
 
 /** planned_total/delta/delta_pct are null (not 0) when there is no Order yet

@@ -245,7 +245,9 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                         <th>Поставщик</th>
                         <th>Статус</th>
                         <th>Товары</th>
+                        <th>Налог</th>
                         <th>Доставка</th>
+                        <th>Итого</th>
                         <th className={styles.sortableHeader} onClick={toggleOrderSort}>
                           Создан
                           <span className={`${styles.sortIndicator} ${styles.sortIndicatorActive}`}>
@@ -271,7 +273,9 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
                             </td>
                             <td>{order.status}</td>
                             <td>{formatMoney(order.total_amount)}</td>
+                            <td>{order.tax_amount != null ? formatMoney(order.tax_amount) : '—'}</td>
                             <td>{formatMoney(order.delivery_fee)}</td>
+                            <td>{formatMoney(order.sent_total)}</td>
                             <td>{formatDateTime(order.created_at)}</td>
                             <td onClick={(e) => e.stopPropagation()}>
                               <div className={styles.actionsCell}>

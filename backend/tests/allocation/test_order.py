@@ -542,6 +542,49 @@ def test_order_out_exposes_tax_amount_snapshot(
     assert response.json()["tax_amount"] == 7.00
 
 
+def test_project_orders_list_exposes_sent_total(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """sent_total = total_amount + tax_amount + delivery_fee snapshot ("Отправлено"
+    on the order screen), computed server-side so the project's order list
+    can show it without the frontend summing money itself (CLAUDE.md п.4)."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=5.0, free_shipping_threshold=1000.0)
+    material = make_material()
+    make_price(material, supplier, price=100.00, availability=10)
+    project = make_project([(material, 1)])
+    run = run_allocation(session, project.id)
+    create_orders_for_run(session, project.id, run.id)
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/projects/{project.id}/orders")
+
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["sent_total"] == 112.00  # 100 + 7% tax + 5 delivery
+
+
+def test_order_out_sent_total_without_tax_snapshot(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    """Order created before ADR-0029 has tax_amount NULL — sent_total sums
+    without it (same as the "Отправлено" footer did on the frontend)."""
+    session, *_ = db_session
+    supplier = make_supplier(flat_fee=5.0, free_shipping_threshold=1000.0)
+    material = make_material()
+    make_price(material, supplier, price=100.00, availability=10)
+    project = make_project([(material, 1)])
+    run = run_allocation(session, project.id)
+    order = create_orders_for_run(session, project.id, run.id)[0]
+    order.tax_amount = None
+    session.commit()
+    client = _employee_client(make_user, make_session)
+
+    response = client.get(f"/orders/{order.id}")
+
+    assert response.json()["sent_total"] == 105.00
+
+
 def test_order_out_expected_total_when_no_declines(
     db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
 ):

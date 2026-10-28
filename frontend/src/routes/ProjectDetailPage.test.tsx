@@ -91,11 +91,12 @@ function orderFixture(base: {
   total_amount: number;
   delivery_fee: number;
   items: Order['items'];
-}, overrides: Partial<Pick<Order, 'tax_amount' | 'expected_goods_total' | 'expected_tax_amount' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined' | 'created_at'>> = {}): Order {
+}, overrides: Partial<Pick<Order, 'tax_amount' | 'sent_total' | 'expected_goods_total' | 'expected_tax_amount' | 'expected_delivery_fee' | 'expected_total' | 'declined_amount' | 'fully_declined' | 'created_at'>> = {}): Order {
   return {
     ...base,
     created_at: '2026-08-17T12:00:00Z',
     tax_amount: null,
+    sent_total: base.total_amount + (overrides.tax_amount ?? 0) + base.delivery_fee,
     expected_goods_total: base.total_amount,
     expected_tax_amount: 0,
     expected_delivery_fee: base.delivery_fee,
@@ -322,6 +323,41 @@ describe('ProjectDetailPage', () => {
     expect(await screen.findByText('Ордера')).toBeInTheDocument();
     expect(screen.getByText(supplier.name)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Открыть »' })).toHaveAttribute('href', '/orders/order-1');
+  });
+
+  it('shows tax and the server-computed sent total for each order, "—" tax for a pre-ADR-0029 order', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [],
+      latest_allocation_run: { id: 'run-1', created_at: '2026-08-17T12:00:00Z', status: 'ok' },
+    };
+    const withTax: Order = orderFixture(
+      { id: 'order-1', project_id: 'proj-1', supplier_id: 'sup-a', status: 'draft', total_amount: 1914.38, delivery_fee: 35, items: [] },
+      { tax_amount: 134.01, sent_total: 2083.39 },
+    );
+    const withoutTax: Order = orderFixture(
+      { id: 'order-2', project_id: 'proj-1', supplier_id: 'sup-a', status: 'draft', total_amount: 100, delivery_fee: 10, items: [] },
+      { tax_amount: null, sent_total: 110 },
+    );
+    getMock.mockResolvedValue(project);
+    suppliersListMock.mockResolvedValue([]);
+    ordersListForProjectMock.mockResolvedValue([withTax, withoutTax]);
+
+    renderPage();
+
+    await screen.findByText('Ордера');
+    const table = screen.getByRole('columnheader', { name: 'Поставщик' }).closest('table')!;
+    expect(within(table).getByRole('columnheader', { name: 'Налог' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Итого' })).toBeInTheDocument();
+    const [, taxedRow, untaxedRow] = within(table).getAllByRole('row');
+    const taxedCells = within(taxedRow).getAllByRole('cell').map((c) => c.textContent);
+    expect(taxedCells).toEqual(expect.arrayContaining(['$1,914.38', '$134.01', '$35.00', '$2,083.39']));
+    const untaxedCells = within(untaxedRow).getAllByRole('cell').map((c) => c.textContent);
+    expect(untaxedCells).toEqual(expect.arrayContaining(['$100.00', '—', '$10.00', '$110.00']));
   });
 
   it('shows each order\'s created_at date, formatted the same way as "Последний расчёт"', async () => {

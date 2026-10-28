@@ -547,7 +547,7 @@ export function OrderDetailPage() {
                 Товары {formatMoney(order.total_amount)} + Налог (7%){' '}
                 {order.tax_amount != null ? formatMoney(order.tax_amount) : '—'} + Доставка{' '}
                 {formatMoney(order.delivery_fee)} ={' '}
-                {formatMoney(order.total_amount + (order.tax_amount ?? 0) + order.delivery_fee)}
+                {formatMoney(order.sent_total)}
               </span>
             </div>
             <div className={styles.footerLine}>

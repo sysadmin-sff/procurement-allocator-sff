@@ -117,6 +117,11 @@ class OrderOut(BaseModel):
     tax_amount: float | None = None
     """7% (TAX_RATE) от total_amount, снимок на момент создания Order —
     NULL для Order, созданных до ADR-0029. См. ADR-0029 §4/§5б."""
+    sent_total: float
+    """total_amount + tax_amount + delivery_fee — the sent snapshot's grand
+    total ("Отправлено"), tax counted as 0 when tax_amount is NULL. Computed
+    here so neither the order screen nor the project's order list sums money
+    on the frontend (CLAUDE.md п.4)."""
     items: list[OrderItemOut]
     expected_goods_total: float
     expected_tax_amount: float

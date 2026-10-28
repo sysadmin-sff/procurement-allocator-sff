@@ -499,6 +499,9 @@ export interface Order {
   /** 7% (TAX_RATE) от total_amount, снимок на момент создания Order —
    * nullable, NULL для Order, созданных до ADR-0029. См. ADR-0029 §5б. */
   tax_amount: number | null;
+  /** total_amount + tax_amount + delivery_fee ("Отправлено"), computed
+   * server-side; tax counted as 0 when tax_amount is null. */
+  sent_total: number;
   /** Derived, non-persistent — computed on GET, see ADR-0026 §1. */
   expected_goods_total: number;
   /** Пересчитывается от expected_goods_total (после исключения отклонённых

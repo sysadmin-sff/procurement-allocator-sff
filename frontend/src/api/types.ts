@@ -539,6 +539,10 @@ export interface OrderDraftConflict {
   suppliers_with_existing_drafts: SupplierWithExistingDrafts[];
 }
 
+/** Per-supplier answer to a draft conflict — see ADR-0048: replace its
+ * drafts, create an additional Order next to them, or create nothing. */
+export type SupplierDraftAction = 'replace' | 'add' | 'skip';
+
 export interface PurchaseRecord {
   id: string;
   project_id: string;

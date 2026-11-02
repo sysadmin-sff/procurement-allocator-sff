@@ -160,6 +160,7 @@ def create_orders(
             replace_drafts=payload.replace_drafts,
             acknowledge_conflict=payload.acknowledge_conflict,
             created_by_user_id=current_user.id,
+            supplier_actions=payload.supplier_actions,
         )
     except RunNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Allocation run not found") from exc

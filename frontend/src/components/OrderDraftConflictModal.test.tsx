@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { OrderDraftConflictModal } from './OrderDraftConflictModal';
@@ -50,8 +50,7 @@ describe('OrderDraftConflictModal', () => {
     render(
       <OrderDraftConflictModal
         conflict={conflictWithoutConfirmedPrices}
-        onReplace={vi.fn()}
-        onAcknowledge={vi.fn()}
+        onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -63,49 +62,11 @@ describe('OrderDraftConflictModal', () => {
     expect(screen.getByText('$596.35')).toBeInTheDocument();
   });
 
-  it('calls onReplace with no extra confirmation when no supplier has confirmed prices', async () => {
-    const onReplace = vi.fn();
-    render(
-      <OrderDraftConflictModal
-        conflict={conflictWithoutConfirmedPrices}
-        onReplace={onReplace}
-        onAcknowledge={vi.fn()}
-        onCancel={vi.fn()}
-      />,
-    );
-
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /Заменить черновики/ }));
-
-    expect(onReplace).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onAcknowledge, ungated by the confirmed-price checkbox, when "Создать дополнительно" is clicked', async () => {
-    const onAcknowledge = vi.fn();
-    render(
-      <OrderDraftConflictModal
-        conflict={conflictWithConfirmedPrices}
-        onReplace={vi.fn()}
-        onAcknowledge={onAcknowledge}
-        onCancel={vi.fn()}
-      />,
-    );
-
-    // Even with a confirmed-price supplier in the conflict (which disables
-    // "Заменить черновики" until acknowledged), "Создать дополнительно"
-    // deletes nothing and stays enabled without the checkbox.
-    const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /Создать дополнительно/ }));
-
-    expect(onAcknowledge).toHaveBeenCalledTimes(1);
-  });
-
   it('shows a distinct warning for a supplier whose draft has confirmed prices', () => {
     render(
       <OrderDraftConflictModal
         conflict={conflictWithConfirmedPrices}
-        onReplace={vi.fn()}
-        onAcknowledge={vi.fn()}
+        onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -115,36 +76,11 @@ describe('OrderDraftConflictModal', () => {
     ).toBeInTheDocument();
   });
 
-  it('disables "Заменить черновики" until the confirmed-price acknowledgement checkbox is checked', async () => {
-    const onReplace = vi.fn();
-    render(
-      <OrderDraftConflictModal
-        conflict={conflictWithConfirmedPrices}
-        onReplace={onReplace}
-        onAcknowledge={vi.fn()}
-        onCancel={vi.fn()}
-      />,
-    );
-
-    const replaceButton = screen.getByRole('button', { name: /Заменить черновики/ });
-    expect(replaceButton).toBeDisabled();
-
-    const user = userEvent.setup();
-    await user.click(
-      screen.getByRole('checkbox', { name: /понимаю, что подтверждённые цены будут потеряны/i }),
-    );
-
-    expect(replaceButton).toBeEnabled();
-    await user.click(replaceButton);
-    expect(onReplace).toHaveBeenCalledTimes(1);
-  });
-
   it('shows an irreversibility hint for the replace action', () => {
     render(
       <OrderDraftConflictModal
         conflict={conflictWithoutConfirmedPrices}
-        onReplace={vi.fn()}
-        onAcknowledge={vi.fn()}
+        onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -157,8 +93,7 @@ describe('OrderDraftConflictModal', () => {
     render(
       <OrderDraftConflictModal
         conflict={conflictWithoutConfirmedPrices}
-        onReplace={vi.fn()}
-        onAcknowledge={vi.fn()}
+        onSubmit={vi.fn()}
         onCancel={onCancel}
       />,
     );
@@ -167,5 +102,69 @@ describe('OrderDraftConflictModal', () => {
     await user.click(screen.getByRole('button', { name: /Отмена/ }));
 
     expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  describe('per-supplier actions (ADR-0048)', () => {
+    function choose(supplierName: string, action: RegExp) {
+      return within(screen.getByRole('radiogroup', { name: supplierName })).getByRole('radio', { name: action });
+    }
+
+    it('offers Заменить / Создать дополнительно / Не создавать for each supplier, none preselected', () => {
+      render(<OrderDraftConflictModal conflict={conflictWithoutConfirmedPrices} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+
+      for (const name of ['JM Fasteners', 'Florida Sales & Marketing']) {
+        const group = screen.getByRole('radiogroup', { name });
+        const radios = within(group).getAllByRole('radio');
+        expect(radios.map((r) => r.closest('label')?.textContent?.trim())).toEqual([
+          'Заменить',
+          'Создать дополнительно',
+          'Не создавать',
+        ]);
+        for (const radio of radios) expect(radio).not.toBeChecked();
+      }
+      expect(screen.getByRole('button', { name: 'Создать ордера' })).toBeDisabled();
+    });
+
+    it('submits a supplier_id -> action map once every supplier has a choice', async () => {
+      const onSubmit = vi.fn();
+      render(<OrderDraftConflictModal conflict={conflictWithoutConfirmedPrices} onSubmit={onSubmit} onCancel={vi.fn()} />);
+      const user = userEvent.setup();
+
+      await user.click(choose('JM Fasteners', /Не создавать/));
+      expect(screen.getByRole('button', { name: 'Создать ордера' })).toBeDisabled();
+      await user.click(choose('Florida Sales & Marketing', /Заменить/));
+      await user.click(screen.getByRole('button', { name: 'Создать ордера' }));
+
+      expect(onSubmit).toHaveBeenCalledWith({ 'sup-a': 'skip', 'sup-b': 'replace' });
+    });
+
+    it('does not ask for the confirmed-price acknowledgement when that supplier is not being replaced', async () => {
+      const onSubmit = vi.fn();
+      render(<OrderDraftConflictModal conflict={conflictWithConfirmedPrices} onSubmit={onSubmit} onCancel={vi.fn()} />);
+      const user = userEvent.setup();
+
+      await user.click(choose('JM Fasteners', /Заменить/));
+      await user.click(choose('American Metals Supply', /Создать дополнительно/));
+
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Создать ордера' }));
+      expect(onSubmit).toHaveBeenCalledWith({ 'sup-a': 'replace', 'sup-c': 'add' });
+    });
+
+    it('requires the confirmed-price acknowledgement when a supplier with confirmed prices is set to Заменить', async () => {
+      const onSubmit = vi.fn();
+      render(<OrderDraftConflictModal conflict={conflictWithConfirmedPrices} onSubmit={onSubmit} onCancel={vi.fn()} />);
+      const user = userEvent.setup();
+
+      await user.click(choose('JM Fasteners', /Не создавать/));
+      await user.click(choose('American Metals Supply', /Заменить/));
+
+      const submit = screen.getByRole('button', { name: 'Создать ордера' });
+      expect(submit).toBeDisabled();
+      await user.click(screen.getByRole('checkbox', { name: /понимаю, что подтверждённые цены будут потеряны/i }));
+      expect(submit).toBeEnabled();
+      await user.click(submit);
+      expect(onSubmit).toHaveBeenCalledWith({ 'sup-a': 'skip', 'sup-c': 'replace' });
+    });
   });
 });

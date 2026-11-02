@@ -767,3 +767,191 @@ def test_acknowledge_conflict_keeps_per_supplier_granularity(
         .all()
     )
     assert len(a_drafts) == 2
+
+
+# --- ADR-0048: per-supplier actions -----------------------------------------
+
+
+def _setup_two_conflicting_suppliers(
+    session, make_supplier, make_material, make_price, make_project
+):
+    """Suppliers A and C each sole source of their own material; a first run
+    creates one draft per supplier, a second run conflicts on both."""
+    supplier_a = make_supplier(name="A act", flat_fee=0.0, free_shipping_threshold=0.0)
+    supplier_c = make_supplier(name="C act", flat_fee=0.0, free_shipping_threshold=0.0)
+    material_a = make_material()
+    material_c = make_material()
+    make_price(material_a, supplier_a, price=5.00, availability=10)
+    make_price(material_c, supplier_c, price=7.00, availability=10)
+    project = make_project([(material_a, 1), (material_c, 1)])
+    run0 = run_allocation(session, project.id)
+    first = {o.supplier_id: o.id for o in create_orders_for_run(session, project.id, run0.id)}
+    assert set(first) == {supplier_a.id, supplier_c.id}
+    run1 = run_allocation(session, project.id)
+    return supplier_a, supplier_c, project, run1, first
+
+
+def _drafts(session, project_id, supplier_id):
+    return {
+        o.id
+        for o in session.query(Order)
+        .filter_by(project_id=project_id, supplier_id=supplier_id, status="draft")
+        .all()
+    }
+
+
+def test_supplier_actions_replace_one_add_other(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0048 §1: replace deletes A's old draft and creates a new one; add
+    keeps C's old draft and creates a new one next to it."""
+    session, *_ = db_session
+    a, c, project, run1, first = _setup_two_conflicting_suppliers(
+        session, make_supplier, make_material, make_price, make_project
+    )
+
+    new_orders = create_orders_for_run(
+        session, project.id, run1.id, supplier_actions={a.id: "replace", c.id: "add"}
+    )
+
+    new_by_supplier = {o.supplier_id: o.id for o in new_orders}
+    assert set(new_by_supplier) == {a.id, c.id}
+    assert session.get(Order, first[a.id]) is None
+    assert _drafts(session, project.id, a.id) == {new_by_supplier[a.id]}
+    assert _drafts(session, project.id, c.id) == {first[c.id], new_by_supplier[c.id]}
+
+
+def test_supplier_actions_skip_creates_nothing_for_that_supplier(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0048 §1 "skip": no new Order for the supplier, its old draft is
+    untouched, and its AllocationLines are not marked ordered_at."""
+    session, *_ = db_session
+    a, c, project, run1, first = _setup_two_conflicting_suppliers(
+        session, make_supplier, make_material, make_price, make_project
+    )
+
+    new_orders = create_orders_for_run(
+        session, project.id, run1.id, supplier_actions={a.id: "skip", c.id: "replace"}
+    )
+
+    assert {o.supplier_id for o in new_orders} == {c.id}
+    assert _drafts(session, project.id, a.id) == {first[a.id]}
+    a_lines = (
+        session.query(AllocationLine).filter_by(allocation_run_id=run1.id, supplier_id=a.id).all()
+    )
+    assert a_lines and all(line.ordered_at is None for line in a_lines)
+
+
+def test_supplier_actions_all_skip_returns_empty_list(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    session, *_ = db_session
+    a, c, project, run1, first = _setup_two_conflicting_suppliers(
+        session, make_supplier, make_material, make_price, make_project
+    )
+
+    new_orders = create_orders_for_run(
+        session, project.id, run1.id, supplier_actions={a.id: "skip", c.id: "skip"}
+    )
+
+    assert new_orders == []
+    assert _drafts(session, project.id, a.id) == {first[a.id]}
+    assert _drafts(session, project.id, c.id) == {first[c.id]}
+
+
+def test_supplier_actions_missing_conflicting_supplier_raises_conflict(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """ADR-0048 §1: a conflicting supplier without an action (conflict
+    appeared after the 409) -> conflict again, nothing created or deleted."""
+    session, *_ = db_session
+    a, c, project, run1, first = _setup_two_conflicting_suppliers(
+        session, make_supplier, make_material, make_price, make_project
+    )
+
+    try:
+        create_orders_for_run(session, project.id, run1.id, supplier_actions={a.id: "replace"})
+    except DraftOrderConflictError as exc:
+        listed = {s["supplier_id"] for s in exc.suppliers_with_existing_drafts}
+        assert str(c.id) in {str(x) for x in listed}
+    else:
+        raise AssertionError("expected DraftOrderConflictError")
+
+    session.rollback()
+    assert _drafts(session, project.id, a.id) == {first[a.id]}
+    assert _drafts(session, project.id, c.id) == {first[c.id]}
+
+
+def test_supplier_actions_entry_for_non_conflicting_supplier_is_ignored(
+    db_session, make_supplier, make_material, make_price, make_project
+):
+    """No conflict for this supplier at request time -> normal creation,
+    even if the stale action said "skip"."""
+    session, *_ = db_session
+    supplier, material, project = _setup_single_supplier_project(
+        make_supplier, make_material, make_price, make_project
+    )
+    run = run_allocation(session, project.id)
+
+    orders = create_orders_for_run(
+        session, project.id, run.id, supplier_actions={supplier.id: "skip"}
+    )
+
+    assert [o.supplier_id for o in orders] == [supplier.id]
+
+
+def test_supplier_actions_via_api(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    session, *_ = db_session
+    a, c, project, run1, first = _setup_two_conflicting_suppliers(
+        session, make_supplier, make_material, make_price, make_project
+    )
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run1.id}/orders",
+        json={"supplier_actions": {str(a.id): "skip", str(c.id): "add"}},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 201
+    assert [o["supplier_id"] for o in response.json()] == [str(c.id)]
+
+
+def test_supplier_actions_with_legacy_flag_is_422(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    session, *_ = db_session
+    a, c, project, run1, first = _setup_two_conflicting_suppliers(
+        session, make_supplier, make_material, make_price, make_project
+    )
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run1.id}/orders",
+        json={"supplier_actions": {str(a.id): "skip", str(c.id): "add"}, "replace_drafts": True},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 422
+    assert _drafts(session, project.id, a.id) == {first[a.id]}
+
+
+def test_supplier_actions_unknown_action_is_422(
+    db_session, make_supplier, make_material, make_price, make_project, make_user, make_session
+):
+    session, *_ = db_session
+    a, c, project, run1, first = _setup_two_conflicting_suppliers(
+        session, make_supplier, make_material, make_price, make_project
+    )
+    client = _employee_client(make_user, make_session)
+
+    response = client.post(
+        f"/projects/{project.id}/allocations/{run1.id}/orders",
+        json={"supplier_actions": {str(a.id): "delete", str(c.id): "add"}},
+        headers={"X-CSRF-Token": CSRF},
+    )
+
+    assert response.status_code == 422

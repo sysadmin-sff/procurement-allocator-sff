@@ -579,7 +579,7 @@ describe('AllocationResultPage', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
 
-    expect(createOrdersMock).toHaveBeenCalledWith('proj-1', 'run-4', undefined, undefined);
+    expect(createOrdersMock).toHaveBeenCalledWith('proj-1', 'run-4', undefined);
     expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
   });
 
@@ -648,7 +648,7 @@ describe('AllocationResultPage', () => {
     expect(document.querySelectorAll('[class*="banner"]')).toHaveLength(0);
   });
 
-  it('replaces drafts when the modal\'s "Заменить черновики" is confirmed, then navigates', async () => {
+  it('sends "replace" for a supplier set to Заменить in the modal, then navigates (ADR-0048)', async () => {
     const okRun: AllocationRun = {
       id: 'run-8',
       project_id: 'proj-1',
@@ -692,14 +692,15 @@ describe('AllocationResultPage', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
     await screen.findByRole('dialog');
-    await user.click(screen.getByRole('button', { name: /Заменить черновики/ }));
+    await user.click(within(screen.getByRole('radiogroup', { name: 'ABC Supply' })).getByRole('radio', { name: /Заменить/ }));
+    await user.click(screen.getByRole('button', { name: 'Создать ордера' }));
 
     expect(createOrdersMock).toHaveBeenCalledTimes(2);
-    expect(createOrdersMock).toHaveBeenNthCalledWith(2, 'proj-1', 'run-8', true, undefined);
+    expect(createOrdersMock).toHaveBeenNthCalledWith(2, 'proj-1', 'run-8', { 'sup-a': 'replace' });
     expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
   });
 
-  it('creates an additional order without replacing existing drafts when "Создать дополнительно" is confirmed', async () => {
+  it('sends "add" for a supplier set to Создать дополнительно in the modal (ADR-0048)', async () => {
     const okRun: AllocationRun = {
       id: 'run-9',
       project_id: 'proj-1',
@@ -743,10 +744,13 @@ describe('AllocationResultPage', () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ }));
     await screen.findByRole('dialog');
-    await user.click(screen.getByRole('button', { name: /Создать дополнительно/ }));
+    await user.click(
+      within(screen.getByRole('radiogroup', { name: 'ABC Supply' })).getByRole('radio', { name: /Создать дополнительно/ }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Создать ордера' }));
 
     expect(createOrdersMock).toHaveBeenCalledTimes(2);
-    expect(createOrdersMock).toHaveBeenNthCalledWith(2, 'proj-1', 'run-9', false, true);
+    expect(createOrdersMock).toHaveBeenNthCalledWith(2, 'proj-1', 'run-9', { 'sup-a': 'add' });
     expect(await screen.findByText('Project detail screen')).toBeInTheDocument();
   });
 
@@ -809,7 +813,8 @@ describe('AllocationResultPage', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getAllByText('$120.00')).toHaveLength(1);
 
-    await user.click(within(dialog).getByRole('button', { name: /Заменить черновики/ }));
+    await user.click(within(within(dialog).getByRole('radiogroup', { name: 'ABC Supply' })).getByRole('radio', { name: /Заменить/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Создать ордера' }));
 
     const refreshedDialog = await screen.findByRole('dialog');
     expect(within(refreshedDialog).getAllByText('$120.00')).toHaveLength(2);

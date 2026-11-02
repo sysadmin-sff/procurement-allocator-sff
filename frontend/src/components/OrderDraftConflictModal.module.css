@@ -86,6 +86,23 @@
   font-weight: 600;
 }
 
+.actionGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  margin-top: var(--space-5);
+}
+
+.actionOption {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
 .acknowledgeRow {
   display: flex;
   align-items: flex-start;

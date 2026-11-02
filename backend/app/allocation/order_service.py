@@ -564,6 +564,7 @@ def create_orders_for_run(
     replace_drafts: bool = False,
     acknowledge_conflict: bool = False,
     created_by_user_id: uuid.UUID | None = None,
+    supplier_actions: dict[uuid.UUID, str] | None = None,
 ) -> list[Order]:
     """Create one Order per supplier in the run's current supplier_summaries
     (i.e. after any ADR-0006 overrides), snapshotting each supplier's current
@@ -599,6 +600,15 @@ def create_orders_for_run(
     replace_drafts takes precedence if both are True: it is the more
     specific instruction, and either flag alone already means the user has
     seen the conflict.
+
+    supplier_actions (ADR-0048) decides per conflicting supplier instead of
+    for all at once: "replace" (delete its conflicting drafts, create new),
+    "add" (create alongside), "skip" (create nothing for it, leave its
+    drafts and its lines' ordered_at alone). A conflicting supplier with no
+    entry raises DraftOrderConflictError with the fresh conflict — the
+    server never guesses. Entries for suppliers not in conflict are
+    ignored (normal creation). The API layer rejects combining it with the
+    legacy flags; here supplier_actions wins if given.
     """
     run = db.get(AllocationRun, run_id)
     if run is None or run.project_id != project_id:
@@ -628,8 +638,24 @@ def create_orders_for_run(
     supplier_ids = {uuid.UUID(summary["supplier_id"]) for summary in run.supplier_summaries}
     conflicts = _conflicting_draft_orders_by_supplier(db, project_id, supplier_ids)
 
+    skipped_supplier_ids: set[uuid.UUID] = set()
     if conflicts:
-        if replace_drafts:
+        if supplier_actions is not None:
+            if any(supplier_id not in supplier_actions for supplier_id in conflicts):
+                raise DraftOrderConflictError(_serialize_conflicts(db, conflicts))
+            to_delete = [
+                order
+                for supplier_id, supplier_orders in conflicts.items()
+                if supplier_actions[supplier_id] == "replace"
+                for order in supplier_orders
+            ]
+            if to_delete:
+                _delete_orders(db, to_delete)
+                db.flush()
+            skipped_supplier_ids = {
+                supplier_id for supplier_id in conflicts if supplier_actions[supplier_id] == "skip"
+            }
+        elif replace_drafts:
             _delete_orders(db, [order for orders in conflicts.values() for order in orders])
             db.flush()
         elif not acknowledge_conflict:
@@ -642,6 +668,8 @@ def create_orders_for_run(
 
     for summary in run.supplier_summaries:
         supplier_id = uuid.UUID(summary["supplier_id"])
+        if supplier_id in skipped_supplier_ids:
+            continue
         lines = db.scalars(
             select(AllocationLine).where(
                 AllocationLine.allocation_run_id == run_id,

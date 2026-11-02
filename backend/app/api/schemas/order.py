@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PriceDivergenceOut(BaseModel):
@@ -159,6 +159,18 @@ class CreateOrdersIn(BaseModel):
 
     replace_drafts: bool = False
     acknowledge_conflict: bool = False
+    supplier_actions: dict[uuid.UUID, Literal["replace", "add", "skip"]] | None = None
+    """Per-supplier decision for a conflict — see ADR-0048. Mutually
+    exclusive with replace_drafts/acknowledge_conflict (422), which remain
+    as the "all replace"/"all add" shorthands."""
+
+    @model_validator(mode="after")
+    def _supplier_actions_excludes_legacy_flags(self) -> CreateOrdersIn:
+        if self.supplier_actions is not None and (self.replace_drafts or self.acknowledge_conflict):
+            raise ValueError(
+                "supplier_actions cannot be combined with replace_drafts/acknowledge_conflict"
+            )
+        return self
 
 
 class ExistingDraftOrderOut(BaseModel):

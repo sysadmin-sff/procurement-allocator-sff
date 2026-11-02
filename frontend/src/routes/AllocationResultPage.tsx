@@ -15,6 +15,7 @@ import type {
   Price,
   ProjectWithItems,
   Supplier,
+  SupplierDraftAction,
 } from '../api/types';
 import { Alert } from '../components/Alert';
 import { Badge } from '../components/Badge';
@@ -203,12 +204,12 @@ function AllocationResultOk({
     }
   }
 
-  async function handleCreateOrders(replaceDrafts?: boolean, acknowledgeConflict?: boolean) {
+  async function handleCreateOrders(supplierActions?: Record<string, SupplierDraftAction>) {
     setCreateOrdersError(null);
     setDraftConflict(null);
     setCreatingOrders(true);
     try {
-      await ordersApi.createForRun(project.id, run.id, replaceDrafts, acknowledgeConflict);
+      await ordersApi.createForRun(project.id, run.id, supplierActions);
       onOrdersCreated();
     } catch (err) {
       // A conflict can resurface even on a retry (e.g. another draft was
@@ -449,8 +450,7 @@ function AllocationResultOk({
         <OrderDraftConflictModal
           conflict={draftConflict}
           submitting={creatingOrders}
-          onReplace={() => void handleCreateOrders(true)}
-          onAcknowledge={() => void handleCreateOrders(false, true)}
+          onSubmit={(actions) => void handleCreateOrders(actions)}
           onCancel={() => setDraftConflict(null)}
         />
       )}

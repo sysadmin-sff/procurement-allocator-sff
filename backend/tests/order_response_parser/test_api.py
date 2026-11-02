@@ -501,3 +501,46 @@ def test_parse_response_no_session_returns_401():
         files={"file": ("response.pdf", FAKE_PDF_BYTES, "application/pdf")},
     )
     assert response.status_code == 401
+
+
+def test_price_note_and_warning_reach_matched_and_extra_lines(
+    db_session, make_supplier, make_material, make_order, make_user, make_session
+):
+    """ADR-0050: the per-foot conversion note and the arithmetic warning are
+    part of the parse-response JSON for both matched and extra lines."""
+    session, *_ = db_session
+    supplier = make_supplier()
+    material = make_material(canonical_name="2\" x 6\" SMB x 28' (Bronze)")
+    order = make_order(supplier, [(material, 8, 80.00)])
+    (item,) = order.items
+    client = _employee_client(make_user, make_session)
+
+    lines = [
+        ExtractedLine(
+            raw_description="2 X 6 SMB BRZ 28' 6005",
+            matched_order_item_id=item.id,
+            price=78.4,
+            quantity=8,
+            confidence="high",
+            reasoning="",
+            price_note="$2.800/фут × 224 фт = $627.20 ÷ 8 шт = $78.400/шт",
+        ),
+        ExtractedLine(
+            raw_description="1 X 3 X 25' SMS",
+            matched_order_item_id=None,
+            price=44.5,
+            quantity=2,
+            confidence="high",
+            reasoning="",
+            price_warning="Сумма строки не сходится с ценой × количеством — проверьте цену.",
+        ),
+    ]
+
+    with _mock_extraction(lines):
+        response = _upload(client, order.id)
+
+    body = response.json()
+    assert body["matched"][0]["price_note"] == "$2.800/фут × 224 фт = $627.20 ÷ 8 шт = $78.400/шт"
+    assert body["matched"][0]["price_warning"] is None
+    assert body["extra"][0]["price_note"] is None
+    assert body["extra"][0]["price_warning"].startswith("Сумма строки не сходится")

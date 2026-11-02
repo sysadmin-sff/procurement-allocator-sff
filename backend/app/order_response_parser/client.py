@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import uuid
+from typing import Literal
 
 from openai import APIError, APITimeoutError, OpenAI
 from pydantic import BaseModel
@@ -20,16 +21,41 @@ from app.core.config import settings
 
 
 class ExtractedLine(BaseModel):
+    """A line after normalization (ADR-0050): price is always per piece and
+    quantity is in pieces, whatever the document priced it per."""
+
     raw_description: str
     matched_order_item_id: uuid.UUID | None
     price: float
     quantity: int | None
     confidence: str
     reasoning: str
+    price_note: str | None = None
+    """How a non-per-piece price was converted, e.g. "$2.800/фут × 224 фт =
+    $627.20 ÷ 8 шт = $78.400/шт"; None when the document priced per piece."""
+    price_warning: str | None = None
+    """Set when the line's arithmetic doesn't add up or the per-piece price
+    couldn't be derived — shown on the review screen, never auto-fixed."""
 
 
-class ExtractionResult(BaseModel):
-    lines: list[ExtractedLine]
+class RawExtractedLine(BaseModel):
+    """What the model returns — numbers transcribed as printed, no
+    arithmetic (ADR-0050 §1). pricing.normalize_line turns it into an
+    ExtractedLine."""
+
+    raw_description: str
+    matched_order_item_id: uuid.UUID | None
+    quantity: int | None
+    printed_unit_price: float
+    price_basis: Literal["piece", "linear_foot", "other"]
+    priced_quantity: float | None
+    line_total: float | None
+    confidence: str
+    reasoning: str
+
+
+class RawExtractionResult(BaseModel):
+    lines: list[RawExtractedLine]
 
 
 class OrderResponseParsingError(Exception):
@@ -79,8 +105,21 @@ _PROMPT_TEMPLATE = """\
 соответствует одной из них; null, если строка не соответствует ни одной \
 позиции заказа (внеплановая позиция, либо описание слишком отличается, \
 чтобы быть уверенным)
-- price: цена за единицу, как указано в документе
-- quantity: количество, если указано в документе; null, если не указано
+- quantity: количество в ШТУКАХ (колонка PCS / EA / Qty в штуках), если \
+указано; null, если не указано. НЕ погонные футы и не другие единицы длины \
+или веса — если в документе есть и футы, и штуки, сюда идут штуки.
+- printed_unit_price: цена за единицу ровно так, как напечатана в строке, \
+без пересчётов
+- price_basis: за что напечатана эта цена — "piece" (за штуку), \
+"linear_foot" (за погонный фут: например, есть колонка футов вроде \
+"Required", и цена × футы = сумма строки), "other" (за что-то иное)
+- priced_quantity: количество, к которому применяется printed_unit_price, \
+как напечатано (для "linear_foot" — число футов, например колонка \
+"Required"); null, если такой колонки нет
+- line_total: сумма строки (колонка Amount / Total / Ext), как напечатана; \
+null, если нет
+Ничего не вычисляй сам: не дели и не умножай, только переписывай числа из \
+документа. Пересчёт в цену за штуку делает система.
 - confidence: "high" | "medium" | "low" — насколько ты уверен в сопоставлении \
 (для matched_order_item_id = null тоже укажи уверенность в том, что это \
 действительно новая позиция, а не пропущенное сопоставление)
@@ -149,7 +188,7 @@ def parse_order_response_document(
                     ],
                 }
             ],
-            text_format=ExtractionResult,
+            text_format=RawExtractionResult,
         )
     except (APIError, APITimeoutError) as exc:
         raise OrderResponseParsingError(
@@ -164,4 +203,7 @@ def parse_order_response_document(
             "введите цены вручную построчно."
         )
 
-    return parsed.lines
+    # Imported here, not at module top: pricing imports this module's models.
+    from app.order_response_parser.pricing import normalize_line
+
+    return [normalize_line(line) for line in parsed.lines]

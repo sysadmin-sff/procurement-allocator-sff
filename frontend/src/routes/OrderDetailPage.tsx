@@ -1613,8 +1613,21 @@ function MatchedLineRow({
             if (!Number.isNaN(value)) onPriceChange(value);
           }}
         />
+        <PriceConversionNotes line={line} />
       </td>
     </tr>
+  );
+}
+
+/** Where a per-piece price came from when the supplier priced per linear
+ * foot, and any arithmetic warning — ADR-0050. Both computed server-side;
+ * shown as-is. */
+function PriceConversionNotes({ line }: { line: { price_note?: string | null; price_warning?: string | null } }) {
+  return (
+    <>
+      {line.price_note && <span className={styles.parseReasoning}>{line.price_note}</span>}
+      {line.price_warning && <span className={styles.parseConfidenceWarning}>⚠ {line.price_warning}</span>}
+    </>
   );
 }
 
@@ -1776,6 +1789,7 @@ function ExtraLineRow({
             }}
           />
         </span>
+        <PriceConversionNotes line={line} />
       </span>
       <span className={styles.parseExtraActions}>
         <span className={styles.parseExtraButtons}>

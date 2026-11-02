@@ -21,6 +21,12 @@ class MatchedLineOut(BaseModel):
     quantity: int | None
     confidence: str
     reasoning: str
+    price_note: str | None = None
+    """How a per-foot (or other non-piece) price became this per-piece
+    price — see ADR-0050; None when the document priced per piece."""
+    price_warning: str | None = None
+    """Arithmetic didn't add up / per-piece price couldn't be derived —
+    ADR-0050; shown on the review screen."""
     matched_by_alias: bool
     """True only for a line the post-match step linked via a stored
     SupplierMaterialAlias (ADR-0046 §1), not the model itself — confidence
@@ -44,6 +50,8 @@ class ExtraLineOut(BaseModel):
     quantity: int | None
     confidence: str
     reasoning: str
+    price_note: str | None = None
+    price_warning: str | None = None
 
 
 class ParseOrderResponseOut(BaseModel):

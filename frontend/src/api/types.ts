@@ -578,6 +578,10 @@ export interface ParsedMatchedLine {
    * order-response alias, not the model — see ADR-0046 §1. Such rows start
    * unchecked in "Применить все совпадения". */
   matched_by_alias: boolean;
+  /** How a per-foot price became this per-piece price — ADR-0050. */
+  price_note?: string | null;
+  /** Line arithmetic didn't add up / couldn't convert — ADR-0050. */
+  price_warning?: string | null;
 }
 
 /** One row of POST .../parse-response's "missing" category — see ADR-0018 §3b. */
@@ -596,6 +600,9 @@ export interface ParsedExtraLine {
   quantity: number | null;
   confidence: string;
   reasoning: string;
+  /** See ParsedMatchedLine.price_note / price_warning — ADR-0050. */
+  price_note?: string | null;
+  price_warning?: string | null;
 }
 
 /** Response body of POST /orders/{order_id}/parse-response — a preview,

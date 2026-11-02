@@ -460,6 +460,8 @@ async def parse_order_response_endpoint(
                 quantity=line.quantity,
                 confidence=line.confidence,
                 reasoning=line.reasoning,
+                price_note=line.price_note,
+                price_warning=line.price_warning,
                 matched_by_alias=line.matched_order_item_id in alias_matched_ids,
             )
             for line in matched
@@ -483,6 +485,8 @@ async def parse_order_response_endpoint(
                 quantity=line.quantity,
                 confidence=line.confidence,
                 reasoning=line.reasoning,
+                price_note=line.price_note,
+                price_warning=line.price_warning,
             )
             for line in extra
         ],

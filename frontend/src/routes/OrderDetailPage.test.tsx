@@ -2971,6 +2971,62 @@ describe('OrderDetailPage', () => {
       expect(tableNames.slice(0, 4)).toEqual([...skuExpectedNames, 'Ручная позиция']);
     });
   });
+
+  describe('per-foot price conversion note (ADR-0050)', () => {
+    it('shows how the per-piece price was derived and the arithmetic warning, for matched and extra lines', async () => {
+      getOrderMock.mockResolvedValue(
+        orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 640,
+          delivery_fee: 0,
+          items: [itemFixture({ id: 'item-1', quantity: 8, quoted_price: 80 })],
+        }),
+      );
+      parseResponseMock.mockResolvedValue({
+        matched: [
+          {
+            order_item_id: 'item-1',
+            raw_description: "2 X 6 SMB BRZ 28' 6005",
+            price: 78.4,
+            quantity: 8,
+            confidence: 'high',
+            reasoning: '',
+            matched_by_alias: false,
+            price_note: '$2.800/фут × 224 фт = $627.20 ÷ 8 шт = $78.400/шт',
+            price_warning: null,
+          },
+        ],
+        missing: [],
+        extra: [
+          {
+            raw_description: "1 X 3 X 25' SMS",
+            price: 44.5,
+            quantity: 2,
+            confidence: 'high',
+            reasoning: '',
+            price_note: null,
+            price_warning: 'Сумма строки $90.00 не сходится с ценой × количеством ($89.00) — проверьте цену.',
+          },
+        ],
+      });
+      renderPage();
+
+      const firstBlockTitle = await screen.findByText('Распознавание ответа поставщика');
+      const firstSection = firstBlockTitle.parentElement?.parentElement as HTMLElement;
+      const fileInput = firstSection.querySelector('input[type="file"]') as HTMLInputElement;
+      const user = userEvent.setup();
+      await user.upload(fileInput, new File(['x'], 'response.pdf', { type: 'application/pdf' }));
+      await user.click(within(firstSection).getByText('Распознать цены из документа'));
+
+      const matchedRow = (await within(firstSection).findByText('$2.800/фут × 224 фт = $627.20 ÷ 8 шт = $78.400/шт')).closest('tr');
+      expect(matchedRow).not.toBeNull();
+      const extraRow = within(firstSection).getByText(/Сумма строки \$90\.00 не сходится/).closest('li');
+      expect(extraRow).not.toBeNull();
+    });
+  });
 });
 
 function escapeRe(value: string): string {

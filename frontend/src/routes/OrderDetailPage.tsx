@@ -31,7 +31,9 @@ import { PriceDivergenceModal } from '../components/PriceDivergenceModal';
 import type { PriceUpdateBatchRow } from '../components/PriceUpdateBatchScreen';
 import { PriceUpdateBatchScreen } from '../components/PriceUpdateBatchScreen';
 import { ResponseAliasModal } from '../components/ResponseAliasModal';
+import { useCategories } from '../hooks/useCategories';
 import { resolveMaterialName } from '../lib/colors';
+import { buildCategoryOrder, orderByCategoryAndSku } from '../lib/groupByCategory';
 import { aliasCandidates, suggestAliasPair } from '../lib/responseAliasSuggestion';
 import styles from './order-detail/OrderDetail.module.css';
 // badgeActive/badgeHistorical are the same "активна"/"историческая" classes
@@ -91,6 +93,7 @@ export function OrderDetailPage() {
   // step: the user already sees exactly the one Order they opened.
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { categories } = useCategories();
   const [deleteError, setDeleteError] = useState<unknown>(null);
   // Only already-replaced items (replaced_by_supplier_id != null) are hidden
   // by default, inside this collapsible section — see ADR-0043 Amendment 1.
@@ -246,8 +249,20 @@ export function OrderDetailPage() {
     );
   }
 
-  const { order, materials, suppliers, projectColorChoice, projectItems } = data;
+  const { order: loadedOrder, materials, suppliers, projectColorChoice, projectItems } = data;
   const materialById = new Map(materials.map((m) => [m.id, m]));
+  // Items in category display_order, then SKU (ADR-0042/ADR-0049) — for the
+  // tables and the copyable supplier texts alike; lightweight items without
+  // a catalog material go last. Display order only, the loaded Order is
+  // untouched.
+  const order: Order = {
+    ...loadedOrder,
+    items: orderByCategoryAndSku(
+      loadedOrder.items,
+      (item) => (item.material_id != null ? materialById.get(item.material_id) : undefined),
+      buildCategoryOrder(categories),
+    ),
+  };
   const supplier = suppliers.find((s) => s.id === order.supplier_id);
 
   // Same irreversibility criterion as OrderDraftConflictModal's

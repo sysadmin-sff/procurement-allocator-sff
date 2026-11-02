@@ -75,7 +75,12 @@ interface CategorizedRow extends CategorizedItem {
 
 function toCategorizedRow(row: Row): CategorizedRow | null {
   if (!row.material || !row.remoteId) return null;
-  return { row, material_id: row.material.id, category_name: row.material.category_name };
+  return {
+    row,
+    material_id: row.material.id,
+    category_name: row.material.category_name,
+    internal_sku: row.material.internal_sku,
+  };
 }
 
 function pluralizePositions(count: number): string {
@@ -149,9 +154,11 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
     [categorized, categoryOrder],
   );
 
-  // Row's "#" column and Enter/focus behavior key off its position in the
-  // input order (rows), not its position in the category-grouped display —
-  // grouping is purely visual, entry order stays the user's mental model.
+  // Enter/focus behavior keys off a row's position in the input order
+  // (rows), not its position in the category-grouped display. The "#"
+  // column does not: rows are sorted by SKU inside their category
+  // (ADR-0049), so input-order numbers would read 19, 13, 15… — "#" counts
+  // rows in visible order instead (displayNumberById below).
   const rowIndexById = useMemo(() => {
     const map = new Map<string, number>();
     rows.forEach((row, index) => map.set(row.id, index));
@@ -170,23 +177,23 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
    * "__header__<category>") interleaved at the position right before its
    * group's first row.
    */
-  const { orderById, groupHeaders } = useMemo(() => {
+  const { orderById, groupHeaders, displayNumberById } = useMemo(() => {
     const orderById = new Map<string, number>();
+    const displayNumberById = new Map<string, number>();
     const groupHeaders: { id: string; category: string | null; order: number }[] = [];
     let order = 0;
+    const place = (row: Row) => {
+      orderById.set(row.id, order);
+      displayNumberById.set(row.id, displayNumberById.size + 1);
+      order += 1;
+    };
     for (const group of groupedRows) {
       groupHeaders.push({ id: `__header__${group.category ?? '__none__'}`, category: group.category, order });
       order += 1;
-      for (const { row } of group.items) {
-        orderById.set(row.id, order);
-        order += 1;
-      }
+      for (const { row } of group.items) place(row);
     }
-    for (const row of drafts) {
-      orderById.set(row.id, order);
-      order += 1;
-    }
-    return { orderById, groupHeaders };
+    for (const row of drafts) place(row);
+    return { orderById, groupHeaders, displayNumberById };
   }, [groupedRows, drafts]);
 
   const inFlightSavesRef = useRef(new Set<Promise<unknown>>());
@@ -379,7 +386,7 @@ export function ProjectBuilderPage({ projectId, initialProject }: ProjectBuilder
         style={{ order }}
         className={`${styles.grid} ${styles.row} ${isDuplicate ? styles.duplicateRow : ''}`}
       >
-        <div className={styles.rowNum}>{index + 1}</div>
+        <div className={styles.rowNum}>{displayNumberById.get(row.id) ?? index + 1}</div>
 
         <div className={styles.rowMaterialCell}>
           <div className={styles.rowMaterialInner}>

@@ -807,4 +807,58 @@ describe('ProjectDetailPage', () => {
       expect((select as HTMLSelectElement).value).toBe('Bronze');
     });
   });
+
+  it('orders the spec rows inside a category by internal_sku, not by input order (ADR-0049)', async () => {
+    const project: ProjectWithItems = {
+      id: 'proj-1',
+      title: 'Pool cage — Bayshore Rd',
+      created_by: null,
+      status: 'draft',
+      created_at: '2026-08-17T00:00:00Z',
+      items: [
+        { id: 'i-9', project_id: 'proj-1', material_id: skuPatio2x3.id, quantity: 2 },
+        { id: 'i-3', project_id: 'proj-1', material_id: skuOpenBack.id, quantity: 16 },
+        { id: 'i-6', project_id: 'proj-1', material_id: skuPatio2x2.id, quantity: 3 },
+      ],
+      latest_allocation_run: null,
+    };
+    getMock.mockResolvedValue(project);
+    materialsListMock.mockResolvedValue([skuPatio2x3, skuOpenBack, skuPatio2x2]);
+    categoriesListMock.mockResolvedValue([category('Profil', 3)]);
+
+    renderPage();
+
+    await screen.findAllByText(skuOpenBack.canonical_name);
+    const rendered = [...document.querySelectorAll('td')]
+      .map((td) => td.textContent)
+      .filter((text): text is string => skuExpectedNames.includes(text ?? ''));
+    expect(rendered).toEqual(skuExpectedNames);
+  });
 });
+
+const skuOpenBack = {
+  id: 'mat-p3',
+  internal_sku: 'PROF-003',
+  canonical_name: "1 x 2 Open Back x .040 min. x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x2 = {
+  id: 'mat-p6',
+  internal_sku: 'PROF-006',
+  canonical_name: "2 x 2 x .045 Patio x 24' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x3 = {
+  id: 'mat-p9',
+  internal_sku: 'PROF-009',
+  canonical_name: "2 x 3 x .045 Patio x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+// Input order deliberately not SKU order: PROF-009, PROF-003, PROF-006.
+const skuExpectedNames = [skuOpenBack.canonical_name, skuPatio2x2.canonical_name, skuPatio2x3.canonical_name];

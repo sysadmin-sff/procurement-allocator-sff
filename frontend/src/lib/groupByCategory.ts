@@ -4,6 +4,16 @@ import type { Category } from '../api/types';
 export interface CategorizedItem {
   material_id: string;
   category_name: string | null | undefined;
+  /** Material.internal_sku — orders items inside their category group
+   * (ADR-0049). Missing → after the items that have one, in input order. */
+  internal_sku?: string | null;
+}
+
+/** internal_sku order with the numeric part compared as a number ("X-99" <
+ * "X-100"); a missing SKU sorts after any present one. See ADR-0049. */
+function compareSku(a: string | null | undefined, b: string | null | undefined): number {
+  if (!a || !b) return (a ? 0 : 1) - (b ? 0 : 1);
+  return a.localeCompare(b, 'en', { numeric: true });
 }
 
 /** Builds the name -> display_order lookup groupByCategory needs, from the
@@ -47,8 +57,32 @@ export function groupByCategory<T extends CategorizedItem>(
 
   return orderedCategories.map((category) => ({
     category,
-    items: byCategory.get(category)!,
+    // Array.prototype.sort is stable, so equal/missing SKUs keep input order.
+    items: byCategory.get(category)!.sort((a, b) => compareSku(a.internal_sku, b.internal_sku)),
   }));
+}
+
+/** Same order as groupByCategory (category display_order, then
+ * internal_sku — ADR-0042/ADR-0049), flattened, for lists that are not
+ * rendered as category groups (order items, allocation lines). `getMaterial`
+ * resolves an item to its material's category/SKU; an item it can't resolve
+ * (lightweight OrderItem, material not loaded yet) goes last, in input
+ * order. */
+export function orderByCategoryAndSku<T>(
+  items: T[],
+  getMaterial: (item: T) => { category_name: string | null | undefined; internal_sku: string } | undefined,
+  categoryOrder: Map<string, number>,
+): T[] {
+  const adapted = items.map((item, index) => {
+    const material = getMaterial(item);
+    return {
+      item,
+      material_id: String(index),
+      category_name: material?.category_name,
+      internal_sku: material?.internal_sku,
+    };
+  });
+  return groupByCategory(adapted, categoryOrder).flatMap((group) => group.items.map((a) => a.item));
 }
 
 /** Counts occurrences of each material_id — used to flag duplicate rows

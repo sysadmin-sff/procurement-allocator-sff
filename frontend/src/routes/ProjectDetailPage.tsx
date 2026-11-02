@@ -416,11 +416,12 @@ interface CategorizedProjectItem extends CategorizedItem {
  * material isn't loaded yet resolve to category_name undefined, which
  * groupByCategory already treats as "Без категории". */
 function toCategorizedItems(items: ProjectItem[], materials: Material[]): CategorizedProjectItem[] {
-  const categoryNameById = new Map(materials.map((m) => [m.id, m.category_name]));
+  const materialById = new Map(materials.map((m) => [m.id, m]));
   return items.map((item) => ({
     item,
     material_id: item.material_id,
-    category_name: categoryNameById.get(item.material_id),
+    category_name: materialById.get(item.material_id)?.category_name,
+    internal_sku: materialById.get(item.material_id)?.internal_sku,
   }));
 }
 

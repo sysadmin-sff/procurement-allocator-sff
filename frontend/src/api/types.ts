@@ -244,6 +244,8 @@ export interface ProjectTemplateItem {
   canonical_name: string;
   unit: string;
   category_name: string;
+  /** Orders items inside their category group — see ADR-0049. */
+  internal_sku: string;
 }
 
 export interface ProjectTemplate {

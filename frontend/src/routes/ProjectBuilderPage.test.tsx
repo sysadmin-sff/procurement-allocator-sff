@@ -8,7 +8,7 @@ import { categoriesApi } from '../api/categories';
 import { materialsApi } from '../api/materials';
 import { projectsApi } from '../api/projects';
 import { templatesApi } from '../api/templates';
-import type { Category } from '../api/types';
+import type { Category, ProjectWithItems } from '../api/types';
 
 vi.mock('../api/materials', () => ({
   materialsApi: {
@@ -334,7 +334,7 @@ describe('ProjectBuilderPage', () => {
       name: 'Стандартная дверь',
       created_at: '2026-01-01T00:00:00Z',
       items: [
-        { id: 'ti-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: material.unit, category_name: material.category_name },
+        { id: 'ti-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: material.unit, category_name: material.category_name, internal_sku: material.internal_sku },
       ],
     };
 
@@ -621,4 +621,70 @@ describe('ProjectBuilderPage', () => {
       expect(screen.getAllByText('Двери').length).toBeGreaterThan(0);
     });
   });
+
+  describe('order within a category (ADR-0049)', () => {
+    it('places loaded rows by internal_sku inside the category and numbers "#" in that visible order', async () => {
+      materialsListMock.mockResolvedValue([skuPatio2x3, skuOpenBack, skuPatio2x2]);
+      categoriesListMock.mockResolvedValue([category('Profil', 3)]);
+      const initialProject: ProjectWithItems = {
+        id: 'proj-1',
+        title: 'Проект',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-18T00:00:00Z',
+        items: [
+          { id: 'i-9', project_id: 'proj-1', material_id: skuPatio2x3.id, quantity: 2 },
+          { id: 'i-3', project_id: 'proj-1', material_id: skuOpenBack.id, quantity: 16 },
+          { id: 'i-6', project_id: 'proj-1', material_id: skuPatio2x2.id, quantity: 3 },
+        ],
+        latest_allocation_run: null,
+      };
+
+      render(
+        <MemoryRouter>
+          <ProjectBuilderPage projectId="proj-1" initialProject={initialProject} />
+        </MemoryRouter>,
+      );
+
+      const rowFor = async (name: string) => {
+        const input = await screen.findByDisplayValue(name);
+        let el: HTMLElement | null = input;
+        while (el && el.style.order === '') el = el.parentElement;
+        return el as HTMLElement;
+      };
+      // Wait for categories to load (the group header appears once grouping ran).
+      await waitFor(() => expect(document.querySelector('[class*="categoryRow"]')?.textContent).toBe('Profil'));
+      const rows = await Promise.all(skuExpectedNames.map(rowFor));
+      const orders = rows.map((row) => Number(row.style.order));
+      expect([...orders].sort((a, b) => a - b)).toEqual(orders);
+      expect(rows.map((row) => row.querySelector('[class*="rowNum"]')?.textContent)).toEqual(['1', '2', '3']);
+    });
+  });
 });
+
+const skuOpenBack = {
+  id: 'mat-p3',
+  internal_sku: 'PROF-003',
+  canonical_name: "1 x 2 Open Back x .040 min. x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x2 = {
+  id: 'mat-p6',
+  internal_sku: 'PROF-006',
+  canonical_name: "2 x 2 x .045 Patio x 24' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x3 = {
+  id: 'mat-p9',
+  internal_sku: 'PROF-009',
+  canonical_name: "2 x 3 x .045 Patio x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+// Input order deliberately not SKU order: PROF-009, PROF-003, PROF-006.
+const skuExpectedNames = [skuOpenBack.canonical_name, skuPatio2x2.canonical_name, skuPatio2x3.canonical_name];

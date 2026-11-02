@@ -32,6 +32,7 @@ def _to_out(template: ProjectTemplate) -> ProjectTemplateOut:
                 canonical_name=item.material.canonical_name,
                 unit=item.material.unit,
                 category_name=item.material.category.name,
+                internal_sku=item.material.internal_sku,
             )
             for item in template.items
         ],

@@ -22,7 +22,9 @@ import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { OrderDraftConflictModal } from '../components/OrderDraftConflictModal';
+import { useCategories } from '../hooks/useCategories';
 import { hasColorChoiceMaterial, KNOWN_COLORS } from '../lib/colors';
+import { buildCategoryOrder, orderByCategoryAndSku } from '../lib/groupByCategory';
 import styles from './allocation-result/AllocationResult.module.css';
 
 function isOrderDraftConflict(err: unknown): err is ApiError & { body: OrderDraftConflict } {
@@ -153,6 +155,8 @@ function AllocationResultOk({
 
   const supplierById = new Map(suppliers.map((s) => [s.id, s]));
   const materialById = new Map(materials.map((m) => [m.id, m]));
+  const { categories } = useCategories();
+  const categoryOrder = buildCategoryOrder(categories);
 
   const goodsTotal = run.supplier_summaries.reduce((sum, s) => sum + s.goods_total, 0);
   const deliveryTotal = run.supplier_summaries.reduce((sum, s) => sum + s.delivery_fee, 0);
@@ -318,7 +322,13 @@ function AllocationResultOk({
 
         {run.supplier_summaries.map((summary) => {
           const supplier = supplierById.get(summary.supplier_id);
-          const lines = run.lines.filter((l) => l.supplier_id === summary.supplier_id);
+          // Category display_order, then SKU (ADR-0042/ADR-0049) — the run's
+          // own line order is whatever Postgres returned.
+          const lines = orderByCategoryAndSku(
+            run.lines.filter((l) => l.supplier_id === summary.supplier_id),
+            (l) => materialById.get(l.material_id),
+            categoryOrder,
+          );
           // Read the ready backend total, not a client recomputation —
           // total_with_tax already includes tax_amount (ADR-0029 §5а).
           const cardTotal = summary.total_with_tax;

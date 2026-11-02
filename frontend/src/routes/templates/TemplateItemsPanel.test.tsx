@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TemplateItemsPanel } from './TemplateItemsPanel';
@@ -62,10 +62,10 @@ describe('TemplateItemsPanel', () => {
     // ordering would put Окна first and fail this test.
     categoriesListMock.mockResolvedValue([category('Двери', 0), category('Окна', 1)]);
     const t = template([
-      { id: 'i1', material_id: 'mat-2', canonical_name: 'Уплотнитель окна', unit: 'м', category_name: 'Окна' },
-      { id: 'i2', material_id: 'mat-3', canonical_name: 'Без категории материал', unit: 'шт', category_name: '' },
-      { id: 'i3', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери' },
-      { id: 'i4', material_id: 'mat-4', canonical_name: 'Ещё окно', unit: 'шт', category_name: 'Окна' },
+      { id: 'i1', material_id: 'mat-2', canonical_name: 'Уплотнитель окна', unit: 'м', category_name: 'Окна', internal_sku: 'TPL-001' },
+      { id: 'i2', material_id: 'mat-3', canonical_name: 'Без категории материал', unit: 'шт', category_name: '', internal_sku: 'TPL-001' },
+      { id: 'i3', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери', internal_sku: 'TPL-001' },
+      { id: 'i4', material_id: 'mat-4', canonical_name: 'Ещё окно', unit: 'шт', category_name: 'Окна', internal_sku: 'TPL-001' },
     ]);
 
     render(
@@ -99,9 +99,9 @@ describe('TemplateItemsPanel', () => {
     // category but before "Без категории".
     categoriesListMock.mockResolvedValue([category('Окна', 0)]);
     const t = template([
-      { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери' },
-      { id: 'i2', material_id: 'mat-3', canonical_name: 'Без категории материал', unit: 'шт', category_name: '' },
-      { id: 'i3', material_id: 'mat-2', canonical_name: 'Уплотнитель окна', unit: 'м', category_name: 'Окна' },
+      { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери', internal_sku: 'TPL-001' },
+      { id: 'i2', material_id: 'mat-3', canonical_name: 'Без категории материал', unit: 'шт', category_name: '', internal_sku: 'TPL-001' },
+      { id: 'i3', material_id: 'mat-2', canonical_name: 'Уплотнитель окна', unit: 'м', category_name: 'Окна', internal_sku: 'TPL-001' },
     ]);
 
     render(
@@ -128,7 +128,7 @@ describe('TemplateItemsPanel', () => {
     const user = userEvent.setup();
     materialsListMock.mockResolvedValue([doorHandle, windowSeal]);
 
-    const existingItem = { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери' };
+    const existingItem = { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери', internal_sku: 'TPL-001' };
     const t = template([existingItem]);
     const onAddItem = vi.fn().mockResolvedValue(undefined);
 
@@ -155,8 +155,8 @@ describe('TemplateItemsPanel', () => {
   it('marks two rows sharing a material_id as duplicates, and stops marking them once only one remains', () => {
     materialsListMock.mockResolvedValue([doorHandle, windowSeal]);
     const dup = template([
-      { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери' },
-      { id: 'i2', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери' },
+      { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери', internal_sku: 'TPL-001' },
+      { id: 'i2', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери', internal_sku: 'TPL-001' },
     ]);
 
     const { rerender } = render(
@@ -172,7 +172,7 @@ describe('TemplateItemsPanel', () => {
     expect(duplicateBadges).toHaveLength(2);
 
     const single = template([
-      { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери' },
+      { id: 'i1', material_id: 'mat-1', canonical_name: 'Дверная ручка', unit: 'шт', category_name: 'Двери', internal_sku: 'TPL-001' },
     ]);
     rerender(
       <TemplateItemsPanel
@@ -185,4 +185,50 @@ describe('TemplateItemsPanel', () => {
 
     expect(screen.queryByText('дубль')).not.toBeInTheDocument();
   });
+
+  it('orders items inside a category by the material internal_sku (ADR-0049)', async () => {
+    materialsListMock.mockResolvedValue([skuPatio2x3, skuOpenBack, skuPatio2x2]);
+    categoriesListMock.mockResolvedValue([category('Profil', 3)]);
+    const t = template([
+      { id: 'i9', material_id: skuPatio2x3.id, canonical_name: skuPatio2x3.canonical_name, unit: 'pcs', category_name: 'Profil', internal_sku: skuPatio2x3.internal_sku },
+      { id: 'i3', material_id: skuOpenBack.id, canonical_name: skuOpenBack.canonical_name, unit: 'pcs', category_name: 'Profil', internal_sku: skuOpenBack.internal_sku },
+      { id: 'i6', material_id: skuPatio2x2.id, canonical_name: skuPatio2x2.canonical_name, unit: 'pcs', category_name: 'Profil', internal_sku: skuPatio2x2.internal_sku },
+    ]);
+
+    render(<TemplateItemsPanel template={t} isAdmin={true} onAddItem={vi.fn()} onRemoveItem={vi.fn()} />);
+
+    await waitFor(() => {
+      const rendered = [...document.querySelectorAll('td')]
+        .map((td) => td.textContent)
+        .filter((text): text is string => skuExpectedNames.includes(text ?? ''));
+      expect(rendered).toEqual(skuExpectedNames);
+    });
+  });
 });
+
+const skuOpenBack = {
+  id: 'mat-p3',
+  internal_sku: 'PROF-003',
+  canonical_name: "1 x 2 Open Back x .040 min. x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x2 = {
+  id: 'mat-p6',
+  internal_sku: 'PROF-006',
+  canonical_name: "2 x 2 x .045 Patio x 24' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x3 = {
+  id: 'mat-p9',
+  internal_sku: 'PROF-009',
+  canonical_name: "2 x 3 x .045 Patio x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+// Input order deliberately not SKU order: PROF-009, PROF-003, PROF-006.
+const skuExpectedNames = [skuOpenBack.canonical_name, skuPatio2x2.canonical_name, skuPatio2x3.canonical_name];

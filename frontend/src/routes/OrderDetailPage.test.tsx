@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrderDetailPage } from './OrderDetailPage';
+import { categoriesApi } from '../api/categories';
 import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
@@ -26,6 +27,9 @@ vi.mock('../api/orders', () => ({
     addRawItem: vi.fn(),
     createResponseAlias: vi.fn(),
   },
+}));
+vi.mock('../api/categories', () => ({
+  categoriesApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 vi.mock('../api/materials', () => ({
   materialsApi: { list: vi.fn(), search: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
@@ -191,6 +195,7 @@ describe('OrderDetailPage', () => {
     materialsListMock.mockResolvedValue([material]);
     suppliersListMock.mockResolvedValue([supplier]);
     projectGetMock.mockResolvedValue(projectFixture());
+    vi.mocked(categoriesApi.list).mockResolvedValue([]);
   });
 
   it('renders quoted price and an empty confirmed-price cell when unconfirmed', async () => {
@@ -2922,8 +2927,79 @@ describe('OrderDetailPage', () => {
       expect(patchItemMock).not.toHaveBeenCalledWith('order-1', 'item-2', expect.anything());
     });
   });
+
+  describe('order within a category (ADR-0049)', () => {
+    it('lists order items and the copyable text by internal_sku inside the category, lightweight items last', async () => {
+      getOrderMock.mockResolvedValue(
+        orderFixture({
+          id: 'order-1',
+          project_id: 'proj-1',
+          supplier_id: 'sup-a',
+          status: 'draft',
+          total_amount: 100,
+          delivery_fee: 0,
+          items: [
+            itemFixture({ id: 'it-light', material_id: null, raw_description: 'Ручная позиция' }),
+            itemFixture({ id: 'it-9', material_id: skuPatio2x3.id }),
+            itemFixture({ id: 'it-3', material_id: skuOpenBack.id }),
+            itemFixture({ id: 'it-6', material_id: skuPatio2x2.id }),
+          ],
+        }),
+      );
+      materialsListMock.mockResolvedValue([skuPatio2x3, skuOpenBack, skuPatio2x2]);
+      vi.mocked(categoriesApi.list).mockResolvedValue([
+        { id: 'c-p', name: 'Profil', sku_prefix: 'PROF', requires_single_supplier: false, next_sku_number: 1, display_order: 3, created_at: '2026-01-01T00:00:00Z' },
+      ]);
+
+      renderPage();
+
+      const heading = await screen.findByText('Список материалов (без цен)');
+      const textarea = within(heading.parentElement!.parentElement as HTMLElement).getByRole('textbox') as HTMLTextAreaElement;
+      await waitFor(() =>
+        expect(textarea.value.split('\n').filter((l) => /^\d+\. /.test(l))).toEqual([
+          `1. ${skuOpenBack.canonical_name} - 10 pcs`,
+          `2. ${skuPatio2x2.canonical_name} - 10 pcs`,
+          `3. ${skuPatio2x3.canonical_name} - 10 pcs`,
+          '4. Ручная позиция - 10',
+        ]),
+      );
+
+      const tableNames = [...document.querySelectorAll('tbody tr')]
+        .map((tr) => tr.textContent ?? '')
+        .map((text) => [...skuExpectedNames, 'Ручная позиция'].find((name) => text.includes(name)))
+        .filter(Boolean);
+      expect(tableNames.slice(0, 4)).toEqual([...skuExpectedNames, 'Ручная позиция']);
+    });
+  });
 });
 
 function escapeRe(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+const skuOpenBack = {
+  id: 'mat-p3',
+  internal_sku: 'PROF-003',
+  canonical_name: "1 x 2 Open Back x .040 min. x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x2 = {
+  id: 'mat-p6',
+  internal_sku: 'PROF-006',
+  canonical_name: "2 x 2 x .045 Patio x 24' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x3 = {
+  id: 'mat-p9',
+  internal_sku: 'PROF-009',
+  canonical_name: "2 x 3 x .045 Patio x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+// Input order deliberately not SKU order: PROF-009, PROF-003, PROF-006.
+const skuExpectedNames = [skuOpenBack.canonical_name, skuPatio2x2.canonical_name, skuPatio2x3.canonical_name];

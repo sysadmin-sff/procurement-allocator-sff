@@ -178,6 +178,8 @@ def test_add_item_returns_template_with_denormalized_material_fields(
     assert items[0]["canonical_name"] == "6ft Vinyl Panel"
     assert items[0]["unit"] == "panel"
     assert items[0]["category_name"] == "fencing"
+    # ADR-0049: the template panel orders items inside a category by SKU.
+    assert items[0]["internal_sku"] == material.internal_sku
 
 
 def test_add_item_returns_404_for_unknown_material(

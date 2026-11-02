@@ -91,7 +91,7 @@ describe('ProjectTemplatesPage', () => {
     // Add a material
     const withItem: ProjectTemplate = {
       ...emptyTemplate,
-      items: [{ id: 'item-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: 'шт', category_name: 'Двери' }],
+      items: [{ id: 'item-1', material_id: 'mat-1', canonical_name: material.canonical_name, unit: 'шт', category_name: 'Двери', internal_sku: 'TPL-001' }],
     };
     addItemMock.mockResolvedValue(withItem);
 

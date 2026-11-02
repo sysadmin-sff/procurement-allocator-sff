@@ -1,9 +1,10 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AllocationResultPage } from './AllocationResultPage';
 import { allocationApi } from '../api/allocation';
+import { categoriesApi } from '../api/categories';
 import { ApiError } from '../api/client';
 import { materialsApi } from '../api/materials';
 import { ordersApi } from '../api/orders';
@@ -19,6 +20,9 @@ import type {
   Supplier,
 } from '../api/types';
 
+vi.mock('../api/categories', () => ({
+  categoriesApi: { list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn() },
+}));
 vi.mock('../api/allocation', () => ({
   allocationApi: { run: vi.fn(), get: vi.fn(), overrideLine: vi.fn() },
 }));
@@ -171,6 +175,7 @@ describe('AllocationResultPage', () => {
     suppliersListMock.mockResolvedValue([supplierA, supplierB]);
     materialsListMock.mockResolvedValue([materialScreen]);
     pricesListMock.mockResolvedValue([]);
+    vi.mocked(categoriesApi.list).mockResolvedValue([]);
   });
 
   it('shows an explicit message and no supplier cards when status is infeasible', async () => {
@@ -1643,4 +1648,80 @@ describe('AllocationResultPage', () => {
       expect(screen.queryByText(/мин\.?\s*заказ/i)).not.toBeInTheDocument();
     });
   });
+
+  it('lists a supplier card\'s lines by category display_order, then internal_sku (ADR-0049)', async () => {
+    const line = (id: string, material_id: string) => ({
+      id,
+      material_id,
+      supplier_id: 'sup-a',
+      quantity: 1,
+      unit_price: 10,
+      line_total: 10,
+      overridden_at: null,
+      original_supplier_id: null,
+      original_unit_price: null,
+      ordered_at: null,
+    });
+    runMock.mockResolvedValue({
+      id: 'run-sku',
+      project_id: 'proj-1',
+      created_at: '2026-08-17T00:00:00Z',
+      algorithm_version: 'v1',
+      status: 'ok',
+      split_categories: [],
+      lines: [
+        line('l-9', skuPatio2x3.id),
+        line('l-door', doorMaterial1.id),
+        line('l-3', skuOpenBack.id),
+        line('l-6', skuPatio2x2.id),
+      ],
+      orphaned_materials: [],
+      supplier_summaries: [
+        { supplier_id: 'sup-a', goods_total: 40, delivery_fee: 0, tax_amount: 2.8, total_with_tax: 42.8, free_shipping_achieved: true, below_min_order: false },
+      ],
+    } as AllocationRun);
+    materialsListMock.mockResolvedValue([skuPatio2x3, doorMaterial1, skuOpenBack, skuPatio2x2]);
+    vi.mocked(categoriesApi.list).mockResolvedValue([
+      { id: 'c-d', name: 'Doors', sku_prefix: 'DOOR', requires_single_supplier: false, next_sku_number: 1, display_order: 0, created_at: '2026-01-01T00:00:00Z' },
+      { id: 'c-p', name: 'Profil', sku_prefix: 'PROF', requires_single_supplier: false, next_sku_number: 1, display_order: 3, created_at: '2026-01-01T00:00:00Z' },
+    ]);
+
+    renderPage();
+
+    const expected = [doorMaterial1.canonical_name, ...skuExpectedNames];
+    await screen.findByText(skuOpenBack.canonical_name);
+    await waitFor(() => {
+      const positions = expected.map((name) => screen.getByText(name));
+      for (let i = 1; i < positions.length; i += 1) {
+        expect(positions[i - 1].compareDocumentPosition(positions[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      }
+    });
+  });
 });
+
+const skuOpenBack = {
+  id: 'mat-p3',
+  internal_sku: 'PROF-003',
+  canonical_name: "1 x 2 Open Back x .040 min. x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x2 = {
+  id: 'mat-p6',
+  internal_sku: 'PROF-006',
+  canonical_name: "2 x 2 x .045 Patio x 24' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+const skuPatio2x3 = {
+  id: 'mat-p9',
+  internal_sku: 'PROF-009',
+  canonical_name: "2 x 3 x .045 Patio x 30' (White/Bronze)",
+  category_name: 'Profil',
+  unit: 'pcs',
+  attributes: {},
+};
+// Input order deliberately not SKU order: PROF-009, PROF-003, PROF-006.
+const skuExpectedNames = [skuOpenBack.canonical_name, skuPatio2x2.canonical_name, skuPatio2x3.canonical_name];

@@ -26,6 +26,9 @@ class ProjectTemplateItemOut(BaseModel):
     canonical_name: str
     unit: str
     category_name: str
+    internal_sku: str
+    """Orders items inside their category group on the template panel —
+    see ADR-0049."""
 
 
 class ProjectTemplateOut(BaseModel):

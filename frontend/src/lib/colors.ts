@@ -9,6 +9,22 @@ import type { Material } from '../api/types';
  * always stores/returns the value as passed. */
 export const KNOWN_COLORS: readonly string[] = ['White', 'Bronze'];
 
+const COLOR_WORD = new RegExp(`\\b(${KNOWN_COLORS.join('|')})\\b`, 'gi');
+
+/** Employees type the project color into its title by hand ("3284 bronze -
+ * 1146 27th Ave S"); when Project.color_choice changes, every KNOWN_COLORS
+ * word in the title (whole word, any case) becomes the new color in the
+ * same case style. A title with no color word, or a cleared color, leaves
+ * the title as is — nothing is appended. */
+export function retitleWithColor(title: string, color: string | null): string {
+  if (color == null) return title;
+  return title.replace(COLOR_WORD, (word) => {
+    if (word === word.toUpperCase()) return color.toUpperCase();
+    if (word === word.toLowerCase()) return color.toLowerCase();
+    return color;
+  });
+}
+
 /** Supplier-facing material name with the color ambiguity resolved — mirrors
  * backend/app/services/material_naming.py resolve_material_name exactly
  * (ADR-0031 п.4), so buildOrderText/buildTargetPriceOrderText (and any

@@ -23,7 +23,7 @@ import { Button } from '../components/Button';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { OrderDraftConflictModal } from '../components/OrderDraftConflictModal';
 import { useCategories } from '../hooks/useCategories';
-import { hasColorChoiceMaterial, KNOWN_COLORS } from '../lib/colors';
+import { hasColorChoiceMaterial, KNOWN_COLORS, retitleWithColor } from '../lib/colors';
 import { buildCategoryOrder, orderByCategoryAndSku } from '../lib/groupByCategory';
 import styles from './allocation-result/AllocationResult.module.css';
 
@@ -198,13 +198,13 @@ function AllocationResultOk({
 
   async function handleColorChoiceChange(colorChoice: string | null) {
     setOverrideError(null);
-    const previous = project.color_choice;
-    onProjectChange({ ...project, color_choice: colorChoice });
+    const title = retitleWithColor(project.title, colorChoice);
+    onProjectChange({ ...project, title, color_choice: colorChoice });
     try {
-      await projectsApi.updateProject(project.id, project.title, colorChoice);
+      await projectsApi.updateProject(project.id, title, colorChoice);
     } catch (err) {
       setOverrideError(err);
-      onProjectChange({ ...project, color_choice: previous });
+      onProjectChange(project);
     }
   }
 

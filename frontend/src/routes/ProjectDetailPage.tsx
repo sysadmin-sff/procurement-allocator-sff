@@ -10,7 +10,7 @@ import { Button } from '../components/Button';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { useCategories } from '../hooks/useCategories';
-import { KNOWN_COLORS } from '../lib/colors';
+import { KNOWN_COLORS, retitleWithColor } from '../lib/colors';
 import {
   buildCategoryOrder,
   groupByCategory,
@@ -159,13 +159,14 @@ export function ProjectDetailPage({ initialProject }: ProjectDetailPageProps = {
   async function handleColorChoiceChange(colorChoice: string | null) {
     if (!projectId || !project) return;
     setActionError(null);
-    const previous = project.color_choice;
-    setProject({ ...project, color_choice: colorChoice });
+    const previous = { title: project.title, color_choice: project.color_choice };
+    const title = retitleWithColor(project.title, colorChoice);
+    setProject({ ...project, title, color_choice: colorChoice });
     try {
-      await projectsApi.updateProject(projectId, project.title, colorChoice);
+      await projectsApi.updateProject(projectId, title, colorChoice);
     } catch (err) {
       setActionError(err);
-      setProject((prev) => (prev ? { ...prev, color_choice: previous } : prev));
+      setProject((prev) => (prev ? { ...prev, ...previous } : prev));
     }
   }
 

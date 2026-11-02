@@ -1355,6 +1355,23 @@ describe('AllocationResultPage', () => {
       expect(await screen.findByRole('button', { name: /Подтвердить и создать ордера/ })).toBeEnabled();
     });
 
+    it('rewrites the color word in the project title when the color is changed on this page', async () => {
+      runMock.mockResolvedValue(colorRun());
+      materialsListMock.mockResolvedValue([colorMaterial]);
+      pricesListMock.mockResolvedValue([]);
+      projectGetMock.mockResolvedValue({ ...project, title: '3284 bronze - 1146 27th Ave S', color_choice: 'Bronze' });
+      updateProjectMock.mockResolvedValue({ ...project, title: '3284 white - 1146 27th Ave S', color_choice: 'White' });
+
+      renderPage();
+
+      const colorSelect = await screen.findByLabelText('Цвет проекта:');
+      const user = userEvent.setup();
+      await user.selectOptions(colorSelect, 'White');
+
+      expect(updateProjectMock).toHaveBeenCalledWith('proj-1', '3284 white - 1146 27th Ave S', 'White');
+      expect(await screen.findByText('3284 white - 1146 27th Ave S')).toBeInTheDocument();
+    });
+
     it('rolls back the color selection on this page if saving it fails', async () => {
       runMock.mockResolvedValue(colorRun());
       materialsListMock.mockResolvedValue([colorMaterial]);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasColorChoiceMaterial, resolveMaterialName } from './colors';
+import { hasColorChoiceMaterial, resolveMaterialName, retitleWithColor } from './colors';
 import type { Material } from '../api/types';
 
 function materialFixture(overrides: Partial<Material> = {}): Material {
@@ -78,5 +78,25 @@ describe('hasColorChoiceMaterial', () => {
 
   it('ignores undefined entries (material not yet loaded)', () => {
     expect(hasColorChoiceMaterial([undefined, materialFixture({ color_options: null })])).toBe(false);
+  });
+});
+
+describe('retitleWithColor', () => {
+  it('replaces the color word in the project title with the newly chosen color, keeping its case', () => {
+    expect(retitleWithColor('3284 bronze - 1146 27th Ave S', 'White')).toBe('3284 white - 1146 27th Ave S');
+    expect(retitleWithColor('3284 Bronze - 1146 27th Ave S', 'White')).toBe('3284 White - 1146 27th Ave S');
+    expect(retitleWithColor('3284 BRONZE - 1146 27th Ave S', 'White')).toBe('3284 WHITE - 1146 27th Ave S');
+  });
+
+  it('leaves a title without a color word unchanged', () => {
+    expect(retitleWithColor('3284 - 1146 27th Ave S', 'White')).toBe('3284 - 1146 27th Ave S');
+  });
+
+  it('matches whole words only', () => {
+    expect(retitleWithColor('Whitehall Rd bronze', 'White')).toBe('Whitehall Rd white');
+  });
+
+  it('leaves the title unchanged when the color is cleared', () => {
+    expect(retitleWithColor('3284 bronze', null)).toBe('3284 bronze');
   });
 });

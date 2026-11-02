@@ -788,6 +788,54 @@ describe('ProjectDetailPage', () => {
       expect((select as HTMLSelectElement).value).toBe('White');
     });
 
+    it('rewrites the color word in the title when the color changes, and saves the new title', async () => {
+      const project: ProjectWithItems = {
+        id: 'proj-1',
+        title: '3284 bronze - 1146 27th Ave S, St. Petersburg',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-17T00:00:00Z',
+        color_choice: 'Bronze',
+        items: [],
+        latest_allocation_run: null,
+      };
+      getMock.mockResolvedValue(project);
+      updateProjectMock.mockResolvedValue({ ...project, title: '3284 white - 1146 27th Ave S, St. Petersburg', color_choice: 'White' });
+
+      renderPage();
+
+      const select = await screen.findByRole('combobox', { name: /Цвет проекта/ });
+      const user = userEvent.setup();
+      await user.selectOptions(select, 'White');
+
+      expect(updateProjectMock).toHaveBeenCalledWith('proj-1', '3284 white - 1146 27th Ave S, St. Petersburg', 'White');
+      expect(await screen.findByText('3284 white - 1146 27th Ave S, St. Petersburg')).toBeInTheDocument();
+    });
+
+    it('restores the old title as well as the old color if saving fails', async () => {
+      const project: ProjectWithItems = {
+        id: 'proj-1',
+        title: '3284 bronze - 1146 27th Ave S',
+        created_by: null,
+        status: 'draft',
+        created_at: '2026-08-17T00:00:00Z',
+        color_choice: 'Bronze',
+        items: [],
+        latest_allocation_run: null,
+      };
+      getMock.mockResolvedValue(project);
+      updateProjectMock.mockRejectedValue(new Error('network'));
+
+      renderPage();
+
+      const select = await screen.findByRole('combobox', { name: /Цвет проекта/ });
+      const user = userEvent.setup();
+      await user.selectOptions(select, 'White');
+
+      expect(await screen.findByText('3284 bronze - 1146 27th Ave S')).toBeInTheDocument();
+      expect((select as HTMLSelectElement).value).toBe('Bronze');
+    });
+
     it('shows the already-selected color after a reload (persisted state)', async () => {
       const project: ProjectWithItems = {
         id: 'proj-1',

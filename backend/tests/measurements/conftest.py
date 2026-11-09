@@ -8,7 +8,11 @@ from app.auth.constants import SESSION_IDLE_TTL
 from app.core.database import SessionLocal, get_db
 from app.measurements.models import (
     MeasurementsAmoEvent,
+    MeasurementsAmoUser,
+    MeasurementsFieldValue,
     MeasurementsLead,
+    MeasurementsPipelineStatus,
+    MeasurementsResultAttribution,
     MeasurementsSyncState,
     MeasurementsUserAccess,
     MeasurementsVisit,
@@ -100,3 +104,41 @@ def enabled_app(db_session):
 @pytest.fixture
 def client(enabled_app):
     return TestClient(enabled_app)
+
+
+_INITIAL_MAPPING = (
+    (627963, "Closed, Not Sold On-Site", True, "not_sold"),
+    (627965, "Visit Completed", True, "completed"),
+    (627967, "Sold On-Site", True, "sold"),
+    (627969, "Declined Before Visit", False, "declined"),
+)
+
+
+def _reset_sync_tables() -> None:
+    with SessionLocal() as session:
+        for model in (
+            MeasurementsVisit,
+            MeasurementsLead,
+            MeasurementsAmoEvent,
+            MeasurementsSyncState,
+            MeasurementsResultAttribution,
+            MeasurementsAmoUser,
+            MeasurementsPipelineStatus,
+            MeasurementsFieldValue,
+        ):
+            session.query(model).delete(synchronize_session=False)
+        session.add_all(
+            MeasurementsFieldValue(
+                enum_id=enum_id, label=label, visit_occurred=occurred, outcome_type=outcome
+            )
+            for enum_id, label, occurred, outcome in _INITIAL_MAPPING
+        )
+        session.commit()
+
+
+@pytest.fixture
+def sync_tables_clean():
+    """Sync code commits page by page, so its tests cannot rely on a rollback."""
+    _reset_sync_tables()
+    yield
+    _reset_sync_tables()

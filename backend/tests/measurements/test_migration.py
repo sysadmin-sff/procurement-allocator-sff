@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 from alembic.autogenerate import compare_metadata
-from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import inspect, text
@@ -117,7 +116,7 @@ def drift() -> list[tuple[str, str, str]]:
 
 
 def test_migration_is_the_single_child_of_the_previous_head():
-    scripts = ScriptDirectory.from_config(Config(str(BACKEND_DIR / "alembic.ini")))
+    scripts = ScriptDirectory(str(BACKEND_DIR / "alembic"))
     children = [
         script.revision
         for script in scripts.walk_revisions()
@@ -177,7 +176,7 @@ def test_mapping_after_upgrade_matches_the_adr_table():
         ).all()
     assert [tuple(row) for row in rows] == [
         (627963, "Closed, Not Sold On-Site", True, "not_sold", True),
-        (627965, "Visit Completed (передан в продажу)", True, "completed", True),
+        (627965, "Visit Completed", True, "completed", True),
         (627967, "Sold On-Site", True, "sold", True),
         (627969, "Declined Before Visit", False, "declined", True),
     ]
@@ -268,3 +267,27 @@ def test_deleting_a_user_cascades_to_their_grant():
         ).scalar()
         connection.rollback()
     assert remaining == 0
+
+
+def test_deleting_the_granter_keeps_the_grant_and_clears_the_reference():
+    grantee_id, granter_id = uuid.uuid4(), uuid.uuid4()
+    with engine.connect() as connection:
+        for user_id in (grantee_id, granter_id):
+            connection.execute(
+                text(INSERT_USER),
+                {"id": user_id, "email": f"{user_id}@screen-factory-florida.com"},
+            )
+        connection.execute(
+            text(
+                "insert into measurements_user_access (user_id, granted_by_user_id, granted_at) "
+                "values (:grantee, :granter, now())"
+            ),
+            {"grantee": grantee_id, "granter": granter_id},
+        )
+        connection.execute(text("delete from users where id = :id"), {"id": granter_id})
+        rows = connection.execute(
+            text("select granted_by_user_id from measurements_user_access where user_id = :id"),
+            {"id": grantee_id},
+        ).all()
+        connection.rollback()
+    assert [tuple(row) for row in rows] == [(None,)]

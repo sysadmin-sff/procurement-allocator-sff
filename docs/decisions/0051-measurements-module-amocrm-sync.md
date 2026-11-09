@@ -470,3 +470,11 @@ ID из amo служат натуральными ключами `BigInteger` в
 `kind` воспроизводится из нашей БД без обращения к amo: смена
 `legacy_meetings_until` при недоступном amo, аудит причины `legacy`, метрика
 «назначение → выезд».
+
+**`measurements_field_values` (§3).** Начальный `label` для `627965` — `Visit
+Completed`. Скобка в таблице маппинга — пояснение, а не значение поля.
+
+**`measurements_user_access` (§2).** `granted_by_user_id` — nullable FK на
+`users` с `ON DELETE SET NULL`. Скрипт выдачи принимает опциональный
+`--by <email>`. Это второй FK из той же новой таблицы, блокировка при создании
+та же, данные `users` не меняются.

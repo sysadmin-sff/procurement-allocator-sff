@@ -3,9 +3,10 @@
 from datetime import datetime, timezone
 
 import pytest
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 
 from app.auth.cookies import CSRF_HEADER, SESSION_COOKIE
+from app.auth.dependencies import get_current_user
 from app.measurements.access import require_measurements_access
 from app.measurements.models import (
     MeasurementsAmoEvent,
@@ -13,7 +14,7 @@ from app.measurements.models import (
     MeasurementsSyncState,
     MeasurementsVisit,
 )
-from tests.measurements.helpers import measurements_routes
+from tests.measurements.helpers import assert_every_route_guarded, measurements_routes
 
 NOW = datetime(2026, 11, 10, 12, tzinfo=timezone.utc)
 
@@ -26,9 +27,41 @@ def _assert_every_route_returns(client, enabled_app, expected: int, cookie=None)
     client.cookies.clear()
     if cookie is not None:
         client.cookies.set(SESSION_COOKIE, str(cookie.id))
-    for path, method in routes:
-        response = client.request(method, path, headers={CSRF_HEADER: "test-csrf-token"})
-        assert response.status_code == expected, f"{method} {path}"
+    # Every route is called before asserting, so a failure names all broken routes.
+    statuses = {
+        f"{method} {path}": client.request(
+            method, path, headers={CSRF_HEADER: "test-csrf-token"}
+        ).status_code
+        for path, method in routes
+    }
+    assert statuses == {route: expected for route in statuses}
+
+
+def _synthetic_app(*dependencies) -> FastAPI:
+    router = APIRouter(prefix="/measurements", dependencies=list(dependencies))
+
+    @router.get("/synthetic")
+    def synthetic() -> dict:
+        return {}
+
+    app = FastAPI()
+    app.include_router(router)
+    return app
+
+
+def test_every_route_has_the_guard_in_its_dependency_chain(enabled_app):
+    assert_every_route_guarded(enabled_app, require_measurements_access)
+
+    # Negative controls: the check itself must fail on an unguarded route, and
+    # plain authentication is not the module's guard.
+    for unguarded in (_synthetic_app(), _synthetic_app(Depends(get_current_user))):
+        with pytest.raises(AssertionError, match="/measurements/synthetic"):
+            assert_every_route_guarded(unguarded, require_measurements_access)
+
+    # Positive control: the walk does see a guard placed on a router.
+    assert_every_route_guarded(
+        _synthetic_app(Depends(require_measurements_access)), require_measurements_access
+    )
 
 
 def test_without_session_every_route_returns_401(client, enabled_app):

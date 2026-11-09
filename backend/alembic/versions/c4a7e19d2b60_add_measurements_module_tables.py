@@ -121,7 +121,7 @@ def upgrade() -> None:
             },
             {
                 "enum_id": 627965,
-                "label": "Visit Completed (передан в продажу)",
+                "label": "Visit Completed",
                 "visit_occurred": True,
                 "outcome_type": "completed",
             },
@@ -205,7 +205,12 @@ def upgrade() -> None:
             sa.ForeignKey("users.id", ondelete="CASCADE"),
             primary_key=True,
         ),
-        sa.Column("granted_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column(
+            "granted_by_user_id",
+            postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("granted_at", _TIMESTAMP, nullable=False, server_default=sa.func.now()),
     )
 

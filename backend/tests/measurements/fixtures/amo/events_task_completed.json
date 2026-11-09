@@ -1,0 +1,41 @@
+{
+  "_page": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/events?page=1&limit=250"
+    }
+  },
+  "_embedded": {
+    "events": [
+      {
+        "id": "01m6rxp6p2q4csa7sypj23tzys",
+        "type": "task_completed",
+        "entity_id": 18313159,
+        "entity_type": "task",
+        "created_by": 8644141,
+        "created_at": 1793985288,
+        "value_after": [],
+        "value_before": [],
+        "account_id": 32002014,
+        "name": "synthetic event",
+        "entity_type_name": "task",
+        "oauth_client_uuid": "",
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/events/01m6rxp6p2q4csa7sypj23tzys"
+          }
+        },
+        "_embedded": {
+          "entity": {
+            "id": 18313159,
+            "_links": {
+              "self": {
+                "href": "https://example.amocrm.com/api/v4/tasks/18313159"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

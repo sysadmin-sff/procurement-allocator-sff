@@ -1,0 +1,25 @@
+{
+  "id": 18313159,
+  "created_by": 0,
+  "updated_by": 8644141,
+  "created_at": 1793985136,
+  "updated_at": 1793985288,
+  "responsible_user_id": 8644141,
+  "group_id": 592418,
+  "entity_id": 25341615,
+  "entity_type": "leads",
+  "duration": 0,
+  "is_completed": true,
+  "task_type_id": 1,
+  "text": "Synthetic task text",
+  "result": {
+    "text": "Synthetic result text"
+  },
+  "complete_till": 1793985436,
+  "account_id": 32002014,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/tasks/18313159?page=1&limit=250"
+    }
+  }
+}

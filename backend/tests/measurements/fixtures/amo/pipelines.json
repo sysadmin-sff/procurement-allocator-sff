@@ -1,0 +1,93 @@
+{
+  "_total_items": 2,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/leads/pipelines"
+    }
+  },
+  "_embedded": {
+    "pipelines": [
+      {
+        "id": 8740486,
+        "name": "Synthetic measurements pipeline",
+        "sort": 1,
+        "is_main": true,
+        "is_unsorted_on": false,
+        "is_archive": false,
+        "account_id": 1,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/leads/pipelines/8740486"
+          }
+        },
+        "_embedded": {
+          "statuses": [
+            {
+              "id": 70000001,
+              "name": "Synthetic open status",
+              "sort": 10,
+              "is_editable": true,
+              "pipeline_id": 8740486,
+              "color": "#fffeb2",
+              "type": 0,
+              "account_id": 1,
+              "_links": {
+                "self": {
+                  "href": "https://example.amocrm.com/api/v4/leads/pipelines/8740486/statuses/70000001"
+                }
+              }
+            },
+            {
+              "id": 142,
+              "name": "Synthetic won status",
+              "sort": 10000,
+              "is_editable": false,
+              "pipeline_id": 8740486,
+              "color": "#CCFF66",
+              "type": 0,
+              "account_id": 1,
+              "_links": {
+                "self": {
+                  "href": "https://example.amocrm.com/api/v4/leads/pipelines/8740486/statuses/142"
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": 8740490,
+        "name": "Synthetic sales pipeline",
+        "sort": 2,
+        "is_main": false,
+        "is_unsorted_on": false,
+        "is_archive": true,
+        "account_id": 1,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/leads/pipelines/8740490"
+          }
+        },
+        "_embedded": {
+          "statuses": [
+            {
+              "id": 142,
+              "name": "Synthetic won status",
+              "sort": 10000,
+              "is_editable": false,
+              "pipeline_id": 8740490,
+              "color": "#CCFF66",
+              "type": 0,
+              "account_id": 1,
+              "_links": {
+                "self": {
+                  "href": "https://example.amocrm.com/api/v4/leads/pipelines/8740490/statuses/142"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

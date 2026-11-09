@@ -1,0 +1,97 @@
+{
+  "_page": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/leads?limit=250&page=1"
+    }
+  },
+  "_embedded": {
+    "leads": [
+      {
+        "id": 25341615,
+        "name": "Synthetic lead one",
+        "price": 12500,
+        "responsible_user_id": 9861902,
+        "group_id": 0,
+        "status_id": 142,
+        "pipeline_id": 8740486,
+        "loss_reason_id": null,
+        "created_by": 9861902,
+        "updated_by": 9861902,
+        "created_at": 1794000000,
+        "updated_at": 1794232950,
+        "closed_at": 1794232950,
+        "closest_task_at": null,
+        "is_deleted": false,
+        "custom_fields_values": [
+          {
+            "field_id": 784029,
+            "field_name": "Site Visit Result",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Sold On-Site",
+                "enum_id": 627967,
+                "enum_code": null
+              }
+            ]
+          },
+          {
+            "field_id": 111111,
+            "field_name": "Synthetic other field",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value"
+              }
+            ]
+          }
+        ],
+        "score": null,
+        "account_id": 1,
+        "labor_cost": null,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/leads/25341615?limit=250&page=1"
+          }
+        },
+        "_embedded": {
+          "tags": [],
+          "companies": []
+        }
+      },
+      {
+        "id": 25341616,
+        "name": "Synthetic lead two",
+        "price": 0,
+        "responsible_user_id": 14156562,
+        "group_id": 0,
+        "status_id": 70000001,
+        "pipeline_id": 8740490,
+        "loss_reason_id": null,
+        "created_by": 14156562,
+        "updated_by": 14156562,
+        "created_at": 1794000100,
+        "updated_at": 1794000200,
+        "closed_at": null,
+        "closest_task_at": null,
+        "is_deleted": false,
+        "custom_fields_values": null,
+        "score": null,
+        "account_id": 1,
+        "labor_cost": null,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/leads/25341616?limit=250&page=1"
+          }
+        },
+        "_embedded": {
+          "tags": [],
+          "companies": []
+        }
+      }
+    ]
+  }
+}

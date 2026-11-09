@@ -1,0 +1,46 @@
+{
+  "_total_items": 2,
+  "_page": 1,
+  "_page_count": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/users?limit=250&page=1"
+    }
+  },
+  "_embedded": {
+    "users": [
+      {
+        "id": 9861902,
+        "name": "Synthetic Surveyor One",
+        "email": "surveyor.one@example.invalid",
+        "lang": "en",
+        "rights": {
+          "is_admin": false,
+          "is_free": false,
+          "is_active": true
+        },
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/users/9861902"
+          }
+        }
+      },
+      {
+        "id": 14156562,
+        "name": "Synthetic Surveyor Two",
+        "email": "surveyor.two@example.invalid",
+        "lang": "en",
+        "rights": {
+          "is_admin": false,
+          "is_free": false,
+          "is_active": false
+        },
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/users/14156562"
+          }
+        }
+      }
+    ]
+  }
+}

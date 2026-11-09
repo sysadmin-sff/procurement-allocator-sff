@@ -1,0 +1,59 @@
+{
+  "_page": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/leads/custom_fields?page=1&limit=250"
+    }
+  },
+  "_embedded": {
+    "custom_fields": [
+      {
+        "id": 784029,
+        "name": "Site Visit Result",
+        "type": "select",
+        "account_id": 32002014,
+        "code": null,
+        "sort": 521,
+        "is_api_only": false,
+        "enums": [
+          {
+            "id": 627963,
+            "value": "Closed, Not Sold On-Site",
+            "sort": 500
+          },
+          {
+            "id": 627965,
+            "value": "Visit Completed",
+            "sort": 1
+          },
+          {
+            "id": 627967,
+            "value": "Sold On-Site",
+            "sort": 2
+          },
+          {
+            "id": 627969,
+            "value": "Declined Before Visit",
+            "sort": 3
+          }
+        ],
+        "group_id": null,
+        "required_statuses": [],
+        "is_deletable": true,
+        "is_predefined": false,
+        "entity_type": "leads",
+        "tracking_callback": null,
+        "remind": null,
+        "triggers": [],
+        "currency": null,
+        "hidden_statuses": [],
+        "chained_lists": null,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/leads/custom_fields/784029?page=1&limit=250"
+          }
+        }
+      }
+    ]
+  }
+}

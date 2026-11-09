@@ -1,0 +1,139 @@
+{
+  "_page": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/events?page=1&limit=250"
+    }
+  },
+  "_embedded": {
+    "events": [
+      {
+        "id": "01m709w5gknf9w8wg3c3fh7c5h",
+        "type": "custom_field_784029_value_changed",
+        "entity_id": 25341615,
+        "entity_type": "lead",
+        "created_by": 11989030,
+        "created_at": 1794232948,
+        "value_after": [],
+        "value_before": [
+          {
+            "custom_field_value": {
+              "field_id": 784029,
+              "field_type": 4,
+              "enum_id": 627967,
+              "text": "Sold On-Site",
+              "is_masked": false
+            }
+          }
+        ],
+        "account_id": 32002014,
+        "name": "synthetic event",
+        "entity_type_name": "lead",
+        "oauth_client_uuid": "",
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/events/01m709w5gknf9w8wg3c3fh7c5h"
+          }
+        },
+        "_embedded": {
+          "entity": {
+            "id": 25341615,
+            "_links": {
+              "self": {
+                "href": "https://example.amocrm.com/api/v4/leads/25341615"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "01m709w3ekpfjakkv1z6f0kvj8",
+        "type": "custom_field_784029_value_changed",
+        "entity_id": 25341615,
+        "entity_type": "lead",
+        "created_by": 11989030,
+        "created_at": 1794232946,
+        "value_after": [
+          {
+            "custom_field_value": {
+              "field_id": 784029,
+              "field_type": 4,
+              "enum_id": 627967,
+              "text": "Sold On-Site",
+              "is_masked": false
+            }
+          }
+        ],
+        "value_before": [
+          {
+            "custom_field_value": {
+              "field_id": 784029,
+              "field_type": 4,
+              "enum_id": 627963,
+              "text": "Closed, Not Sold On-Site",
+              "is_masked": false
+            }
+          }
+        ],
+        "account_id": 32002014,
+        "name": "synthetic event",
+        "entity_type_name": "lead",
+        "oauth_client_uuid": "",
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/events/01m709w3ekpfjakkv1z6f0kvj8"
+          }
+        },
+        "_embedded": {
+          "entity": {
+            "id": 25341615,
+            "_links": {
+              "self": {
+                "href": "https://example.amocrm.com/api/v4/leads/25341615"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "01m709w0wm54qwgy815t43yvze",
+        "type": "custom_field_784029_value_changed",
+        "entity_id": 25341615,
+        "entity_type": "lead",
+        "created_by": 11989030,
+        "created_at": 1794232943,
+        "value_after": [
+          {
+            "custom_field_value": {
+              "field_id": 784029,
+              "field_type": 4,
+              "enum_id": 627963,
+              "text": "Closed, Not Sold On-Site",
+              "is_masked": false
+            }
+          }
+        ],
+        "value_before": [],
+        "account_id": 32002014,
+        "name": "synthetic event",
+        "entity_type_name": "lead",
+        "oauth_client_uuid": "",
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/events/01m709w0wm54qwgy815t43yvze"
+          }
+        },
+        "_embedded": {
+          "entity": {
+            "id": 25341615,
+            "_links": {
+              "self": {
+                "href": "https://example.amocrm.com/api/v4/leads/25341615"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

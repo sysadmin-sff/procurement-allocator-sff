@@ -1,0 +1,98 @@
+{
+  "_page": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/events?page=1&limit=250"
+    }
+  },
+  "_embedded": {
+    "events": [
+      {
+        "id": "01m6sh8x2tp98fy97vx1yqpz5x",
+        "type": "lead_status_changed",
+        "entity_id": 24916255,
+        "entity_type": "lead",
+        "created_by": 10219178,
+        "created_at": 1794005824,
+        "value_after": [
+          {
+            "lead_status": {
+              "id": 70753810,
+              "pipeline_id": 8740494
+            }
+          }
+        ],
+        "value_before": [
+          {
+            "lead_status": {
+              "id": 70752494,
+              "pipeline_id": 8740494
+            }
+          }
+        ],
+        "account_id": 32002014,
+        "name": "synthetic event",
+        "entity_type_name": "lead",
+        "oauth_client_uuid": "",
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/events/01m6sh8x2tp98fy97vx1yqpz5x"
+          }
+        },
+        "_embedded": {
+          "entity": {
+            "id": 24916255,
+            "_links": {
+              "self": {
+                "href": "https://example.amocrm.com/api/v4/leads/24916255"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "01m6sh7abt5dyv7z2nv3qwzhvn",
+        "type": "lead_status_changed",
+        "entity_id": 24158607,
+        "entity_type": "lead",
+        "created_by": 10219178,
+        "created_at": 1794005772,
+        "value_after": [
+          {
+            "lead_status": {
+              "id": 70753810,
+              "pipeline_id": 8740494
+            }
+          }
+        ],
+        "value_before": [
+          {
+            "lead_status": {
+              "id": 70752494,
+              "pipeline_id": 8740494
+            }
+          }
+        ],
+        "account_id": 32002014,
+        "name": "synthetic event",
+        "entity_type_name": "lead",
+        "oauth_client_uuid": "",
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/events/01m6sh7abt5dyv7z2nv3qwzhvn"
+          }
+        },
+        "_embedded": {
+          "entity": {
+            "id": 24158607,
+            "_links": {
+              "self": {
+                "href": "https://example.amocrm.com/api/v4/leads/24158607"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

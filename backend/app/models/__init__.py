@@ -1,3 +1,4 @@
+from app.measurements import models as _measurements_models  # noqa: F401  (ADR-0051 §1)
 from app.models.allocation import AllocationLine, AllocationRun
 from app.models.base import Base
 from app.models.category import Category

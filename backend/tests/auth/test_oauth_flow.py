@@ -244,3 +244,36 @@ def test_logout_deletes_session_row_and_second_request_401(make_user, make_sessi
     second_client.cookies.set("session_id", session_id)
     second_response = second_client.get("/auth/me")
     assert second_response.status_code == 401
+
+
+def test_reactivated_user_can_log_in_again(monkeypatch, db_session, make_user):
+    _configure_settings(monkeypatch)
+    session, _ = db_session
+    user = make_user(
+        email="back@screen-factory-florida.com", google_sub="back-sub", is_active=False
+    )
+    claims = GoogleClaims(
+        sub="back-sub", email="back@screen-factory-florida.com", name=None, hd=DOMAIN
+    )
+    login_client = TestClient(app, follow_redirects=False)
+
+    def log_in():
+        login_resp = login_client.get("/auth/login")
+        login_client.cookies.set("oauth_flow", login_resp.cookies["oauth_flow"])
+        state = parse_qs(urlparse(login_resp.headers["location"]).query)["state"][0]
+        with (
+            patch("app.api.auth._exchange_code_for_id_token", return_value="fake-id-token"),
+            patch("app.api.auth.verify_google_id_token", return_value=claims),
+        ):
+            return login_client.get(f"/auth/callback?code=fake-code&state={state}")
+
+    assert log_in().status_code == 403
+
+    user.is_active = True
+    session.commit()
+
+    response = log_in()
+    assert response.status_code in (302, 307)
+    assert "session_id" in response.cookies
+    login_client.cookies.set("session_id", response.cookies["session_id"])
+    assert login_client.get("/auth/me").status_code == 200

@@ -81,6 +81,9 @@ def get_valid_session(db: Session, session_id: str) -> UserSession | None:
         return None
     if now > created_at + SESSION_ABSOLUTE_TTL:
         return None
+    if not session.user.is_active:
+        # Deactivation takes effect on the next request, see ADR-0024 §3.
+        return None
     return session
 
 

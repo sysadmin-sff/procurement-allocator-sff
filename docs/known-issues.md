@@ -1152,3 +1152,38 @@ _to_cents(line.line_total) for line in lines)`, отдельный путь, г�
 (`frontend/src/layout/AppLayout.tsx`) `await authApi.logout()` бросает ошибку на
 401, и `navigate('/login')` не выполняется. Первым делом перенести `navigate` в
 `finally`.
+
+## Дрейф моделей и миграций: `alembic check` красный на `ea480577269c` (приоритет: высокий)
+
+Обнаружено 2026-11-10 перед реализацией ADR-0051, на пустой тестовой БД после
+`alembic upgrade head`. Часть индексов и ограничений существует только в миграциях
+и не объявлена в моделях. Не исправлено: выравнивание моделей выполняется отдельной
+сессией сразу после модуля «Замеры».
+
+**Запрещено запускать `alembic revision --autogenerate` без построчного ревью
+удаляемых индексов и ограничений.** Сейчас autogenerate предложит удалить, среди
+прочего, `ix_users_email`, `ux_prices_active_material_supplier` и
+`ck_prices_valid_to_after_valid_from`, то есть уникальность и инварианты,
+которые держат данные.
+
+13 операций:
+
+| Операция | Объект |
+|---|---|
+| `modify_nullable` | `allocation_runs.created_at` |
+| `modify_nullable` | `categories.created_at` |
+| `remove_constraint` | `ck_order_items_material_xor_raw_description` |
+| `remove_constraint` | `ck_prices_valid_to_after_valid_from` |
+| `remove_index` | `ix_price_list_entries_import_id` |
+| `remove_index` | `ix_prices_material_supplier_valid_to` |
+| `remove_index` | `ux_prices_active_material_supplier` |
+| `remove_index` | `ix_project_templates_name` |
+| `add_constraint` | уникальность `project_templates.name` (без имени) |
+| `remove_index` | `ix_supplier_material_aliases_supplier_material` |
+| `remove_index` | `ix_user_sessions_user_id` |
+| `remove_index` | `ix_users_email` |
+| `remove_index` | `ix_users_google_sub` |
+
+Тест модуля «Замеры» сравнивает расхождения с этим списком (ADR-0051, «Изменение
+2026-11-10»): появление новой операции или исчезновение перечисленной роняет его.
+После выравнивания белый список удаляется.

@@ -152,6 +152,33 @@ describe('TemplateItemsPanel', () => {
     expect(onAddItem).toHaveBeenCalledWith('mat-1');
   });
 
+  it('keeps the selection for a retry when adding fails, without an unhandled rejection', async () => {
+    const user = userEvent.setup();
+    materialsListMock.mockResolvedValue([doorHandle, windowSeal]);
+    const onAddItem = vi.fn().mockRejectedValue(new Error('duplicate'));
+
+    render(
+      <TemplateItemsPanel
+        template={template([])}
+        isAdmin={true}
+        onAddItem={onAddItem}
+        onRemoveItem={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('Название или артикул…'), 'ручка');
+    const listbox = await screen.findByRole('listbox');
+    await user.click(within(listbox).getByText(doorHandle.canonical_name));
+    const addButton = screen.getByRole('button', { name: /^добавить$/i });
+    await user.click(addButton);
+    await waitFor(() => expect(addButton).toBeEnabled());
+
+    await user.click(addButton);
+
+    expect(onAddItem).toHaveBeenCalledTimes(2);
+    expect(onAddItem).toHaveBeenLastCalledWith('mat-1');
+  });
+
   it('marks two rows sharing a material_id as duplicates, and stops marking them once only one remains', () => {
     materialsListMock.mockResolvedValue([doorHandle, windowSeal]);
     const dup = template([

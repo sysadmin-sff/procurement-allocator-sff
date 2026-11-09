@@ -34,6 +34,9 @@ export function TemplateItemsPanel({
       await onAddItem(selected.id);
       setSelected(null);
       setQuery('');
+    } catch {
+      // The parent has already shown the error. The selection stays so the
+      // user can retry.
     } finally {
       setAdding(false);
     }

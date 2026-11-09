@@ -17,6 +17,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.measurements.amo_client import AmoAuthError, AmoClient, AmoError, AmoHttpError
+from app.measurements.attribution_store import recompute_lead
 from app.measurements.classification import (
     classify_kind,
     is_post_cutover_meeting_ignored,
@@ -64,10 +65,6 @@ def _as_datetime(timestamp: int | None) -> datetime | None:
     return None if timestamp is None else datetime.fromtimestamp(timestamp, timezone.utc)
 
 
-def field_event_type(settings: MeasurementsSettings) -> str:
-    return f"custom_field_{settings.field_id}_value_changed"
-
-
 # --- events
 
 
@@ -94,7 +91,7 @@ def _insert_event(ctx: SyncContext, raw: dict, lead_id: int | None) -> bool:
 
 
 def _load_lead_history(ctx: SyncContext, lead_id: int) -> None:
-    wanted = {field_event_type(ctx.settings), _LEAD_STATUS_CHANGED}
+    wanted = {ctx.settings.field_event_type, _LEAD_STATUS_CHANGED}
     params = [("filter[entity]", "lead"), ("filter[entity_id][]", lead_id)]
     for batch in ctx.client.iter_pages("/events", "events", params):
         for raw in batch:
@@ -436,17 +433,21 @@ def _handle_type_changed(ctx: SyncContext, raw: dict, counters: Counter) -> None
         _insert_event(ctx, raw, row.lead_id)
 
 
-def _changed_lead_ids(ctx: SyncContext, watermark: datetime | None) -> list[int]:
+def _changed_lead_ids(
+    ctx: SyncContext, watermark: datetime | None, *, include_snapshots: bool = False
+) -> list[int]:
     """Leads without a snapshot, or touched since the last successful read."""
     since = watermark or _EPOCH
-    query = union(
+    sources = [
         select(MeasurementsLead.lead_id).where(MeasurementsLead.amo_updated_at.is_(None)),
         select(MeasurementsVisit.lead_id).where(MeasurementsVisit.synced_at > since),
         select(MeasurementsAmoEvent.lead_id).where(
             MeasurementsAmoEvent.lead_id.is_not(None), MeasurementsAmoEvent.ingested_at > since
         ),
-    )
-    return sorted(ctx.db.scalars(query).all())
+    ]
+    if include_snapshots:
+        sources.append(select(MeasurementsLead.lead_id).where(MeasurementsLead.synced_at > since))
+    return sorted(ctx.db.scalars(union(*sources)).all())
 
 
 def _leads_stream(ctx: SyncContext):
@@ -467,6 +468,20 @@ def _leads_stream(ctx: SyncContext):
     return process
 
 
+def _attribution_stream(ctx: SyncContext):
+    def process(watermark: datetime | None, counters: Counter) -> None:
+        for lead_id in _changed_lead_ids(ctx, watermark, include_snapshots=True):
+            result = recompute_lead(ctx.db, lead_id, ctx.settings, ctx.now())
+            ctx.db.commit()
+            counters["recomputed"] += 1
+            counters["drift"] += int(result.drift)
+            for row in result.attributions:
+                if row.rule in ("unmapped", "no_visit"):
+                    counters[row.rule] += 1
+
+    return process
+
+
 def run_cycle(ctx: SyncContext) -> None:
     """One polling pass. Tasks go first so that their events find them known."""
     settings = ctx.settings
@@ -482,7 +497,7 @@ def run_cycle(ctx: SyncContext) -> None:
         ("tasks_legacy", _tasks_stream(ctx, [settings.task_type_legacy])),
         (
             "events_field",
-            _events_stream(ctx, field_event_type(settings), handler(_handle_field_event)),
+            _events_stream(ctx, settings.field_event_type, handler(_handle_field_event)),
         ),
         (
             "events_lead_status",
@@ -502,6 +517,7 @@ def run_cycle(ctx: SyncContext) -> None:
             _events_stream(ctx, _TASK_TYPE_CHANGED, handler(_handle_type_changed)),
         ),
         ("leads", _leads_stream(ctx)),
+        ("attribution", _attribution_stream(ctx)),
     ]
     for stream, process in streams:
         _run_stream(ctx, stream, process)

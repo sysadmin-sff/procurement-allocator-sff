@@ -64,6 +64,10 @@ class MeasurementsSettings(MeasurementsFlags):
     timezone: str = _NEW_YORK
     excluded_lead_ids: frozenset[int] = frozenset()
 
+    @property
+    def field_event_type(self) -> str:
+        return f"custom_field_{self.field_id}_value_changed"
+
     def validate_for_worker(self) -> None:
         """Raises at worker start, listing every invalid setting at once."""
         problems: list[str] = []

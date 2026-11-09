@@ -19,6 +19,7 @@ from app.auth.service import bootstrap_admin
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.rate_limit import limiter, rate_limit_exceeded_handler
+from app.measurements.flags import MeasurementsFlags
 
 app = FastAPI(title="procurement-allocator")
 
@@ -54,6 +55,13 @@ app.include_router(material_router)
 app.include_router(category_router)
 app.include_router(price_router)
 app.include_router(price_ingestion_router)
+
+# Imported inside the condition so that the module's code stays unloaded while
+# the flag is off (ADR-0051 §1).
+if MeasurementsFlags().enabled:
+    from app.measurements.router import router as measurements_router
+
+    app.include_router(measurements_router)
 
 
 @app.on_event("startup")

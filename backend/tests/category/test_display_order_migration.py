@@ -8,9 +8,9 @@ Two layers:
   extracted from upgrade() specifically so it's testable without a DB) is
   exercised directly with synthetic name sets for the unknown-name failure
   and missing-name warning paths -- no DB needed, no risk to real data.
-- `upgrade()` itself is exercised once, end-to-end, against the real
-  categories table -- which already holds exactly the 8 approved rows after
-  `alembic upgrade head` -- inside a transaction rolled back at teardown.
+- `upgrade()` itself is exercised once, end-to-end, against the categories
+  table seeded with the 8 approved rows by a fixture, inside a transaction
+  rolled back at teardown.
   Loaded by file path and run via a bound alembic Operations context on this
   test's own connection, rather than through the full `alembic.command`
   chain, for the same reason as
@@ -18,6 +18,8 @@ Two layers:
   downgrades/upgrades every migration above and below this one, including
   ADR-0034's lossy Category downgrade, risking real dev-DB data.
 """
+
+import uuid
 
 import pytest
 from sqlalchemy import text
@@ -88,52 +90,80 @@ def test_compute_display_orders_warns_but_succeeds_when_approved_name_missing(ca
 # --- upgrade(): one end-to-end test against the real schema ---
 
 
-def test_upgrade_backfills_the_real_categories_table(caplog):
-    """The real dev DB already has exactly the 8 approved categories (from
-    the actual `alembic upgrade head` run). To re-run upgrade()'s own
-    add_column step faithfully (it isn't idempotent), this first drops the
-    column inside a rolled-back transaction -- putting the schema back to
-    exactly its pre-migration shape -- then invokes the real upgrade(), all
-    without ever inserting/deleting a categories row (which would risk
-    uq_categories_name collisions or the materials FK against real data)."""
+APPROVED_NAMES = (
+    "Screws",
+    "Doors",
+    "Roof panels",
+    "Caulk",
+    "Connectors",
+    "Gutter",
+    "Mesh",
+    "Profil",
+)
+
+
+@pytest.fixture
+def connection_with_approved_categories():
+    """A connection whose categories table holds exactly the 8 approved rows.
+    Everything is undone by the rollback at teardown."""
     connection = engine.connect()
     transaction = connection.begin()
     try:
-        from alembic.migration import MigrationContext
-        from alembic.operations import Operations
-
-        connection.execute(text("ALTER TABLE categories DROP COLUMN display_order"))
-
-        context = MigrationContext.configure(connection)
-        with Operations.context(context):
-            migration = _load_migration_module()
-            with caplog.at_level("WARNING"):
-                migration.upgrade()
-
-        rows = connection.execute(text("SELECT name, display_order FROM categories")).fetchall()
-        result = {row.name: row.display_order for row in rows}
-        assert result == {
-            "Doors": 0,
-            "Gutter": 1,
-            "Caulk": 2,
-            "Profil": 3,
-            "Roof panels": 4,
-            "Mesh": 5,
-            "Connectors": 6,
-            "Screws": 7,
-        }
-        # All 8 approved names present in real data -- no missing-name warning.
-        assert not any("not found in categories table" in r.message for r in caplog.records)
-
-        not_null = connection.execute(
-            text(
-                """
-                SELECT is_nullable FROM information_schema.columns
-                WHERE table_name = 'categories' AND column_name = 'display_order'
-                """
+        connection.execute(text("TRUNCATE categories CASCADE"))
+        for position, name in enumerate(APPROVED_NAMES):
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO categories (id, name, sku_prefix, display_order)
+                    VALUES (:id, :name, :prefix, :position)
+                    """
+                ),
+                {
+                    "id": uuid.uuid4(),
+                    "name": name,
+                    "prefix": name[:3].upper(),
+                    "position": position,
+                },
             )
-        ).scalar()
-        assert not_null == "NO"
+        yield connection
     finally:
         transaction.rollback()
         connection.close()
+
+
+def test_upgrade_backfills_the_real_categories_table(connection_with_approved_categories, caplog):
+    """upgrade()'s add_column step isn't idempotent, so the column is dropped
+    first, which puts the schema back to its pre-migration shape."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    connection = connection_with_approved_categories
+    connection.execute(text("ALTER TABLE categories DROP COLUMN display_order"))
+
+    with Operations.context(MigrationContext.configure(connection)):
+        migration = _load_migration_module()
+        with caplog.at_level("WARNING"):
+            migration.upgrade()
+
+    rows = connection.execute(text("SELECT name, display_order FROM categories")).fetchall()
+    assert {row.name: row.display_order for row in rows} == {
+        "Doors": 0,
+        "Gutter": 1,
+        "Caulk": 2,
+        "Profil": 3,
+        "Roof panels": 4,
+        "Mesh": 5,
+        "Connectors": 6,
+        "Screws": 7,
+    }
+    assert not any("not found in categories table" in r.message for r in caplog.records)
+
+    is_nullable = connection.execute(
+        text(
+            """
+            SELECT is_nullable FROM information_schema.columns
+            WHERE table_name = 'categories' AND column_name = 'display_order'
+            """
+        )
+    ).scalar()
+    assert is_nullable == "NO"

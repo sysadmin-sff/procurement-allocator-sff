@@ -210,23 +210,89 @@ def test_downgrade_fails_when_light_row_exists(db_session, make_order_shell):
         connection.close()
 
 
-def test_downgrade_succeeds_with_no_light_rows(db_session):
-    """Regression: downgrade must still work cleanly (no RuntimeError) when
-    the table has no raw_description-only rows at all -- run against a
-    transaction rolled back at the end, so this never leaves the real schema
-    downgraded (that would desync it from the ORM models used by every other
-    test in the suite)."""
-    migration = _load_migration_module()
+@pytest.fixture
+def connection_with_only_catalog_rows():
+    """A connection whose order_items holds one seeded material row and no
+    light rows. Everything is undone by the rollback at teardown."""
     connection = engine.connect()
     transaction = connection.begin()
+    ids = {
+        name: uuid.uuid4()
+        for name in ("category", "material", "supplier", "project", "order", "item")
+    }
+    marker = ids["item"].hex[:8].upper()
     try:
-        from alembic.migration import MigrationContext
-        from alembic.operations import Operations
-
-        context = MigrationContext.configure(connection)
-        with Operations.context(context):
-            migration.downgrade()
-            migration.upgrade()
+        connection.execute(text("DELETE FROM order_items WHERE material_id IS NULL"))
+        connection.execute(
+            text(
+                """
+                INSERT INTO categories (id, name, sku_prefix, display_order)
+                VALUES (:category, :name, :prefix, 0)
+                """
+            ),
+            {"category": ids["category"], "name": f"Seed {marker}", "prefix": marker},
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO materials
+                    (id, internal_sku, canonical_name, unit, attributes, category_id)
+                VALUES (:material, :sku, 'Seed material', 'pcs', '{}', :category)
+                """
+            ),
+            {"material": ids["material"], "sku": f"SEED-{marker}", "category": ids["category"]},
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO suppliers (id, name, delivery_policy)
+                VALUES (:supplier, 'Seed supplier', '{}')
+                """
+            ),
+            {"supplier": ids["supplier"]},
+        )
+        connection.execute(
+            text("INSERT INTO projects (id, title) VALUES (:project, 'Seed project')"),
+            {"project": ids["project"]},
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO orders (id, project_id, supplier_id)
+                VALUES (:order, :project, :supplier)
+                """
+            ),
+            {"order": ids["order"], "project": ids["project"], "supplier": ids["supplier"]},
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO order_items (id, order_id, material_id, quantity, quoted_price)
+                VALUES (:item, :order, :material, 1, 1.00)
+                """
+            ),
+            {"item": ids["item"], "order": ids["order"], "material": ids["material"]},
+        )
+        yield connection, ids
     finally:
         transaction.rollback()
         connection.close()
+
+
+def test_downgrade_succeeds_with_no_light_rows(connection_with_only_catalog_rows):
+    """Regression: downgrade must work cleanly (no RuntimeError) when the table
+    has no raw_description-only rows, and must keep the ordinary rows."""
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    connection, ids = connection_with_only_catalog_rows
+    migration = _load_migration_module()
+
+    with Operations.context(MigrationContext.configure(connection)):
+        migration.downgrade()
+        migration.upgrade()
+
+    surviving_material = connection.execute(
+        text("SELECT material_id FROM order_items WHERE id = :item"), {"item": ids["item"]}
+    ).scalar()
+    assert surviving_material == ids["material"]

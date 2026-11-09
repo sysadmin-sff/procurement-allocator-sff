@@ -22,10 +22,14 @@ def upgrade() -> None:
     # index covering the same three columns but not restricted to active
     # rows, so it also serves list_prices()-style filters that don't limit
     # to valid_to IS NULL. See docs/known-issues.md.
+    #
+    # if_not_exists: f78b06284148 already creates this index, so without it
+    # the chain cannot be applied to an empty database. ADR-0052.
     op.create_index(
         "ix_prices_material_supplier_valid_to",
         "prices",
         ["material_id", "supplier_id", "valid_to"],
+        if_not_exists=True,
     )
 
 

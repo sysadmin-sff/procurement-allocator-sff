@@ -404,8 +404,12 @@ def test_availability_risk_uses_candidate_own_moq_not_line_quantity(
     order_service.py (сравнение с line.quantity заменяемого поставщика,
     не со своим собственным order_qty кандидата)."""
     session, *_ = db_session
-    high_moq_current = make_supplier(name="CurrentHighMOQ", flat_fee=0.0, free_shipping_threshold=0.0)
-    low_availability_candidate = make_supplier(name="Candidate", flat_fee=0.0, free_shipping_threshold=0.0)
+    high_moq_current = make_supplier(
+        name="CurrentHighMOQ", flat_fee=0.0, free_shipping_threshold=0.0
+    )
+    low_availability_candidate = make_supplier(
+        name="Candidate", flat_fee=0.0, free_shipping_threshold=0.0
+    )
     material = make_material()
     make_price(material, high_moq_current, price=0.50, availability=1000, min_order_qty=200)
     make_price(material, low_availability_candidate, price=5.00, availability=50, min_order_qty=1)
@@ -439,7 +443,9 @@ def test_availability_risk_true_when_candidate_cannot_cover_its_own_moq_demand(
     собственного order_qty, не от line.quantity текущего поставщика."""
     session, *_ = db_session
     current = make_supplier(name="Current", flat_fee=0.0, free_shipping_threshold=0.0)
-    risky_candidate = make_supplier(name="RiskyCandidate", flat_fee=0.0, free_shipping_threshold=0.0)
+    risky_candidate = make_supplier(
+        name="RiskyCandidate", flat_fee=0.0, free_shipping_threshold=0.0
+    )
     material = make_material()
     make_price(material, current, price=1.00, availability=1000, min_order_qty=1)
     make_price(material, risky_candidate, price=0.80, availability=50, min_order_qty=100)

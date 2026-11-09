@@ -435,7 +435,9 @@ def replace_and_sync_order(
         oi.material_id == item.material_id for oi in target_order.items
     ):
         material = db.get(Material, item.material_id)
-        raise DuplicateMaterialInDraftError(target_order.id, item.material_id, material.canonical_name)
+        raise DuplicateMaterialInDraftError(
+            target_order.id, item.material_id, material.canonical_name
+        )
 
     line = override_allocation_line_supplier(
         db,

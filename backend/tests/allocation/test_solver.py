@@ -927,8 +927,12 @@ def test_moq_expensive_but_no_moq_supplier_beats_cheap_high_moq_supplier():
     хотя его цена за штуку выше -- честная экономика ADR-0045."""
     materials = [MaterialInput(material_id="m1", quantity=37)]
     suppliers = [
-        SupplierInput(supplier_id="cheap_high_moq", flat_fee_cents=0, free_shipping_threshold_cents=None),
-        SupplierInput(supplier_id="pricier_no_moq", flat_fee_cents=0, free_shipping_threshold_cents=None),
+        SupplierInput(
+            supplier_id="cheap_high_moq", flat_fee_cents=0, free_shipping_threshold_cents=None
+        ),
+        SupplierInput(
+            supplier_id="pricier_no_moq", flat_fee_cents=0, free_shipping_threshold_cents=None
+        ),
     ]
     prices = [
         PriceInput(

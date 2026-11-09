@@ -68,7 +68,12 @@ def main() -> None:
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(
-        json.dumps({"colors_tested": COLORS_TO_TEST, "materials": rows}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            {"colors_tested": COLORS_TO_TEST, "materials": rows},
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
     print(f"Wrote {len(rows)} materials x {len(COLORS_TO_TEST)} colors to {OUTPUT_PATH}")

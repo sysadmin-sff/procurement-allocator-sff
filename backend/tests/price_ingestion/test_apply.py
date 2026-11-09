@@ -359,7 +359,11 @@ def test_apply_match_inherits_moq_from_closed_price_when_entry_has_none(
 
     new_price = (
         session.query(Price)
-        .filter(Price.material_id == material.id, Price.supplier_id == supplier.id, Price.valid_to.is_(None))
+        .filter(
+            Price.material_id == material.id,
+            Price.supplier_id == supplier.id,
+            Price.valid_to.is_(None),
+        )
         .one()
     )
     assert new_price.min_order_qty == 250
@@ -395,7 +399,11 @@ def test_apply_match_overwrites_moq_when_entry_has_explicit_value(
 
     new_price = (
         session.query(Price)
-        .filter(Price.material_id == material.id, Price.supplier_id == supplier.id, Price.valid_to.is_(None))
+        .filter(
+            Price.material_id == material.id,
+            Price.supplier_id == supplier.id,
+            Price.valid_to.is_(None),
+        )
         .one()
     )
     assert new_price.min_order_qty == 500

@@ -48,7 +48,7 @@ ATTRIBUTION_RULES = (
     "no_visit",
 )
 DEADLINE_SOURCES = ("history", "current")
-SYNC_STATUSES = ("ok", "running", "error", "auth_failed", "aborted")
+SYNC_STATUSES = ("ok", "running", "error", "auth_failed", "aborted", "config_error")
 
 
 def _one_of(column: str, values: tuple[str, ...]) -> str:

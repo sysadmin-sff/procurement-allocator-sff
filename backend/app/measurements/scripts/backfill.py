@@ -54,7 +54,7 @@ def main(
         settings = MeasurementsSettings()
     if client is None:
         try:
-            settings.validate_for_worker()
+            settings.validate_for_worker(require_amo=True)
         except MeasurementsConfigError as exc:
             print(f"invalid measurements settings: {exc}", file=sys.stderr)
             return CONFIG_ERROR_EXIT

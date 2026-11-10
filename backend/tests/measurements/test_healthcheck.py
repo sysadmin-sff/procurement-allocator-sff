@@ -45,3 +45,12 @@ def test_missing_heartbeat_is_unhealthy(sync_tables_clean):
 def test_heartbeat_age_limit_is_three_poll_intervals(sync_tables_clean, age, healthy):
     _beat(NOW - age)
     assert check(engine, _settings(), NOW)[0] is healthy
+
+
+def test_unparseable_config_still_checks_the_heartbeat(monkeypatch):
+    from app.measurements.healthcheck import settings_for_check
+
+    monkeypatch.setenv("MEASUREMENTS_SYNC_ENABLED", "maybe")
+    settings = settings_for_check()
+    assert settings.sync_enabled is True
+    assert settings.poll_interval_seconds == 300

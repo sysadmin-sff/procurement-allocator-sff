@@ -133,22 +133,37 @@ def test_lead_gone_from_amo_is_marked_deleted(env):
     assert env.db.get(MeasurementsLead, FIRST_LEAD + 20).deleted_at == env.now
 
 
-def test_closing_the_transition_trips_the_fuse_when_it_retypes_too_much(env):
+def test_config_reclassification_past_five_percent_is_applied(env):
     env.settings = MeasurementsSettings(
         _env_file=None, legacy_meetings_until=datetime.fromtimestamp(T0 - 10, timezone.utc)
     )
-    reconcile(env)  # 10 of 40 rows = 25%
-    assert env.state("reconcile").last_status == "aborted"
-    assert env.visit(FIRST_TASK).deleted_at is None
+    reconcile(env)  # 10 of 40 rows = 25%, all caused by the config change
+    state = env.state("reconcile")
+    assert state.last_status == "ok"
+    assert state.counters["reclassified_retyped"] == 10
+    assert state.counters["visit_removals"] == 0
+    assert active_visits(env) == COUNT - 10
+
+
+def test_config_reclassification_applies_even_when_amo_answers_trip_the_fuse(env):
+    env.settings = MeasurementsSettings(
+        _env_file=None, legacy_meetings_until=datetime.fromtimestamp(T0 - 10, timezone.utc)
+    )
+    for number in range(20, 40):
+        del env.amo.tasks[FIRST_TASK + number]
+    reconcile(env)
+    state = env.state("reconcile")
+    assert state.last_status == "aborted"
+    assert state.counters["reclassified_retyped"] == 10
+    assert env.visit(FIRST_TASK).deleted_reason == "retyped"
+    assert env.visit(FIRST_TASK + 20).deleted_at is None
 
 
 def test_closing_the_transition_recomputes_kind(env):
     env.settings = MeasurementsSettings(
         _env_file=None, legacy_meetings_until=datetime.fromtimestamp(T0 - 10, timezone.utc)
     )
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr("app.measurements.reconcile._SAFETY_SHARE", 0.5)
-        reconcile(env)
+    reconcile(env)
     assert env.visit(FIRST_TASK).deleted_reason == "retyped"
     assert env.visit(FIRST_TASK + 10).deleted_at is None
     assert env.state("reconcile").counters["post_cutover_meeting_ignored"] == 10
@@ -159,10 +174,7 @@ def test_kind_is_recomputed_from_our_data_when_amo_is_down(env):
         _env_file=None, legacy_meetings_until=datetime.fromtimestamp(T0 - 10, timezone.utc)
     )
     env.amo.fail_when = lambda request: httpx.Response(503)
-    # 10 of 40 legacy rows would be retyped: lift the fuse for this case only.
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr("app.measurements.reconcile._SAFETY_SHARE", 0.5)
-        reconcile(env)
+    reconcile(env)
     assert env.visit(FIRST_TASK).deleted_reason == "retyped"
     state = env.state("reconcile")
     assert state.last_status == "error"
@@ -173,9 +185,7 @@ def test_reopening_the_transition_restores_from_our_data(env):
     test_kind_is_recomputed_from_our_data_when_amo_is_down(env)
     env.settings = MeasurementsSettings(_env_file=None)
     env.amo.fail_when = lambda request: httpx.Response(503)
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr("app.measurements.reconcile._SAFETY_SHARE", 0.5)
-        reconcile(env)
+    reconcile(env)
     visit = env.visit(FIRST_TASK)
     assert visit.deleted_at is None
     assert visit.deleted_reason is None

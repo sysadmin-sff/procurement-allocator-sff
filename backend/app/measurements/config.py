@@ -70,15 +70,22 @@ class MeasurementsSettings(MeasurementsFlags):
     def field_event_type(self) -> str:
         return f"custom_field_{self.field_id}_value_changed"
 
-    def validate_for_worker(self) -> None:
-        """Raises at worker start, listing every invalid setting at once."""
+    def validate_for_worker(self, *, require_amo: bool | None = None) -> None:
+        """Raises listing every invalid setting at once.
+
+        The token and base URL are required only when amo is read: when sync is
+        enabled, or always with `require_amo=True` (the backfill). A base URL that
+        is given is checked either way.
+        """
         problems: list[str] = []
+        needs_amo = self.sync_enabled if require_amo is None else require_amo
 
         token = self.amo_access_token
-        if token is None or not token.get_secret_value().strip():
+        if needs_amo and (token is None or not token.get_secret_value().strip()):
             problems.append("amo_access_token is required")
         if self.amo_base_url is None:
-            problems.append("amo_base_url is required")
+            if needs_amo:
+                problems.append("amo_base_url is required")
         elif not _is_amo_url(self.amo_base_url):
             problems.append("amo_base_url must be https on amocrm.ru or amocrm.com")
 

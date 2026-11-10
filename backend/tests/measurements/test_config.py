@@ -67,12 +67,27 @@ def test_valid_settings_pass_worker_validation():
 def test_worker_validation_requires(missing):
     values = {key: value for key, value in VALID.items() if key != missing}
     with pytest.raises(MeasurementsConfigError, match=missing):
-        _settings(**values).validate_for_worker()
+        _settings(sync_enabled=True, **values).validate_for_worker()
+
+
+def test_disabled_sync_needs_no_token_or_base_url():
+    _settings(sync_enabled=False).validate_for_worker()
+
+
+def test_amo_access_can_be_required_regardless_of_the_flag():
+    """The backfill always talks to amo."""
+    with pytest.raises(MeasurementsConfigError, match="amo_access_token"):
+        _settings(sync_enabled=False).validate_for_worker(require_amo=True)
+
+
+def test_a_given_base_url_is_checked_even_when_sync_is_disabled():
+    with pytest.raises(MeasurementsConfigError, match="amo_base_url"):
+        _settings(sync_enabled=False, amo_base_url="http://evil.com").validate_for_worker()
 
 
 def test_worker_validation_rejects_an_empty_token():
     with pytest.raises(MeasurementsConfigError, match="amo_access_token"):
-        _settings(**{**VALID, "amo_access_token": "  "}).validate_for_worker()
+        _settings(sync_enabled=True, **{**VALID, "amo_access_token": "  "}).validate_for_worker()
 
 
 @pytest.mark.parametrize(
@@ -140,6 +155,6 @@ def test_timezone_must_exist():
 
 def test_all_problems_are_reported_together():
     with pytest.raises(MeasurementsConfigError) as exc_info:
-        _settings().validate_for_worker()
+        _settings(sync_enabled=True).validate_for_worker()
     assert "amo_access_token" in str(exc_info.value)
     assert "amo_base_url" in str(exc_info.value)

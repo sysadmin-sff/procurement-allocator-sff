@@ -281,10 +281,15 @@ MEASUREMENTS_AMO_ACCESS_TOKEN=<токен>
 `Authorization`, логгер `httpx` поднят до WARNING, в
 `measurements_sync_state` пишутся только код статуса и класс ошибки.
 
-Воркер при старте проверяет настройки: токен, `https` и домен
-`amocrm.ru`/`amocrm.com` у `MEASUREMENTS_AMO_BASE_URL`, карту замерщиков.
-При ошибке он выходит с кодом 2, сообщение в логе называет параметр, но не его
-значение.
+Воркер проверяет настройки: карту замерщиков, таймзону, даты, а при
+`MEASUREMENTS_SYNC_ENABLED=true` ещё токен и `MEASUREMENTS_AMO_BASE_URL`
+(`https`, домен `amocrm.ru`/`amocrm.com`). При `false` токен и URL не нужны.
+Ошибка конфига процесс не роняет: статус `config_error` в
+`measurements_sync_state` (поток `worker`), heartbeat продолжается, перепроверка
+раз в час. Сообщение в логе называет параметр, но не его значение. Значения из
+env-файла попадают в контейнер при его создании, поэтому после исправления файла
+нужно `up -d --force-recreate measurements-worker`. Бэкфилл требует токен и URL
+всегда и при ошибке конфига выходит с кодом 2.
 
 ### Порядок выката
 
@@ -360,17 +365,22 @@ for s in backend postgres; do
 ### Эксплуатация
 
 - **Расписание:** опрос каждые 5 минут, справочники раз в час, сверка в 03:30
-  America/New_York.
-- **Предохранитель сверки:** если на удаление попадает больше 5% строк, сверка
-  прерывается со статусом `aborted` и ничего не пишет. Счётчики
-  `visit_removals`/`lead_removals` в `measurements_sync_state.counters`.
+  America/New_York. При старте, если последняя успешная сверка старше 24 часов
+  (или её не было), сверка запускается сразу.
+- **Предохранитель сверки:** если удаления и retype, выведенные из ответов amo,
+  затрагивают больше 5% строк, сверка прерывается со статусом `aborted` и эти
+  изменения не пишет (`visit_removals`/`lead_removals` в
+  `measurements_sync_state.counters`). Переклассификация `kind` по конфигу
+  (`legacy_meetings_until`, `cutover_at`, карта замерщиков) применяется всегда,
+  в том числе при срабатывании предохранителя: `reclassified_retyped` /
+  `reclassified_restored`.
 - **Healthcheck** (`python -m app.measurements.healthcheck`): unhealthy, если
   heartbeat старше трёх интервалов опроса (15 минут). При
   `MEASUREMENTS_SYNC_ENABLED=false` всегда healthy: воркер намеренно спит.
 - **Остановка:** SIGTERM откатывает текущую транзакцию, освобождает advisory
   lock и завершает процесс с кодом 0 (`stop_grace_period: 30s`).
-- **Коды выхода:** 0 — штатная остановка, 2 — неверные настройки, 3 — lock
-  занят другим воркером или бэкфиллом.
+- **Коды выхода воркера:** 0 — штатная остановка, 3 — lock занят другим
+  воркером или бэкфиллом. Бэкфилл: 2 — неверные настройки, 3 — lock занят.
 - **Логи:** драйвер `json-file`, `max-size: 10m`, `max-file: 5` (только для
   этого сервиса): `docker compose --profile measurements logs measurements-worker`.
 - **Откат:** см. «План отката» ADR-0051. Уровень 1 —

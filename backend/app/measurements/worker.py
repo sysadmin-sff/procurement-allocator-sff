@@ -2,7 +2,9 @@
 
 One instance at a time, enforced with a Postgres advisory lock that the
 backfill script also takes. SIGTERM rolls back the open transaction, releases
-the lock and exits 0.
+the lock and exits 0. An invalid configuration never stops the process: it
+reports `config_error`, keeps the heartbeat and re-reads the settings hourly
+(ADR-0051, 2026-11-10 change).
 """
 
 import logging
@@ -14,6 +16,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+from pydantic import ValidationError
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -29,8 +32,11 @@ logger = logging.getLogger("app.measurements.worker")
 
 LOCK_KEY = 510051  # ADR-0051
 LOCK_BUSY_EXIT = 3
-CONFIG_ERROR_EXIT = 2
+CONFIG_ERROR_EXIT = 2  # used by the backfill CLI; the worker itself keeps running
 AUTH_RECHECK = timedelta(hours=1)
+CONFIG_RECHECK = timedelta(hours=1)
+STARTUP_RECONCILE_AFTER = timedelta(hours=24)
+DEFAULT_POLL_SECONDS = 300
 LOCK_BUSY_MESSAGE = "another measurements worker or backfill holds the advisory lock; exiting"
 
 
@@ -79,23 +85,35 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def describe_config_error(exc: Exception) -> str:
+    """Names the invalid settings only. pydantic's own message would echo the values."""
+    if isinstance(exc, ValidationError):
+        fields = sorted({".".join(str(part) for part in error["loc"]) for error in exc.errors()})
+        return "cannot parse: " + ", ".join(fields)
+    return str(exc)
+
+
 class Worker:
     def __init__(
         self,
-        settings: MeasurementsSettings,
         engine: Engine,
-        client: AmoClient,
         *,
+        load_settings: Callable[[], MeasurementsSettings],
+        make_client: Callable[[MeasurementsSettings], AmoClient],
         now: Callable[[], datetime] = _utcnow,
         sleep: Callable[[float], None] = time.sleep,
     ):
-        self._settings = settings
         self._engine = engine
-        self._client = client
+        self._load_settings = load_settings
+        self._make_client = make_client
         self._now = now
         self._sleep = sleep
         self._sessions = sessionmaker(bind=engine, autoflush=False)
+        self._settings: MeasurementsSettings | None = None
+        self._client: AmoClient | None = None
+        self._config_checked_at: datetime | None = None
         self._auth_blocked_until: datetime | None = None
+        self._startup_check_pending = True
 
     def run(self) -> int:
         lock = acquire_lock(self._engine)
@@ -108,7 +126,7 @@ class Worker:
         try:
             while True:
                 self.tick(session)
-                self._sleep(self._settings.poll_interval_seconds)
+                self._sleep(self._poll_seconds())
         except StopRequested:
             logger.info("measurements worker stopping on SIGTERM")
             return 0
@@ -122,7 +140,12 @@ class Worker:
 
     def tick(self, session: Session) -> None:
         now = self._now()
-        if not self._settings.sync_enabled:
+        settings = self._ensure_settings(now)
+        if settings is None:
+            self._heartbeat(session, "config_error")
+            session.commit()
+            return
+        if not settings.sync_enabled:
             self._heartbeat(session, "ok")
             session.commit()
             return
@@ -136,16 +159,16 @@ class Worker:
         ctx = SyncContext(
             db=session,
             client=self._client,
-            settings=self._settings,
+            settings=settings,
             now=self._now,
             heartbeat=lambda: self._heartbeat(session, "running"),
         )
         try:
-            if reference_due(self._last_attempt(session, "reference_custom_fields"), now):
+            if reference_due(self._state_value(session, "reference_custom_fields"), now):
                 run_reference_cycle(ctx)
             run_cycle(ctx)
-            zone = ZoneInfo(self._settings.timezone)
-            if reconcile_due(self._last_attempt(session, "reconcile"), now, zone):
+            if self._reconcile_wanted(session, settings, now):
+                self._startup_check_pending = False
                 run_reconcile(ctx)
         except AmoAuthError:
             self._auth_blocked_until = now + AUTH_RECHECK
@@ -157,6 +180,40 @@ class Worker:
         self._heartbeat(session, "ok")
         session.commit()
 
+    def _ensure_settings(self, now: datetime) -> MeasurementsSettings | None:
+        if self._settings is not None:
+            return self._settings
+        if self._config_checked_at is not None and now - self._config_checked_at < CONFIG_RECHECK:
+            return None
+        self._config_checked_at = now
+        try:
+            settings = self._load_settings()
+            settings.validate_for_worker()
+        except (ValidationError, MeasurementsConfigError) as exc:
+            logger.error(
+                "invalid measurements settings, rechecking hourly: %s", describe_config_error(exc)
+            )
+            return None
+        self._settings = settings
+        if settings.sync_enabled:
+            self._client = self._make_client(settings)
+        return settings
+
+    def _reconcile_wanted(
+        self, session: Session, settings: MeasurementsSettings, now: datetime
+    ) -> bool:
+        reconcile = session.get(MeasurementsSyncState, "reconcile")
+        if self._startup_check_pending:
+            last_success = reconcile.last_success_at if reconcile else None
+            if last_success is None or now - last_success > STARTUP_RECONCILE_AFTER:
+                return True
+            self._startup_check_pending = False
+        last_attempt = reconcile.last_attempt_at if reconcile else None
+        return reconcile_due(last_attempt, now, ZoneInfo(settings.timezone))
+
+    def _poll_seconds(self) -> float:
+        return self._settings.poll_interval_seconds if self._settings else DEFAULT_POLL_SECONDS
+
     def _heartbeat(self, session: Session, status: str) -> None:
         state = session.get(MeasurementsSyncState, "worker")
         if state is None:
@@ -166,7 +223,7 @@ class Worker:
         state.last_status = status
 
     @staticmethod
-    def _last_attempt(session: Session, stream: str) -> datetime | None:
+    def _state_value(session: Session, stream: str) -> datetime | None:
         state = session.get(MeasurementsSyncState, stream)
         return state.last_attempt_at if state else None
 
@@ -188,21 +245,21 @@ class Worker:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
-    settings = MeasurementsSettings()
-    try:
-        settings.validate_for_worker()
-    except MeasurementsConfigError as exc:
-        logger.error("invalid measurements settings: %s", exc)
-        return CONFIG_ERROR_EXIT
-
-    from app.core.config import settings as core_settings  # noqa: PLC0415 - after validation
+    from app.core.config import settings as core_settings  # noqa: PLC0415
 
     engine = make_engine(core_settings.database_url)
-    client = AmoClient(settings.amo_base_url, settings.amo_access_token)
+    clients: list[AmoClient] = []
+
+    def make_client(settings: MeasurementsSettings) -> AmoClient:
+        client = AmoClient(settings.amo_base_url, settings.amo_access_token)
+        clients.append(client)
+        return client
+
     try:
-        return Worker(settings, engine, client).run()
+        return Worker(engine, load_settings=MeasurementsSettings, make_client=make_client).run()
     finally:
-        client.close()
+        for client in clients:
+            client.close()
         engine.dispose()
 
 

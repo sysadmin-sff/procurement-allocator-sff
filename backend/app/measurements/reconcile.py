@@ -115,7 +115,9 @@ def _reconcile(ctx: SyncContext, counters: Counter) -> None:
     except AmoError as exc:
         amo_error = exc
 
-    visit_removals = set(db_retype)
+    # Only removals implied by amo's answers count toward the fuse. Changes that
+    # follow from our own settings (2026-11-10 change) always apply.
+    visit_removals: set[int] = set()
     missing: set[int] = set()
     lead_removals: set[int] = set()
     if listed is not None:
@@ -125,17 +127,13 @@ def _reconcile(ctx: SyncContext, counters: Counter) -> None:
             task_id
             for task_id, raw in listed.items()
             if task_id in active and _listed_kind(ctx, raw) is None
-        }
+        } - db_retype
         lead_removals = set(known_leads) - set(snapshots)
 
     counters["active_visits"] = len(active)
     counters["visit_removals"] = len(visit_removals)
     counters["known_leads"] = len(known_leads)
     counters["lead_removals"] = len(lead_removals)
-    if _too_many(len(visit_removals), len(active)) or _too_many(
-        len(lead_removals), len(known_leads)
-    ):
-        raise ReconcileAborted("reconciliation would remove more than 5% of rows")
 
     now = ctx.now()
     if db_retype:
@@ -153,6 +151,20 @@ def _reconcile(ctx: SyncContext, counters: Counter) -> None:
     counters["reclassified_retyped"] = len(db_retype)
     counters["reclassified_restored"] = len(db_restore)
     _commit(ctx)
+
+    if _too_many(len(visit_removals), len(active)) or _too_many(
+        len(lead_removals), len(known_leads)
+    ):
+        changed = db_retype | db_restore
+        if changed:
+            for lead_id in set(
+                db.scalars(
+                    select(MeasurementsVisit.lead_id).where(MeasurementsVisit.task_id.in_(changed))
+                ).all()
+            ):
+                recompute_lead(db, lead_id, ctx.settings, now)
+                _commit(ctx)
+        raise ReconcileAborted("amo answers would remove more than 5% of rows")
 
     if listed is not None:
         listing_counters: Counter = Counter()

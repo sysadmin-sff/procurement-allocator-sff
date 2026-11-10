@@ -7,6 +7,7 @@ Healthy when MEASUREMENTS_SYNC_ENABLED is false: the worker sleeps on purpose.
 import sys
 from datetime import datetime, timedelta, timezone
 
+from pydantic import ValidationError
 from sqlalchemy import create_engine, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.pool import NullPool
@@ -32,8 +33,16 @@ def check(engine: Engine, settings: MeasurementsSettings, now: datetime) -> tupl
     return True, f"healthy: heartbeat is {int(age.total_seconds())}s old"
 
 
+def settings_for_check() -> MeasurementsSettings:
+    """Unparseable settings are a config_error, not a dead worker: check its heartbeat."""
+    try:
+        return MeasurementsSettings()
+    except ValidationError:
+        return MeasurementsSettings.model_construct(sync_enabled=True)
+
+
 def main() -> int:
-    settings = MeasurementsSettings()
+    settings = settings_for_check()
     if not settings.sync_enabled:
         print("healthy: sync disabled")
         return 0

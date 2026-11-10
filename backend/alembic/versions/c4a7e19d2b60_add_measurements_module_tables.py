@@ -192,7 +192,7 @@ def upgrade() -> None:
             server_default=sa.text("'{}'::jsonb"),
         ),
         sa.CheckConstraint(
-            "last_status IN ('ok', 'running', 'error', 'auth_failed', 'aborted')",
+            "last_status IN ('ok', 'running', 'error', 'auth_failed', 'aborted', 'config_error')",
             name="ck_measurements_sync_state_last_status",
         ),
     )

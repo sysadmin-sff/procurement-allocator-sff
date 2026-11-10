@@ -34,6 +34,7 @@ from app.measurements.outcomes import (
     OutcomeResult,
     OutcomeVisit,
     Pipelines,
+    SiteVisitResult,
     StatusChange,
     compute_outcomes,
 )
@@ -142,17 +143,22 @@ def _status_side(value: list | None) -> tuple[int | None, int | None]:
 
 def _effective_results(
     history: LeadHistory, result: AttributionResult, outcome_types: dict[int, str | None]
-) -> dict[int, str]:
-    """task_id -> outcome_type of the result standing on that visit."""
-    after = {change.event_id: change.after for change in history.field_changes}
-    found: dict[int, str] = {}
+) -> dict[int, SiteVisitResult]:
+    """task_id -> the result standing on that visit, with its field event."""
+    changes = {change.event_id: change for change in history.field_changes}
+    found: dict[int, SiteVisitResult] = {}
     for row in result.attributions:
         if not row.is_effective or row.task_id is None:
             continue
-        enum_id = history.snapshot_enum_id if row.event_id is None else after.get(row.event_id)
+        change = changes.get(row.event_id) if row.event_id is not None else None
+        enum_id = history.snapshot_enum_id if row.event_id is None else change.after
         outcome_type = outcome_types.get(enum_id)
         if outcome_type is not None:
-            found[row.task_id] = outcome_type
+            found[row.task_id] = SiteVisitResult(
+                outcome_type,
+                occurred_at=change.occurred_at if change else None,
+                event_id=row.event_id,
+            )
     return found
 
 
@@ -170,8 +176,24 @@ def _status_changes(db: Session, lead_id: int) -> list[StatusChange]:
     return changes
 
 
-def compute_lead(db: Session, lead_id: int, settings: MeasurementsSettings) -> LeadDerived:
-    """Reads only: the dry-run of the recompute script calls this alone."""
+def load_field_values(db: Session) -> list:
+    """The Site Visit Result mapping: (enum_id, visit_occurred, outcome_type) rows."""
+    return db.execute(
+        select(
+            MeasurementsFieldValue.enum_id,
+            MeasurementsFieldValue.visit_occurred,
+            MeasurementsFieldValue.outcome_type,
+        )
+    ).all()
+
+
+def compute_lead(
+    db: Session, lead_id: int, settings: MeasurementsSettings, field_values: list | None = None
+) -> LeadDerived:
+    """Reads only: the dry-run of the recompute script calls this alone.
+
+    A caller recomputing many leads passes `field_values` read once.
+    """
     lead = db.execute(
         select(MeasurementsLead.pipeline_id, MeasurementsLead.deleted_at).where(
             MeasurementsLead.lead_id == lead_id
@@ -180,13 +202,8 @@ def compute_lead(db: Session, lead_id: int, settings: MeasurementsSettings) -> L
     if lead_id in settings.excluded_lead_ids or (lead is not None and lead.deleted_at is not None):
         return _SKIPPED
 
-    field_values = db.execute(
-        select(
-            MeasurementsFieldValue.enum_id,
-            MeasurementsFieldValue.visit_occurred,
-            MeasurementsFieldValue.outcome_type,
-        )
-    ).all()
+    if field_values is None:
+        field_values = load_field_values(db)
     history = _load_history(db, lead_id, settings)
     attribution = attribute(
         history,

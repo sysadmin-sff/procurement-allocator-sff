@@ -12,6 +12,7 @@ from sqlalchemy import func, select, update
 
 from app.auth.cookies import SESSION_COOKIE
 from app.core.database import SessionLocal
+from app.measurements import attribution_store
 from app.measurements.attribution_store import recompute_lead
 from app.measurements.config import MeasurementsSettings
 from app.measurements.models import (
@@ -50,7 +51,7 @@ FUNNEL_TILL = CUTOVER_TS - 5 * DAY
 """A legacy visit before the cutover: its outcome comes from the funnel."""
 LATER = int(NOW.timestamp()) + 60
 """Inside the next polling window, which starts 2 minutes before NOW."""
-COMPLETED, SOLD = 627965, 627967
+COMPLETED, SOLD, DECLINED = 627965, 627967, 627969
 
 
 def status_raw(event_id, lead_id, created_at, after, before=(M, M_STAGE)) -> dict:
@@ -410,6 +411,45 @@ def test_snapshot_result_is_the_effective_site_visit_outcome(env):
     assert outcomes(env.db)[TASK].site_visit_outcome == "sold"
 
 
+# --- the group's Site Visit Result (ADR-0053, "Уточнения реализации")
+
+
+def _two_visits_one_day(env, field_at, enum_id) -> dict:
+    """Two primary visits of Nazar on 2026-11-09 NY, at T0 and T0 + 10 min."""
+    env.amo.add_task(make_task(task_id=TASK, complete_till=T0))
+    env.amo.add_task(make_task(task_id=TASK + 1, complete_till=T0 + 600))
+    env.amo.events = [field_event("f1", LEAD, field_at, None, enum_id)]
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=None)
+    env.cycle()
+    attribution = env.db.scalar(
+        select(MeasurementsResultAttribution).where(MeasurementsResultAttribution.event_id == "f1")
+    )
+    return {"attributed_to": attribution.task_id, "rows": outcomes(env.db)}
+
+
+def test_result_set_after_both_visits_lands_on_the_second_and_the_group_shows_it(env):
+    found = _two_visits_one_day(env, T0 + 3600, COMPLETED)
+    assert found["attributed_to"] == TASK + 1
+    rows = found["rows"]
+    assert (rows[TASK].is_duplicate, rows[TASK + 1].group_task_id) == (False, TASK)
+    assert rows[TASK].site_visit_outcome == rows[TASK + 1].site_visit_outcome == "completed"
+
+
+def test_decline_set_after_both_visits_makes_the_group_declined(env):
+    found = _two_visits_one_day(env, T0 + 3600, DECLINED)
+    assert found["attributed_to"] == TASK + 1
+    rows = found["rows"]
+    # Declined groups are not conducted (§2 M1); the metrics test checks M1 itself.
+    assert rows[TASK].site_visit_outcome == rows[TASK + 1].site_visit_outcome == "declined"
+
+
+def test_result_on_the_first_visit_only_is_the_groups(env):
+    found = _two_visits_one_day(env, T0 + 300, COMPLETED)
+    assert found["attributed_to"] == TASK
+    rows = found["rows"]
+    assert rows[TASK].site_visit_outcome == rows[TASK + 1].site_visit_outcome == "completed"
+
+
 # --- Д3: the recompute script
 
 
@@ -515,6 +555,26 @@ def test_script_removes_rows_of_a_lead_it_no_longer_knows(env, engine, capsys):
     assert code == 0
     assert printed["leads"] == "2"
     assert 1 not in outcomes(env.db)
+
+
+def test_script_reads_the_field_mapping_once_per_run(env, engine, capsys, monkeypatch):
+    _seed_for_script(env)
+    env.amo.add_task(legacy_task(task_id=TASK + 5, lead_id=LEAD + 1, updated_at=LATER))
+    env.amo.leads[LEAD + 1] = lead_snapshot(lead_id=LEAD + 1)
+    next_cycle(env)
+    calls = []
+    original = attribution_store.load_field_values
+
+    def counted(db):
+        calls.append(1)
+        return original(db)
+
+    monkeypatch.setattr(attribution_store, "load_field_values", counted)
+    monkeypatch.setattr(recompute_module, "load_field_values", counted)
+    code, printed = script(env, engine, capsys, "--apply")
+    assert code == 0
+    assert printed["leads"] == "2"
+    assert len(calls) == 1
 
 
 def test_script_waits_for_the_worker_lock(env, engine, capsys):

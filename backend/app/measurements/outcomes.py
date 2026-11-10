@@ -12,7 +12,8 @@ from zoneinfo import ZoneInfo
 
 from app.measurements.zone import ZONE
 
-OUTCOME_RULE_VERSION = 1
+OUTCOME_RULE_VERSION = 2
+"""2: a site_visit group takes the latest effective result of any of its visits."""
 
 WON, LOST = 142, 143
 """amo's closing statuses, the same ids in every pipeline."""
@@ -49,11 +50,30 @@ class StatusChange:
 
 
 @dataclass(frozen=True)
+class SiteVisitResult:
+    """The effective Site Visit Result of one visit.
+
+    `occurred_at` and `event_id` are those of the field event it came from;
+    both are None for `snapshot_fallback`, which exists only when the lead has
+    no field events at all.
+    """
+
+    outcome_type: str
+    occurred_at: datetime | None = None
+    event_id: str | None = None
+
+    def order(self) -> tuple[bool, datetime | None, str]:
+        return (self.occurred_at is not None, self.occurred_at, self.event_id or "")
+
+
+@dataclass(frozen=True)
 class VisitOutcome:
     """One row of `measurements_visit_outcomes`, without the bookkeeping columns.
 
-    `result_source` and the outcome columns are the group's: those of its
-    first visit (§1, "исход группы — исход основного").
+    `result_source` and the outcome columns are the group's. For `funnel` they
+    are those of its first visit (the window is shared). For `site_visit` the
+    outcome is the effective result of any visit of the group; with several,
+    the one whose field event is latest (ADR-0053, "Уточнения реализации").
     """
 
     task_id: int
@@ -162,17 +182,26 @@ def _ever_in_measurements(
     )
 
 
+def _group_site_visit_outcome(
+    members: list[OutcomeVisit], results: Mapping[int, SiteVisitResult]
+) -> str | None:
+    found = [results[member.task_id] for member in members if member.task_id in results]
+    if not found:
+        return None
+    return max(found, key=SiteVisitResult.order).outcome_type
+
+
 def compute_outcomes(
     visits: Iterable[OutcomeVisit],
     status_changes: Iterable[StatusChange],
     cutover_at: datetime,
     measurer_map: Mapping[int, str],
-    site_visit_results: Mapping[int, str],
+    site_visit_results: Mapping[int, SiteVisitResult],
     pipelines: Pipelines,
     snapshot_pipeline_id: int | None = None,
     zone: ZoneInfo = ZONE,
 ) -> OutcomeResult:
-    """`site_visit_results` maps task_id to the `outcome_type` of its effective result.
+    """`site_visit_results` maps task_id to its effective Site Visit Result.
 
     The rule set is chosen by the deadline (`scheduled_at >= cutover_at` is
     `site_visit`), never by `kind`.
@@ -195,7 +224,7 @@ def compute_outcomes(
         if first.scheduled_at >= cutover_at:
             result_source = "site_visit"
             funnel = None
-            site_visit_outcome = site_visit_results.get(first.task_id)
+            site_visit_outcome = _group_site_visit_outcome(members, site_visit_results)
         else:
             result_source = "funnel"
             funnel = _funnel_outcome(

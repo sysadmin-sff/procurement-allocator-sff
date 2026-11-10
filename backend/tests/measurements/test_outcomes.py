@@ -12,6 +12,7 @@ import pytest
 from app.measurements.outcomes import (
     OutcomeVisit,
     Pipelines,
+    SiteVisitResult,
     StatusChange,
     VisitOutcome,
     compute_outcomes,
@@ -44,13 +45,24 @@ def status(event_id, when, after, before=(M, M_STAGE)) -> StatusChange:
     return StatusChange(event_id, when, before[0], before[1], after[0], after[1])
 
 
+def result(outcome_type, when, event_id) -> SiteVisitResult:
+    return SiteVisitResult(outcome_type, occurred_at=when, event_id=event_id)
+
+
 def run(visits, changes=(), results=None, snapshot=None, **overrides):
+    """A plain string result gets a field event of its own on the cutover."""
+    effective = {
+        task_id: value
+        if isinstance(value, SiteVisitResult)
+        else result(value, CUTOVER, f"r{task_id:06d}")
+        for task_id, value in (results or {}).items()
+    }
     return compute_outcomes(
         visits,
         changes,
         overrides.get("cutover_at", CUTOVER),
         overrides.get("measurer_map", MEASURERS),
-        results or {},
+        effective,
         PIPELINES,
         snapshot,
     )
@@ -323,15 +335,48 @@ def test_snapshot_in_measurements_means_the_lead_was_there():
     assert funnel(rows[1]) == ("funnel", "no_data", "window")
 
 
-def test_group_outcome_is_the_first_visits_result():
-    rows = by_task(
-        run(
-            [visit(2, ny(11, 11, 15)), visit(1, ny(11, 11, 9))],
-            results={1: "completed", 2: "declined"},
-        )
-    )
+SAME_DAY = [visit(2, ny(11, 11, 15), kind="primary"), visit(1, ny(11, 11, 9), kind="primary")]
+
+
+def test_site_visit_group_takes_a_result_standing_on_the_duplicate():
+    rows = by_task(run(SAME_DAY, results={2: result("completed", ny(11, 11, 16), "f1")}))
     assert rows[1].site_visit_outcome == rows[2].site_visit_outcome == "completed"
     assert (rows[2].group_task_id, rows[2].is_duplicate) == (1, True)
+
+
+def test_site_visit_group_takes_a_decline_standing_on_the_duplicate():
+    rows = by_task(run(SAME_DAY, results={2: result("declined", ny(11, 11, 16), "f1")}))
+    assert rows[1].site_visit_outcome == rows[2].site_visit_outcome == "declined"
+
+
+def test_site_visit_group_takes_the_first_visits_result_when_only_it_has_one():
+    rows = by_task(run(SAME_DAY, results={1: result("completed", ny(11, 11, 10), "f1")}))
+    assert rows[1].site_visit_outcome == rows[2].site_visit_outcome == "completed"
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "expected"),
+    [
+        (("completed", ny(11, 11, 18), "f1"), ("declined", ny(11, 11, 16), "f2"), "completed"),
+        (("completed", ny(11, 11, 10), "f1"), ("declined", ny(11, 11, 16), "f2"), "declined"),
+        # Same moment: the larger event_id is the later event.
+        (("sold", ny(11, 11, 16), "f9"), ("declined", ny(11, 11, 16), "f2"), "sold"),
+        # A snapshot result has no event and loses to any event.
+        (("sold", None, None), ("not_sold", ny(11, 11, 16), "f2"), "not_sold"),
+    ],
+)
+def test_site_visit_group_with_several_results_takes_the_latest_event(first, second, expected):
+    results = {1: result(*first), 2: result(*second)}
+    rows = by_task(run(SAME_DAY, results=results))
+    assert rows[1].site_visit_outcome == rows[2].site_visit_outcome == expected
+
+
+def test_funnel_group_outcome_is_the_first_visits_even_with_results():
+    """Results never apply before the cutover; the funnel window is shared."""
+    visits = [visit(2, ny(10, 20, 14)), visit(1, ny(10, 20, 10))]
+    rows = by_task(run(visits, [status("e1", ny(10, 20, 16), (M, WON))], results={2: "declined"}))
+    assert funnel(rows[1]) == funnel(rows[2]) == ("funnel", "produced", None)
+    assert rows[1].site_visit_outcome is None and rows[2].site_visit_outcome is None
 
 
 def test_first_of_a_group_ties_on_task_id():
@@ -409,7 +454,13 @@ def _rich_lead():
         status("i", ny(10, 25, 10), (M, LOST), before=(M, M_STAGE)),
         status("j", ny(10, 26, 10), (SALES, 1), before=(M, LOST)),
     ]
-    return visits, changes, {6: "completed", 7: "declined", 10: "sold", 11: "declined"}
+    results = {
+        6: result("completed", ny(11, 10, 18), "r6"),
+        7: result("declined", ny(11, 10, 13), "r7"),
+        10: result("sold", ny(11, 12, 20), "r10"),
+        11: result("declined", ny(11, 12, 9), "r11"),
+    }
+    return visits, changes, results
 
 
 @pytest.mark.parametrize("seed", ["reversed", 0, 1, 2, 3, 4, 5, 6, 7])

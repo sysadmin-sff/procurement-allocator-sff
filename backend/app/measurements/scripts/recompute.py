@@ -17,7 +17,12 @@ from sqlalchemy import select, text, union
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.measurements.attribution_store import LeadDerived, compute_lead, write_lead
+from app.measurements.attribution_store import (
+    LeadDerived,
+    compute_lead,
+    load_field_values,
+    write_lead,
+)
 from app.measurements.config import MeasurementsConfigError, MeasurementsSettings
 from app.measurements.models import (
     MeasurementsLead,
@@ -99,8 +104,9 @@ _ALWAYS_PRINTED = (
 def run(db: Session, settings: MeasurementsSettings, *, apply: bool, now: datetime) -> Counter:
     counters: Counter = Counter({name: 0 for name in _ALWAYS_PRINTED})
     counters["stale_before"] = count_stale_outcomes(db)
+    field_values = load_field_values(db)
     for lead_id in lead_ids(db):
-        derived = compute_lead(db, lead_id, settings)
+        derived = compute_lead(db, lead_id, settings, field_values)
         count(counters, derived)
         if apply:
             write_lead(db, lead_id, derived, now)

@@ -536,8 +536,10 @@ erDiagram
 - `measurements_visit_outcomes` (ADR-0053 §3, ревизия `a83d51c07e94`) — исход и
   группа дублей каждого активного замера. Пересчитывается вместе с атрибуциями
   по сделке, в одной транзакции (`attribution_store.recompute_lead`), функцией
-  `outcomes.compute_outcomes`. Колонки исхода у всех замеров группы — исход её
-  основного замера. Строк нет у удалённых и retyped замеров, у сделок из
+  `outcomes.compute_outcomes`. Колонки исхода у всех замеров группы — исход
+  группы: `funnel` — у основного замера, `site_visit` — действующий результат
+  любого замера группы с наиболее поздним событием (ADR-0053, «Уточнения
+  реализации»). Строк нет у удалённых и retyped замеров, у сделок из
   `excluded_lead_ids` и у сделок с `deleted_at`. Первичное заполнение и смена
   `rule_version` — скрипт `python -m app.measurements.scripts.recompute`;
   `outcomes_stale` в `/measurements/status` — строки со старой `rule_version`.

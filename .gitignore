@@ -16,5 +16,6 @@ deploy/frontend_dist/
 scripts/amo_adr_probe.py
 scripts/amo_adr_probe2.py
 scripts/amo_adr_probe3.py
+scripts/amo_adr_probe4.py
 scripts/.env.amo
 scripts/probe_out/

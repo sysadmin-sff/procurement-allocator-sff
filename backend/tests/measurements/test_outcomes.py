@@ -392,6 +392,10 @@ def _rich_lead():
         visit(5, ny(10, 12)),
         visit(6, ny(11, 10), who=U),
         visit(7, ny(11, 10, 12), who=U),
+        visit(8, ny(10, 20)),
+        visit(9, ny(10, 25)),
+        visit(11, ny(11, 12), who=MATT, kind="primary"),
+        visit(10, ny(11, 12), who=MATT, kind="primary"),
     ]
     changes = [
         status("a", ny(10, 7, 12), (M, M_DELETED_STAGE)),
@@ -400,18 +404,36 @@ def _rich_lead():
         status("d", ny(10, 9, 11, 0, 1), (Q, Q_STAGE)),
         status("e", ny(10, 12, 9), (M, M_STAGE), before=(Q, Q_STAGE)),
         status("f", ny(10, 12, 18), (SALES, 1)),
+        status("g", ny(10, 20, 12), (M, WON), before=(M, M_STAGE)),
+        status("h", ny(10, 20, 12), (Q, Q_STAGE), before=(M, M_STAGE)),
+        status("i", ny(10, 25, 10), (M, LOST), before=(M, M_STAGE)),
+        status("j", ny(10, 26, 10), (SALES, 1), before=(M, LOST)),
     ]
-    return visits, changes, {6: "completed", 7: "declined"}
+    return visits, changes, {6: "completed", 7: "declined", 10: "sold", 11: "declined"}
 
 
-@pytest.mark.parametrize("seed", [0, 1, 2, 3, 4, 5, 6, 7])
+@pytest.mark.parametrize("seed", ["reversed", 0, 1, 2, 3, 4, 5, 6, 7])
 def test_shuffled_input_gives_the_same_result(seed):
     visits, changes, results = _rich_lead()
     expected = run(visits, changes, results)
-    rng = random.Random(seed)
-    rng.shuffle(visits)
-    rng.shuffle(changes)
+    if seed == "reversed":
+        visits.reverse()
+        changes.reverse()
+    else:
+        rng = random.Random(seed)
+        rng.shuffle(visits)
+        rng.shuffle(changes)
     assert run(visits, changes, results) == expected
+
+
+def test_first_exit_is_by_moment_then_event_id_whatever_the_input_order():
+    changes = [
+        status("e3", ny(10, 2), (Q, Q_STAGE), before=(M, WON)),
+        status("e2", ny(10, 1, 12), (Q, Q_STAGE)),
+        status("e1", ny(10, 1, 12), (M, WON)),
+    ]
+    [row] = run([visit(1, ny(10, 1))], changes).rows
+    assert (row.funnel_outcome, row.funnel_exit_event_id) == ("produced", "e1")
 
 
 def test_rich_lead_expected_rows():
@@ -425,6 +447,16 @@ def test_rich_lead_expected_rows():
         ("funnel", "produced", None),
     ]
     assert rows[4].funnel_exit_event_id == "d"
+    assert [(rows[task].funnel_outcome, rows[task].funnel_exit_event_id) for task in (8, 9)] == [
+        ("produced", "g"),
+        ("closed", "i"),
+    ]
+    assert (rows[10].is_duplicate, rows[11].is_duplicate, rows[11].group_task_id) == (
+        False,
+        True,
+        10,
+    )
+    assert rows[11].site_visit_outcome == "sold"
     assert [rows[task].is_duplicate for task in range(1, 8)] == [
         False,
         True,

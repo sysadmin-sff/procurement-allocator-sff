@@ -99,6 +99,11 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
   пересчитываются вместе с атрибуциями потоком `attribution`, сверкой (в том
   числе при сработавшем предохранителе), бэкфиллом и скриптом `recompute`.
   Таймзона модуля — константа `app.measurements.zone`, не настройка.
+  Метрики (ADR-0053) — `metrics.py`: SQL через SQLAlchemy Core по
+  `measurements_visit_outcomes` с соединением на `measurements_visits`, отношения
+  в `Decimal`; маршруты `GET /measurements/metrics` и `/metrics/visits` в том же
+  роутере, под тем же `require_measurements_access`, только агрегаты и
+  идентификаторы.
 
 ## Связанные документы
 

@@ -367,6 +367,37 @@ for s in backend postgres; do
 ```
 Ожидается `0` и `0`.
 
+### Выкат метрик (ADR-0053)
+
+На уже работающем модуле, по «Плану выката» ADR-0053: миграция → `recompute`
+dry-run → `--apply` → включение API.
+
+1. **Миграция** (ревизия `a83d51c07e94`, создаёт `measurements_visit_outcomes`,
+   данных не переносит). Перед ней — дамп БД.
+   ```
+   docker compose run --rm backend alembic upgrade head
+   ```
+2. **Пересчёт исходов, сначала dry-run.** Скрипт читает только нашу БД, amo не
+   трогает, держит тот же advisory lock, что воркер и бэкфилл (занят — код 3,
+   воркер на время останавливают). Dry-run идёт в read-only транзакции.
+   ```
+   docker compose --profile measurements stop measurements-worker
+   docker compose --profile measurements run --rm measurements-worker \
+     python -m app.measurements.scripts.recompute
+   docker compose --profile measurements run --rm measurements-worker \
+     python -m app.measurements.scripts.recompute --apply
+   docker compose --profile measurements up -d measurements-worker
+   ```
+   В выводе только числа: сделки, строки по `result_source` и `funnel_outcome`,
+   группы по исходу (`groups.funnel.<kind>.<outcome>`), группы с дублями,
+   `other_exit`, `stale_before`/`stale_after` (после `--apply` ожидается `0`).
+   Тот же скрипт запускают после смены `rule_version` исходов, если
+   `MEASUREMENTS_SYNC_ENABLED=false` (воркер тогда ничего не пересчитывает).
+3. **API.** Код маршрутов `GET /measurements/metrics` и
+   `GET /measurements/metrics/visits` выкатывается вместе с модулем, флаг тот
+   же (`MEASUREMENTS_ENABLED`). `outcomes_stale` в `/measurements/status` и в
+   ответе метрик должен быть `0`.
+
 ### Ротация токена
 
 1. Выпустить новый токен в той же интеграции и обновить таблицу дат выше.

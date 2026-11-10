@@ -59,6 +59,18 @@ class SyncContext:
     client: AmoClient
     settings: MeasurementsSettings
     now: Callable[[], datetime]
+    heartbeat: Callable[[], None] | None = None
+    """Called before each commit, so long runs keep the worker heartbeat fresh."""
+
+
+class ReconcileAborted(Exception):
+    """The nightly reconciliation would remove too many rows and wrote nothing."""
+
+
+def _commit(ctx: SyncContext) -> None:
+    if ctx.heartbeat is not None:
+        ctx.heartbeat()
+    ctx.db.commit()
 
 
 def _as_datetime(timestamp: int | None) -> datetime | None:
@@ -192,11 +204,19 @@ def _refresh_completed_at(ctx: SyncContext, task_id: int) -> None:
     )
 
 
-def _mark_retyped(ctx: SyncContext, task_id: int) -> None:
+def _mark_retyped(ctx: SyncContext, task_id: int, raw: dict) -> None:
+    """Keeps the current type and responsible, so `kind` can be re-derived from our data."""
     ctx.db.execute(
         update(MeasurementsVisit)
         .where(MeasurementsVisit.task_id == task_id, MeasurementsVisit.deleted_at.is_(None))
-        .values(deleted_at=ctx.now(), deleted_reason="retyped", synced_at=ctx.now())
+        .values(
+            deleted_at=ctx.now(),
+            deleted_reason="retyped",
+            task_type_id=raw["task_type_id"],
+            responsible_amo_user_id=raw["responsible_user_id"],
+            amo_updated_at=_as_datetime(raw["updated_at"]),
+            synced_at=ctx.now(),
+        )
     )
 
 
@@ -269,7 +289,7 @@ def _ingest_task(ctx: SyncContext, raw: dict, counters: Counter) -> None:
         if is_post_cutover_meeting_ignored(ctx.settings, *facts):
             counters["post_cutover_meeting_ignored"] += 1
         if known is not None and _as_datetime(raw["updated_at"]) >= known.amo_updated_at:
-            _mark_retyped(ctx, task_id)
+            _mark_retyped(ctx, task_id, raw)
             counters["retyped"] += 1
         return
 
@@ -314,9 +334,15 @@ def _run_stream(
     except Exception as exc:
         ctx.db.rollback()
         state = _state(ctx, stream)
-        state.last_status = "auth_failed" if isinstance(exc, AmoAuthError) else "error"
+        if isinstance(exc, AmoAuthError):
+            state.last_status = "auth_failed"
+        elif isinstance(exc, ReconcileAborted):
+            state.last_status = "aborted"
+        else:
+            state.last_status = "error"
         state.last_http_status = exc.status_code if isinstance(exc, AmoError) else None
         state.consecutive_failures += 1
+        state.counters = dict(counters)
         ctx.db.commit()
         logger.warning("measurements stream %s failed: %s", stream, type(exc).__name__)
         if isinstance(exc, AmoAuthError):
@@ -344,7 +370,7 @@ def _tasks_stream(ctx: SyncContext, task_types: Iterable[int]):
         for batch in ctx.client.iter_pages("/tasks", "tasks", params):
             for raw in batch:
                 _ingest_task(ctx, raw, counters)
-            ctx.db.commit()
+            _commit(ctx)
 
     return process
 
@@ -358,7 +384,7 @@ def _events_stream(ctx: SyncContext, event_type: str, handle: Callable[[dict, Co
         for batch in ctx.client.iter_pages("/events", "events", params):
             for raw in batch:
                 handle(raw, counters)
-            ctx.db.commit()
+            _commit(ctx)
 
     return process
 
@@ -463,7 +489,7 @@ def _leads_stream(ctx: SyncContext):
                 for raw in batch:
                     _upsert_lead(ctx, raw)
                     counters["stored"] += 1
-                ctx.db.commit()
+                _commit(ctx)
 
     return process
 
@@ -472,7 +498,7 @@ def _attribution_stream(ctx: SyncContext):
     def process(watermark: datetime | None, counters: Counter) -> None:
         for lead_id in _changed_lead_ids(ctx, watermark, include_snapshots=True):
             result = recompute_lead(ctx.db, lead_id, ctx.settings, ctx.now())
-            ctx.db.commit()
+            _commit(ctx)
             counters["recomputed"] += 1
             counters["drift"] += int(result.drift)
             for row in result.attributions:
@@ -560,7 +586,7 @@ def _custom_fields_stream(ctx: SyncContext):
             )
             counters["stored"] += 1
         ctx.db.execute(update(table).where(table.c.enum_id.not_in(seen)).values(is_active=False))
-        ctx.db.commit()
+        _commit(ctx)
 
     return process
 
@@ -583,7 +609,7 @@ def _users_stream(ctx: SyncContext):
                     )
                 )
                 counters["stored"] += 1
-            ctx.db.commit()
+            _commit(ctx)
 
     return process
 
@@ -611,7 +637,7 @@ def _pipelines_stream(ctx: SyncContext):
                         )
                     )
                     counters["stored"] += 1
-            ctx.db.commit()
+            _commit(ctx)
 
     return process
 

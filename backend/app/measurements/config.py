@@ -63,6 +63,8 @@ class MeasurementsSettings(MeasurementsFlags):
     """Unset while the transition period is open."""
     timezone: str = _NEW_YORK
     excluded_lead_ids: frozenset[int] = frozenset()
+    poll_interval_seconds: int = 300
+    """ADR-0051 §4: polling every 5 minutes."""
 
     @property
     def field_event_type(self) -> str:

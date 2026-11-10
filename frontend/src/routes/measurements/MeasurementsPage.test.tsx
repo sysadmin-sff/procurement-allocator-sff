@@ -399,3 +399,67 @@ describe('MeasurementsPage — состояния', () => {
     expect(await screen.findByRole('article', { name: 'Компания' })).toBeInTheDocument();
   });
 });
+
+describe('MeasurementsPage — переход в детализацию', () => {
+  beforeEach(() => {
+    metricsMock.mockReset();
+  });
+
+  function visitsTarget() {
+    const text = screen.getByTestId('location').textContent ?? '';
+    expect(text.startsWith('/measurements/visits?')).toBe(true);
+    return Object.fromEntries(new URLSearchParams(text.split('?')[1]));
+  }
+
+  it('company total opens the aligned range of the response', async () => {
+    const user = userEvent.setup();
+    metricsMock.mockResolvedValue(weekMetrics());
+    renderPage('/measurements?group_by=week');
+
+    const company = await screen.findByRole('article', { name: 'Компания' });
+    await user.click(within(company).getByTestId('conducted-total'));
+
+    expect(visitsTarget()).toEqual({ from: '2026-09-28', to: '2026-11-01' });
+  });
+
+  it('a measurer kind opens that measurer and kind', async () => {
+    const user = userEvent.setup();
+    metricsMock.mockResolvedValue(monthMetrics());
+    renderPage();
+
+    const matt = await screen.findByRole('article', { name: MATT });
+    await user.click(within(matt).getByTestId('conducted-additional'));
+
+    expect(visitsTarget()).toEqual({
+      from: '2026-10-01',
+      to: '2026-10-31',
+      measurer: MATT,
+      kind: 'additional',
+    });
+  });
+
+  it('with a measurer filter the company card keeps the filter', async () => {
+    const user = userEvent.setup();
+    const data = monthMetrics();
+    data.total.measurers = [data.total.measurers[1]];
+    metricsMock.mockResolvedValue(data);
+    renderPage('/measurements?measurer=Matt%20Measurement');
+
+    const company = await screen.findByRole('article', { name: 'Компания' });
+    await user.click(within(company).getByTestId('conducted-total'));
+
+    expect(visitsTarget()).toEqual({ from: '2026-10-01', to: '2026-10-31', measurer: MATT });
+  });
+
+  it('a period cell opens that period for that measurer', async () => {
+    const user = userEvent.setup();
+    metricsMock.mockResolvedValue(weekMetrics());
+    renderPage('/measurements?group_by=week');
+
+    const table = await screen.findByRole('table', { name: 'По периодам' });
+    const row = within(table).getByRole('row', { name: /05\.10–11\.10/ });
+    await user.click(within(row).getByTestId(`${NAZAR}-m1`));
+
+    expect(visitsTarget()).toEqual({ from: '2026-10-05', to: '2026-10-11', measurer: NAZAR });
+  });
+});

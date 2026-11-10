@@ -16,6 +16,7 @@ from app.measurements.models import (
     MeasurementsSyncState,
     MeasurementsUserAccess,
     MeasurementsVisit,
+    MeasurementsVisitOutcome,
 )
 from app.models import User, UserSession
 from tests.measurements.helpers import load_app
@@ -36,6 +37,7 @@ def db_session():
             MeasurementsAmoEvent,
             MeasurementsSyncState,
             MeasurementsUserAccess,
+            MeasurementsVisitOutcome,
         ):
             session.query(model).delete(synchronize_session=False)
         if user_ids:
@@ -122,6 +124,7 @@ def _reset_sync_tables() -> None:
             MeasurementsAmoEvent,
             MeasurementsSyncState,
             MeasurementsResultAttribution,
+            MeasurementsVisitOutcome,
             MeasurementsAmoUser,
             MeasurementsPipelineStatus,
             MeasurementsFieldValue,

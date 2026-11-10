@@ -93,6 +93,13 @@ def _listed_kind(ctx: SyncContext, raw: dict) -> str | None:
     )
 
 
+def _recompute_all(ctx: SyncContext, counters: Counter, now: datetime) -> None:
+    for lead_id in ctx.db.scalars(select(MeasurementsLead.lead_id)).all():
+        recompute_lead(ctx.db, lead_id, ctx.settings, now)
+        _commit(ctx)
+        counters["recomputed"] += 1
+
+
 def _reconcile(ctx: SyncContext, counters: Counter) -> None:
     db = ctx.db
     active = set(
@@ -155,15 +162,9 @@ def _reconcile(ctx: SyncContext, counters: Counter) -> None:
     if _too_many(len(visit_removals), len(active)) or _too_many(
         len(lead_removals), len(known_leads)
     ):
-        changed = db_retype | db_restore
-        if changed:
-            for lead_id in set(
-                db.scalars(
-                    select(MeasurementsVisit.lead_id).where(MeasurementsVisit.task_id.in_(changed))
-                ).all()
-            ):
-                recompute_lead(db, lead_id, ctx.settings, now)
-                _commit(ctx)
+        # ADR-0053 §3: recomputing reads only our data, which the fuse does not
+        # protect, so config and rule changes still reach every lead.
+        _recompute_all(ctx, counters, now)
         raise ReconcileAborted("amo answers would remove more than 5% of rows")
 
     if listed is not None:
@@ -201,10 +202,7 @@ def _reconcile(ctx: SyncContext, counters: Counter) -> None:
         counters["leads_deleted"] = len(lead_removals)
         _commit(ctx)
 
-    for lead_id in db.scalars(select(MeasurementsLead.lead_id)).all():
-        recompute_lead(db, lead_id, ctx.settings, now)
-        _commit(ctx)
-        counters["recomputed"] += 1
+    _recompute_all(ctx, counters, now)
 
     counters["transition_meetings_counted"] = db.scalar(
         select(func.count())

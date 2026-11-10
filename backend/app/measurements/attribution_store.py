@@ -1,6 +1,11 @@
-"""Loads a lead's history and replaces its derived attributions (ADR-0051 §3)."""
+"""Loads a lead's data and replaces its derived rows (ADR-0051 §3, ADR-0053 §3).
+
+Attributions and visit outcomes of a lead are replaced together, in the
+caller's transaction. An excluded or deleted lead keeps no derived rows.
+"""
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import delete, insert, select
@@ -22,10 +27,20 @@ from app.measurements.models import (
     MeasurementsLead,
     MeasurementsResultAttribution,
     MeasurementsVisit,
+    MeasurementsVisitOutcome,
+)
+from app.measurements.outcomes import (
+    OUTCOME_RULE_VERSION,
+    OutcomeResult,
+    OutcomeVisit,
+    Pipelines,
+    StatusChange,
+    compute_outcomes,
 )
 from app.measurements.zone import ZONE
 
 _TASK_DEADLINE_CHANGED = "task_deadline_changed"
+_LEAD_STATUS_CHANGED = "lead_status_changed"
 
 
 def _enum_id(value: list | None) -> int | None:
@@ -98,27 +113,132 @@ def _load_history(db: Session, lead_id: int, settings: MeasurementsSettings) -> 
     )
 
 
-def recompute_lead(
-    db: Session, lead_id: int, settings: MeasurementsSettings, computed_at: datetime
-) -> AttributionResult:
-    """Replaces the lead's rows. The caller commits, making it one transaction."""
-    mapping = dict(
-        db.execute(
-            select(MeasurementsFieldValue.enum_id, MeasurementsFieldValue.visit_occurred)
-        ).all()
-    )
-    result = attribute(
-        _load_history(db, lead_id, settings),
-        mapping,
+@dataclass(frozen=True)
+class LeadDerived:
+    """Everything recomputed for one lead, before it is written."""
+
+    attribution: AttributionResult
+    outcomes: OutcomeResult
+    kinds: dict[int, str]
+    """task_id -> kind of the lead's active visits, for counters."""
+    skipped: bool
+    """Excluded or deleted lead: its rows are removed and none are written."""
+
+
+_SKIPPED = LeadDerived(
+    attribution=AttributionResult(attributions=(), drift=False),
+    outcomes=OutcomeResult(rows=(), other_exit=0),
+    kinds={},
+    skipped=True,
+)
+
+
+def _status_side(value: list | None) -> tuple[int | None, int | None]:
+    if not value:
+        return None, None
+    status = value[0].get("lead_status") or {}
+    return status.get("pipeline_id"), status.get("id")
+
+
+def _effective_results(
+    history: LeadHistory, result: AttributionResult, outcome_types: dict[int, str | None]
+) -> dict[int, str]:
+    """task_id -> outcome_type of the result standing on that visit."""
+    after = {change.event_id: change.after for change in history.field_changes}
+    found: dict[int, str] = {}
+    for row in result.attributions:
+        if not row.is_effective or row.task_id is None:
+            continue
+        enum_id = history.snapshot_enum_id if row.event_id is None else after.get(row.event_id)
+        outcome_type = outcome_types.get(enum_id)
+        if outcome_type is not None:
+            found[row.task_id] = outcome_type
+    return found
+
+
+def _status_changes(db: Session, lead_id: int) -> list[StatusChange]:
+    changes = []
+    for event in db.execute(
+        select(MeasurementsAmoEvent).where(
+            MeasurementsAmoEvent.lead_id == lead_id,
+            MeasurementsAmoEvent.event_type == _LEAD_STATUS_CHANGED,
+        )
+    ).scalars():
+        before = _status_side(event.value_before)
+        after = _status_side(event.value_after)
+        changes.append(StatusChange(event.event_id, event.occurred_at, *before, *after))
+    return changes
+
+
+def compute_lead(db: Session, lead_id: int, settings: MeasurementsSettings) -> LeadDerived:
+    """Reads only: the dry-run of the recompute script calls this alone."""
+    lead = db.execute(
+        select(MeasurementsLead.pipeline_id, MeasurementsLead.deleted_at).where(
+            MeasurementsLead.lead_id == lead_id
+        )
+    ).first()
+    if lead_id in settings.excluded_lead_ids or (lead is not None and lead.deleted_at is not None):
+        return _SKIPPED
+
+    field_values = db.execute(
+        select(
+            MeasurementsFieldValue.enum_id,
+            MeasurementsFieldValue.visit_occurred,
+            MeasurementsFieldValue.outcome_type,
+        )
+    ).all()
+    history = _load_history(db, lead_id, settings)
+    attribution = attribute(
+        history,
+        {row.enum_id: row.visit_occurred for row in field_values},
         settings.cutover_at,
         ZONE,
     )
 
-    table = MeasurementsResultAttribution.__table__
-    db.execute(delete(table).where(table.c.lead_id == lead_id))
-    if result.attributions:
+    visits = db.execute(
+        select(
+            MeasurementsVisit.task_id,
+            MeasurementsVisit.scheduled_at,
+            MeasurementsVisit.responsible_amo_user_id,
+            MeasurementsVisit.kind,
+        ).where(MeasurementsVisit.lead_id == lead_id, MeasurementsVisit.deleted_at.is_(None))
+    ).all()
+    outcomes = compute_outcomes(
+        [
+            OutcomeVisit(row.task_id, row.scheduled_at, row.responsible_amo_user_id, row.kind)
+            for row in visits
+        ],
+        _status_changes(db, lead_id),
+        settings.cutover_at,
+        settings.measurer_map,
+        _effective_results(
+            history, attribution, {row.enum_id: row.outcome_type for row in field_values}
+        ),
+        Pipelines(
+            measurements=settings.pipeline_measurements_id,
+            qualification=settings.pipeline_qualification_id,
+            sales=settings.pipeline_sales_id,
+        ),
+        snapshot_pipeline_id=lead.pipeline_id if lead is not None else None,
+        zone=ZONE,
+    )
+    return LeadDerived(
+        attribution=attribution,
+        outcomes=outcomes,
+        kinds={row.task_id: row.kind for row in visits},
+        skipped=False,
+    )
+
+
+def write_lead(db: Session, lead_id: int, derived: LeadDerived, computed_at: datetime) -> None:
+    """Replaces the lead's attributions and outcomes. Does not commit."""
+    attributions = MeasurementsResultAttribution.__table__
+    outcomes = MeasurementsVisitOutcome.__table__
+    db.execute(delete(attributions).where(attributions.c.lead_id == lead_id))
+    db.execute(delete(outcomes).where(outcomes.c.lead_id == lead_id))
+    if derived.attribution.attributions:
         db.execute(
-            insert(table),
+            insert(attributions),
             [
                 {
                     "id": uuid.uuid4(),
@@ -131,7 +251,38 @@ def recompute_lead(
                     "rule_version": RULE_VERSION,
                     "computed_at": computed_at,
                 }
-                for row in result.attributions
+                for row in derived.attribution.attributions
             ],
         )
-    return result
+    if derived.outcomes.rows:
+        db.execute(
+            insert(outcomes),
+            [
+                {
+                    "task_id": row.task_id,
+                    "lead_id": lead_id,
+                    "measurer_key": row.measurer_key,
+                    "local_date": row.local_date,
+                    "group_task_id": row.group_task_id,
+                    "is_duplicate": row.is_duplicate,
+                    "result_source": row.result_source,
+                    "funnel_outcome": row.funnel_outcome,
+                    "no_data_reason": row.no_data_reason,
+                    "funnel_exit_event_id": row.funnel_exit_event_id,
+                    "site_visit_outcome": row.site_visit_outcome,
+                    "rule_version": OUTCOME_RULE_VERSION,
+                    "computed_at": computed_at,
+                }
+                for row in derived.outcomes.rows
+            ],
+        )
+
+
+def recompute_lead(
+    db: Session, lead_id: int, settings: MeasurementsSettings, computed_at: datetime
+) -> AttributionResult:
+    """Replaces the lead's attributions and outcomes together. The caller
+    commits, making it one transaction."""
+    derived = compute_lead(db, lead_id, settings)
+    write_lead(db, lead_id, derived, computed_at)
+    return derived.attribution

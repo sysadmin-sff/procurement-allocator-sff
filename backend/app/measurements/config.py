@@ -49,6 +49,8 @@ class MeasurementsSettings(MeasurementsFlags):
     """amo account id -> measurer key, one to one. A new account is one more entry."""
     pipeline_measurements_id: int = 8740486
     pipeline_sales_id: int = 8740490
+    pipeline_qualification_id: int = 8740374
+    """Qualification: a visit whose lead leaves Measurements for it was not held (ADR-0053 §3)."""
     cutover_at: datetime = datetime(2026, 11, 9, tzinfo=ZONE)
     legacy_meetings_until: datetime | None = None
     """Unset while the transition period is open."""

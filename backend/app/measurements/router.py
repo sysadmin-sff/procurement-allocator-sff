@@ -13,6 +13,7 @@ from app.measurements.models import (
     MeasurementsSyncState,
     MeasurementsVisit,
 )
+from app.measurements.stale import count_stale_outcomes
 
 router = APIRouter(
     prefix="/measurements",
@@ -48,6 +49,8 @@ class MeasurementsStatusOut(BaseModel):
     last_sync_at: datetime | None
     streams: list[MeasurementsStreamOut]
     counts: MeasurementsCountsOut
+    outcomes_stale: int
+    """Outcome rows computed by an older rule version (ADR-0053 §3)."""
 
 
 @router.get("/access", response_model=MeasurementsAccessOut)
@@ -88,4 +91,5 @@ def get_status(db: Session = Depends(get_db)) -> MeasurementsStatusOut:
             ),
             events=db.scalar(select(func.count()).select_from(MeasurementsAmoEvent)),
         ),
+        outcomes_stale=count_stale_outcomes(db),
     )

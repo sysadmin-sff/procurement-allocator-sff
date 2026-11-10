@@ -148,7 +148,7 @@ def test_late_decline_takes_the_last_past_visit():
     assert (row.task_id, row.rule) == (2, "late_decline")
 
 
-def test_late_decline_when_every_future_visit_already_occurred():
+def test_late_decline_when_the_free_visit_is_gone_but_a_past_one_exists():
     visits = [visit(1, at(3, 15))]
     result = run(
         visits,

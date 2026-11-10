@@ -361,6 +361,7 @@ def test_site_visit_group_takes_the_first_visits_result_when_only_it_has_one():
         (("completed", ny(11, 11, 10), "f1"), ("declined", ny(11, 11, 16), "f2"), "declined"),
         # Same moment: the larger event_id is the later event.
         (("sold", ny(11, 11, 16), "f9"), ("declined", ny(11, 11, 16), "f2"), "sold"),
+        (("declined", ny(11, 11, 16), "f2"), ("sold", ny(11, 11, 16), "f9"), "sold"),
         # A snapshot result has no event and loses to any event.
         (("sold", None, None), ("not_sold", ny(11, 11, 16), "f2"), "not_sold"),
     ],

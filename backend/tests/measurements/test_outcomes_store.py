@@ -450,6 +450,28 @@ def test_result_on_the_first_visit_only_is_the_groups(env):
     assert rows[TASK].site_visit_outcome == rows[TASK + 1].site_visit_outcome == "completed"
 
 
+def test_group_takes_the_later_field_event_not_the_larger_event_id(env):
+    """amo event ids are not in time order: the store must pass each result's moment."""
+    env.amo.add_task(make_task(task_id=TASK, complete_till=T0))
+    env.amo.add_task(make_task(task_id=TASK + 1, complete_till=T0 + 600))
+    env.amo.events = [
+        field_event("f9", LEAD, T0 + 300, None, COMPLETED),  # lands on the first visit
+        field_event("f1", LEAD, T0 + 3600, COMPLETED, DECLINED),  # lands on the second
+    ]
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=None)
+    env.cycle()
+    effective = dict(
+        env.db.execute(
+            select(
+                MeasurementsResultAttribution.event_id, MeasurementsResultAttribution.task_id
+            ).where(MeasurementsResultAttribution.is_effective.is_(True))
+        ).all()
+    )
+    assert effective == {"f9": TASK, "f1": TASK + 1}
+    rows = outcomes(env.db)
+    assert rows[TASK].site_visit_outcome == rows[TASK + 1].site_visit_outcome == "declined"
+
+
 # --- Д3: the recompute script
 
 

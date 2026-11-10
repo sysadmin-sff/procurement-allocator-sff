@@ -40,6 +40,9 @@ DEFAULT_POLL_SECONDS = 300
 LOCK_BUSY_MESSAGE = "another measurements worker or backfill holds the advisory lock; exiting"
 
 
+STOP_SIGNALS = (signal.SIGTERM, signal.SIGINT)
+
+
 class StopRequested(BaseException):
     """Raised from the SIGTERM handler. Not an Exception, so stream handlers let it pass."""
 
@@ -128,7 +131,7 @@ class Worker:
                 self.tick(session)
                 self._sleep(self._poll_seconds())
         except StopRequested:
-            logger.info("measurements worker stopping on SIGTERM")
+            logger.info("measurements worker stopping on a stop signal")
             return 0
         finally:
             try:
@@ -228,19 +231,20 @@ class Worker:
         return state.last_attempt_at if state else None
 
     @staticmethod
-    def _install_stop_handler():
+    def _install_stop_handler() -> dict:
+        """SIGTERM (docker stop) and SIGINT (Ctrl+C, also on Windows) stop the same way."""
         if threading.current_thread() is not threading.main_thread():
-            return None
+            return {}
 
         def stop(_signum, _frame):
             raise StopRequested
 
-        return signal.signal(signal.SIGTERM, stop)
+        return {signum: signal.signal(signum, stop) for signum in STOP_SIGNALS}
 
     @staticmethod
-    def _restore_stop_handler(previous) -> None:
-        if previous is not None:
-            signal.signal(signal.SIGTERM, previous)
+    def _restore_stop_handler(previous: dict) -> None:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 def main(argv: list[str] | None = None) -> int:

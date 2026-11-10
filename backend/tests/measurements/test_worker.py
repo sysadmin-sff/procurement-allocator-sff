@@ -91,14 +91,14 @@ def full_listings(env) -> int:
     )
 
 
-def stop_after(ticks: int, clock: Clock):
+def stop_after(ticks: int, clock: Clock, signum: int = signal.SIGTERM):
     calls = {"count": 0}
 
     def sleep(seconds: float) -> None:
         calls["count"] += 1
         clock.now += timedelta(seconds=seconds)
         if calls["count"] >= ticks:
-            signal.raise_signal(signal.SIGTERM)
+            signal.raise_signal(signum)
 
     return sleep
 
@@ -352,3 +352,22 @@ def test_disabled_sync_without_token_is_not_a_config_error(env, worker_engine):
         load_settings=lambda: MeasurementsSettings(_env_file=None, sync_enabled=False),
     ).run()
     assert worker_state(env).last_status == "ok"
+
+
+# --- Ctrl+C
+
+
+def test_ctrl_c_stops_like_sigterm(env, worker_engine):
+    clock = Clock(NOW)
+    code = make_worker(env, worker_engine, clock, stop_after(2, clock, signal.SIGINT)).run()
+    assert code == 0
+    second = acquire_lock(worker_engine)
+    assert second is not None
+    release_lock(second)
+
+
+def test_previous_sigint_handler_is_restored(env, worker_engine):
+    before = signal.getsignal(signal.SIGINT)
+    clock = Clock(NOW)
+    make_worker(env, worker_engine, clock, stop_after(1, clock, signal.SIGINT)).run()
+    assert signal.getsignal(signal.SIGINT) == before

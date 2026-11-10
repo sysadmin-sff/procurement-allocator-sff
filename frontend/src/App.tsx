@@ -6,6 +6,8 @@ import {
   CategoriesPage,
   LoginPage,
   MaterialsPage,
+  MeasurementsPage,
+  MeasurementVisitsPage,
   OrderDetailPage,
   PriceComparisonPage,
   PriceListImportReviewPage,
@@ -45,6 +47,8 @@ function App() {
         <Route path="/suppliers/:supplierId" element={<SupplierDetailPage />} />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/project-templates" element={<ProjectTemplatesPage />} />
+        <Route path="/measurements" element={<MeasurementsPage />} />
+        <Route path="/measurements/visits" element={<MeasurementVisitsPage />} />
       </Route>
     </Routes>
   );

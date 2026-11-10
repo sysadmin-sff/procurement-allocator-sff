@@ -300,15 +300,30 @@ env-файла попадают в контейнер при его создан
    ```
    docker compose run --rm backend alembic upgrade head
    ```
-2. **Выкат кода и проверка конфигурации.** Переменные модуля должны быть
-   только у `measurements-worker`. Команда печатает имена, не значения:
+2. **Выкат кода и проверка конфигурации.** Правило:
+   - у `backend` и `postgres` из переменных модуля допустима **только**
+     `MEASUREMENTS_ENABLED` (она лежит в `backend/.env`, который читают оба);
+   - `MEASUREMENTS_SYNC_ENABLED` и любые `MEASUREMENTS_AMO_*` у них — **никогда**,
+     они есть только у `measurements-worker`.
+
+   Обзор имён по сервисам, без значений:
    ```
    docker compose --profile measurements config --format json \
      | jq -r '.services | to_entries[] | "\(.key): \((.value.environment // {}) | keys | map(select(startswith("MEASUREMENTS_"))) | join(","))"'
    ```
-   Ожидается: у `backend` и `postgres` после двоеточия пусто, у
-   `measurements-worker` — три имени из файла секрета (и `MEASUREMENTS_ENABLED`,
-   если он задан в `backend/.env`).
+   Ожидается: у `backend` и `postgres` — пусто или только
+   `MEASUREMENTS_ENABLED`; у `measurements-worker` — имена из файла секрета
+   (`MEASUREMENTS_AMO_ACCESS_TOKEN`, `MEASUREMENTS_AMO_BASE_URL`,
+   `MEASUREMENTS_SYNC_ENABLED`) и `MEASUREMENTS_ENABLED`, если она задана.
+
+   Проверка правила — печатает только нарушения, при соблюдении вывод пуст:
+   ```
+   docker compose --profile measurements config --format json \
+     | jq -r '.services | to_entries[] | select(.key != "measurements-worker") | .key as $s
+              | (.value.environment // {}) | keys[]
+              | select(startswith("MEASUREMENTS_") and . != "MEASUREMENTS_ENABLED")
+              | "VIOLATION \($s): \(.)"'
+   ```
 3. **Бэкфилл.** Сначала dry-run, сверка счётчиков с amo (включая чтение сделок
    пачками по 50), затем `--apply`. Воркер в это время остановлен: бэкфилл
    держит тот же advisory lock, второй процесс выходит с кодом 3.

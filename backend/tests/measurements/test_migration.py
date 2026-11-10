@@ -35,6 +35,7 @@ MODULE_TABLES = {
     "measurements_user_access",
     "measurements_amo_users",
     "measurements_pipeline_statuses",
+    "measurements_visit_outcomes",
 }
 
 MODULE_INDEXES = {
@@ -45,6 +46,8 @@ MODULE_INDEXES = {
     "ix_measurements_amo_events_event_type_occurred_at",
     "ix_measurements_result_attributions_lead_id",
     "ix_measurements_result_attributions_task_id",
+    "ix_measurements_visit_outcomes_lead_id",
+    "ix_measurements_visit_outcomes_local_date",
 }
 
 # ADR-0051 "Изменение 2026-11-10"; the list lives in docs/known-issues.md.
@@ -72,6 +75,11 @@ VISIT_COLUMNS = (
     "is_all_day, is_completed, amo_updated_at, amo_created_at, synced_at"
 )
 VISIT_VALUES = "1, 2, 2, {kind}, 3, now(), false, false, now(), now(), now()"
+OUTCOME_COLUMNS = (
+    "task_id, lead_id, local_date, group_task_id, is_duplicate, result_source, "
+    "rule_version, computed_at"
+)
+OUTCOME_VALUES = "1, 2, current_date, 1, false, 'funnel', 1, now()"
 
 
 def _alembic(*args: str) -> subprocess.CompletedProcess:
@@ -116,7 +124,8 @@ def drift() -> list[tuple[str, str, str]]:
         return [_drift_key(diff) for diff in compare_metadata(context, Base.metadata)]
 
 
-MODULE_REVISIONS = ["c4a7e19d2b60", "f2b9d6a41c83"]
+MODULE_REVISIONS = ["c4a7e19d2b60", "f2b9d6a41c83", "a83d51c07e94"]
+OUTCOMES_REVISION = "a83d51c07e94"
 
 
 def test_module_revisions_form_one_chain_on_top_of_the_previous_head():
@@ -233,6 +242,19 @@ def test_foreign_drift_is_exactly_the_recorded_list(drift):
             "insert into measurements_sync_state (stream, last_status) values ('s', 'bogus')",
             id="sync_state.last_status",
         ),
+        *(
+            pytest.param(
+                f"insert into measurements_visit_outcomes ({OUTCOME_COLUMNS}, {column}) "
+                f"values ({OUTCOME_VALUES}, 'bogus')",
+                id=f"visit_outcomes.{column}",
+            )
+            for column in ("funnel_outcome", "no_data_reason", "site_visit_outcome")
+        ),
+        pytest.param(
+            f"insert into measurements_visit_outcomes ({OUTCOME_COLUMNS}) "
+            f"values ({OUTCOME_VALUES.replace('funnel', 'bogus')})",
+            id="visit_outcomes.result_source",
+        ),
     ],
 )
 def test_check_constraints_reject_unknown_enum_values(statement):
@@ -319,3 +341,92 @@ def test_ambiguous_decline_is_a_known_rule():
 def test_reference_tables_have_missing_since(table):
     columns = {column["name"]: column for column in inspect(engine).get_columns(table)}
     assert columns["missing_since"]["nullable"] is True
+
+
+def test_outcomes_revision_round_trip_touches_only_its_table():
+    """ADR-0053 §3: upgrade -> downgrade -> upgrade of the new revision alone."""
+    with engine.begin() as connection:
+        connection.execute(
+            text("insert into measurements_leads (lead_id, synced_at) values (1, now())")
+        )
+    try:
+        _alembic("downgrade", "f2b9d6a41c83")
+        assert "measurements_visit_outcomes" not in _table_names()
+        assert MODULE_TABLES - {"measurements_visit_outcomes"} <= _table_names()
+        with engine.connect() as connection:
+            assert (
+                connection.execute(text("select version_num from alembic_version")).scalar()
+                == "f2b9d6a41c83"
+            )
+            assert (
+                connection.execute(
+                    text("select count(*) from measurements_leads where lead_id = 1")
+                ).scalar()
+                == 1
+            )
+        _alembic("upgrade", "head")
+        assert "measurements_visit_outcomes" in _table_names()
+        indexes = {
+            index["name"] for index in inspect(engine).get_indexes("measurements_visit_outcomes")
+        }
+        assert indexes == {
+            "ix_measurements_visit_outcomes_lead_id",
+            "ix_measurements_visit_outcomes_local_date",
+        }
+    finally:
+        _alembic("upgrade", "head")
+        with engine.begin() as connection:
+            connection.execute(text("delete from measurements_leads where lead_id = 1"))
+
+
+@pytest.mark.parametrize(
+    ("column", "values"),
+    [
+        ("result_source", ("funnel", "site_visit")),
+        ("funnel_outcome", ("produced", "closed", "not_held", "no_data")),
+        ("no_data_reason", ("window", "never_in_measurements")),
+        ("site_visit_outcome", ("not_sold", "completed", "sold", "declined")),
+    ],
+)
+def test_visit_outcome_checks_allow_every_adr_value(column, values):
+    with engine.connect() as connection:
+        for value in values:
+            if column == "result_source":
+                values_sql = OUTCOME_VALUES.replace("'funnel'", ":value")
+                statement = (
+                    f"insert into measurements_visit_outcomes ({OUTCOME_COLUMNS}) "
+                    f"values ({values_sql})"
+                )
+            else:
+                statement = (
+                    f"insert into measurements_visit_outcomes ({OUTCOME_COLUMNS}, {column}) "
+                    f"values ({OUTCOME_VALUES}, :value)"
+                )
+            connection.execute(text(statement), {"value": value})
+            connection.execute(text("delete from measurements_visit_outcomes"))
+        connection.rollback()
+
+
+def test_visit_outcome_columns_match_the_adr_table():
+    columns = {
+        column["name"]: (str(column["type"]), column["nullable"])
+        for column in inspect(engine).get_columns("measurements_visit_outcomes")
+    }
+    assert columns == {
+        "task_id": ("BIGINT", False),
+        "lead_id": ("BIGINT", False),
+        "measurer_key": ("VARCHAR(64)", True),
+        "local_date": ("DATE", False),
+        "group_task_id": ("BIGINT", False),
+        "is_duplicate": ("BOOLEAN", False),
+        "result_source": ("VARCHAR(20)", False),
+        "funnel_outcome": ("VARCHAR(20)", True),
+        "no_data_reason": ("VARCHAR(32)", True),
+        "funnel_exit_event_id": ("VARCHAR(64)", True),
+        "site_visit_outcome": ("VARCHAR(20)", True),
+        "rule_version": ("INTEGER", False),
+        "computed_at": ("TIMESTAMP", False),
+    }
+    assert inspect(engine).get_pk_constraint("measurements_visit_outcomes")[
+        "constrained_columns"
+    ] == ["task_id"]

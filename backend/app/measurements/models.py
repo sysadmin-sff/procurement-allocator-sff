@@ -9,7 +9,7 @@ no foreign keys between sync tables: data arrives out of order.
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -17,6 +17,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -49,6 +50,9 @@ ATTRIBUTION_RULES = (
 )
 DEADLINE_SOURCES = ("history", "current")
 SYNC_STATUSES = ("ok", "running", "error", "auth_failed", "aborted", "config_error")
+RESULT_SOURCES = ("funnel", "site_visit")
+FUNNEL_OUTCOMES = ("produced", "closed", "not_held", "no_data")
+NO_DATA_REASONS = ("window", "never_in_measurements")
 
 
 def _one_of(column: str, values: tuple[str, ...]) -> str:
@@ -182,6 +186,51 @@ class MeasurementsResultAttribution(Base):
     is_effective: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false")
     )
+    rule_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class MeasurementsVisitOutcome(Base):
+    """Derived: outcome and duplicate group of an active visit (ADR-0053 §3).
+
+    Replaced per lead together with its attributions. The outcome columns hold
+    the group's outcome, which is the outcome of its first visit.
+    """
+
+    __tablename__ = "measurements_visit_outcomes"
+    __table_args__ = (
+        CheckConstraint(
+            _one_of("result_source", RESULT_SOURCES),
+            name="ck_measurements_visit_outcomes_result_source",
+        ),
+        CheckConstraint(
+            _one_of("funnel_outcome", FUNNEL_OUTCOMES),
+            name="ck_measurements_visit_outcomes_funnel_outcome",
+        ),
+        CheckConstraint(
+            _one_of("no_data_reason", NO_DATA_REASONS),
+            name="ck_measurements_visit_outcomes_no_data_reason",
+        ),
+        CheckConstraint(
+            _one_of("site_visit_outcome", OUTCOME_TYPES),
+            name="ck_measurements_visit_outcomes_site_visit_outcome",
+        ),
+        Index("ix_measurements_visit_outcomes_lead_id", "lead_id"),
+        Index("ix_measurements_visit_outcomes_local_date", "local_date"),
+    )
+
+    task_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    lead_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    measurer_key: Mapped[str | None] = mapped_column(String(64))
+    local_date: Mapped[date] = mapped_column(Date, nullable=False)
+    """Day of `scheduled_at` in America/New_York."""
+    group_task_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    is_duplicate: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    result_source: Mapped[str] = mapped_column(String(20), nullable=False)
+    funnel_outcome: Mapped[str | None] = mapped_column(String(20))
+    no_data_reason: Mapped[str | None] = mapped_column(String(32))
+    funnel_exit_event_id: Mapped[str | None] = mapped_column(String(64))
+    site_visit_outcome: Mapped[str | None] = mapped_column(String(20))
     rule_version: Mapped[int] = mapped_column(Integer, nullable=False)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

@@ -53,6 +53,22 @@ _TASK_HISTORY_TYPES = {
 }
 
 
+# Names of the polling streams run by run_cycle, in order; the backfill sets
+# their watermarks.
+INCREMENTAL_STREAMS = (
+    "tasks_new",
+    "tasks_legacy",
+    "events_field",
+    "events_lead_status",
+    "events_task_deadline",
+    "events_task_deleted",
+    "events_task_completed",
+    "events_task_type",
+    "leads",
+    "attribution",
+)
+
+
 @dataclass
 class SyncContext:
     db: Session
@@ -545,6 +561,7 @@ def run_cycle(ctx: SyncContext) -> None:
         ("leads", _leads_stream(ctx)),
         ("attribution", _attribution_stream(ctx)),
     ]
+    assert tuple(name for name, _ in streams) == INCREMENTAL_STREAMS
     for stream, process in streams:
         _run_stream(ctx, stream, process)
 

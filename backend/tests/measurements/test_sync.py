@@ -42,17 +42,17 @@ TASK = 888001
 
 
 def make_task(task_id=TASK, lead_id=LEAD, task_type=PRIMARY, **overrides) -> dict:
-    return task(
-        id=task_id,
-        entity_id=lead_id,
-        task_type_id=task_type,
-        responsible_user_id=NAZAR,
-        complete_till=T0 + 86400,
-        created_at=T0,
-        updated_at=T0,
-        duration=3600,
-        **overrides,
-    )
+    defaults = {
+        "id": task_id,
+        "entity_id": lead_id,
+        "task_type_id": task_type,
+        "responsible_user_id": NAZAR,
+        "complete_till": T0 + 86400,
+        "created_at": T0,
+        "updated_at": T0,
+        "duration": 3600,
+    }
+    return task(**{**defaults, **overrides})
 
 
 def status_event(event_id, lead_id, created_at) -> dict:

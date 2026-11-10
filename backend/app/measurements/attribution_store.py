@@ -2,7 +2,6 @@
 
 import uuid
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, insert, select
 from sqlalchemy.orm import Session
@@ -24,6 +23,7 @@ from app.measurements.models import (
     MeasurementsResultAttribution,
     MeasurementsVisit,
 )
+from app.measurements.zone import ZONE
 
 _TASK_DEADLINE_CHANGED = "task_deadline_changed"
 
@@ -111,7 +111,7 @@ def recompute_lead(
         _load_history(db, lead_id, settings),
         mapping,
         settings.cutover_at,
-        ZoneInfo(settings.timezone),
+        ZONE,
     )
 
     table = MeasurementsResultAttribution.__table__

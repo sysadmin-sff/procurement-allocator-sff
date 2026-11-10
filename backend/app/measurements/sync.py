@@ -10,7 +10,6 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 from sqlalchemy import case, func, or_, select, tuple_, union, update
 from sqlalchemy.dialects.postgresql import insert
@@ -33,6 +32,7 @@ from app.measurements.models import (
     MeasurementsSyncState,
     MeasurementsVisit,
 )
+from app.measurements.zone import ZONE
 
 logger = logging.getLogger(__name__)
 
@@ -237,7 +237,7 @@ def _mark_retyped(ctx: SyncContext, task_id: int, raw: dict) -> None:
 
 
 def _is_all_day(ctx: SyncContext, complete_till: datetime, duration: int | None) -> bool:
-    local = complete_till.astimezone(ZoneInfo(ctx.settings.timezone))
+    local = complete_till.astimezone(ZONE)
     return local.hour == 23 and local.minute == 59 and duration == 0
 
 

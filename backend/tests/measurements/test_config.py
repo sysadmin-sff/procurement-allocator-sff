@@ -2,10 +2,12 @@
 
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from app.measurements.config import MeasurementsConfigError, MeasurementsSettings
+from app.measurements.zone import TIMEZONE_NAME, ZONE
 
 TOKEN = "super-secret-amo-token"
 VALID = {
@@ -38,7 +40,6 @@ def test_defaults_match_the_adr_table():
     assert settings.pipeline_sales_id == 8740490
     assert settings.cutover_at == datetime(2026, 11, 9, 5, tzinfo=timezone.utc)
     assert settings.legacy_meetings_until is None
-    assert settings.timezone == "America/New_York"
     assert settings.excluded_lead_ids == frozenset()
 
 
@@ -148,9 +149,15 @@ def test_legacy_meetings_until_must_be_timezone_aware():
         _settings(**VALID, legacy_meetings_until=datetime(2026, 12, 1)).validate_for_worker()
 
 
-def test_timezone_must_exist():
-    with pytest.raises(MeasurementsConfigError, match="timezone"):
-        _settings(**VALID, timezone="Mars/Olympus").validate_for_worker()
+def test_timezone_is_a_module_constant_not_a_setting(monkeypatch):
+    """ADR-0053 §3: MeasurementsSettings.timezone is removed."""
+    assert TIMEZONE_NAME == "America/New_York"
+    assert ZONE == ZoneInfo("America/New_York")
+    assert "timezone" not in MeasurementsSettings.model_fields
+    monkeypatch.setenv("MEASUREMENTS_TIMEZONE", "Mars/Olympus")
+    settings = _settings(**VALID)
+    settings.validate_for_worker()
+    assert not hasattr(settings, "timezone")
 
 
 def test_all_problems_are_reported_together():

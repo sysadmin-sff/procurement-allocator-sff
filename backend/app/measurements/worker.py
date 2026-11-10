@@ -14,7 +14,6 @@ import threading
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 from sqlalchemy import create_engine, func, select, text
@@ -32,6 +31,7 @@ from app.measurements.models import (
 from app.measurements.reconcile import run_reconcile
 from app.measurements.schedule import reconcile_due, reference_due
 from app.measurements.sync import SyncContext, run_cycle, run_reference_cycle
+from app.measurements.zone import ZONE
 
 logger = logging.getLogger("app.measurements.worker")
 
@@ -259,7 +259,7 @@ class Worker:
                 return True
             self._startup_check_pending = False
         last_attempt = reconcile.last_attempt_at if reconcile else None
-        return reconcile_due(last_attempt, now, ZoneInfo(settings.timezone))
+        return reconcile_due(last_attempt, now, ZONE)
 
     def _poll_seconds(self) -> float:
         return self._settings.poll_interval_seconds if self._settings else DEFAULT_POLL_SECONDS

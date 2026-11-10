@@ -8,7 +8,6 @@ import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from sqlalchemy.dialects.postgresql import insert
 
@@ -43,6 +42,7 @@ from app.measurements.sync import (
     _upsert_lead,
     _upsert_visit,
 )
+from app.measurements.zone import ZONE
 
 _LEAD_BATCH = 50
 _WRITE_BATCH = 100
@@ -223,12 +223,11 @@ def summarize(
     for raw, _lead_id in collected.events.values():
         counters[f"events.{raw['type']}"] += 1
 
-    zone = ZoneInfo(settings.timezone)
     for rule in (*_COUNTED_RULES, "drift"):
         counters[rule] += 0
     for lead_id in collected.lead_ids:
         result = attribute(
-            _history(collected, lead_id, settings), mapping, settings.cutover_at, zone
+            _history(collected, lead_id, settings), mapping, settings.cutover_at, ZONE
         )
         counters["drift"] += int(result.drift)
         for row in result.attributions:

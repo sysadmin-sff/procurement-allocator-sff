@@ -2,14 +2,13 @@
 
 from datetime import datetime
 from urllib.parse import urlsplit
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import SecretStr
 from pydantic_settings import SettingsConfigDict
 
 from app.measurements.flags import MeasurementsFlags
+from app.measurements.zone import ZONE
 
-_NEW_YORK = "America/New_York"
 _AMO_DOMAINS = ("amocrm.ru", "amocrm.com")
 
 
@@ -31,14 +30,6 @@ def _is_naive(value: datetime) -> bool:
     return value.utcoffset() is None
 
 
-def _zone_exists(name: str) -> bool:
-    try:
-        ZoneInfo(name)
-    except (ZoneInfoNotFoundError, ValueError):
-        return False
-    return True
-
-
 class MeasurementsSettings(MeasurementsFlags):
     """Built only by the worker and its scripts, so the backend never holds the token."""
 
@@ -58,10 +49,9 @@ class MeasurementsSettings(MeasurementsFlags):
     """amo account id -> measurer key, one to one. A new account is one more entry."""
     pipeline_measurements_id: int = 8740486
     pipeline_sales_id: int = 8740490
-    cutover_at: datetime = datetime(2026, 11, 9, tzinfo=ZoneInfo(_NEW_YORK))
+    cutover_at: datetime = datetime(2026, 11, 9, tzinfo=ZONE)
     legacy_meetings_until: datetime | None = None
     """Unset while the transition period is open."""
-    timezone: str = _NEW_YORK
     excluded_lead_ids: frozenset[int] = frozenset()
     poll_interval_seconds: int = 300
     """ADR-0051 §4: polling every 5 minutes."""
@@ -102,8 +92,6 @@ class MeasurementsSettings(MeasurementsFlags):
             problems.append("cutover_at must be timezone-aware")
         if self.legacy_meetings_until is not None and _is_naive(self.legacy_meetings_until):
             problems.append("legacy_meetings_until must be timezone-aware")
-        if not _zone_exists(self.timezone):
-            problems.append("timezone is not a known zone")
 
         if problems:
             raise MeasurementsConfigError("; ".join(problems))

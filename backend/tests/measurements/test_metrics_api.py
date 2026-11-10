@@ -1,10 +1,14 @@
 """GET /measurements/metrics and /metrics/visits (ADR-0053 §5)."""
 
+from datetime import datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.auth.cookies import SESSION_COOKIE
 from app.core.database import SessionLocal
+from app.measurements.models import MeasurementsSyncState
 from app.measurements.router import get_now
 from tests.measurements.helpers import load_app
 from tests.measurements.test_metrics import MATT_KEY, NAZAR, NOW, Seed, seed_reference
@@ -174,3 +178,18 @@ def test_with_the_flag_off_the_routes_do_not_exist():
     for path in ("/measurements/metrics", "/measurements/metrics/visits"):
         assert client.get(path).status_code == 404
     assert not [path for path in disabled.openapi()["paths"] if "metrics" in path]
+
+
+def test_data_as_of_is_utc_with_z_whatever_the_session_time_zone(api, db_session):
+    session, _ = db_session
+    session.add(
+        MeasurementsSyncState(
+            stream="tasks_new",
+            last_success_at=datetime(2026, 11, 10, 17, 16, 50, tzinfo=timezone.utc),
+        )
+    )
+    session.flush()
+    session.execute(text("SET TIME ZONE 'Asia/Dubai'"))  # +04:00, no daylight saving
+    assert session.execute(text("SELECT now()::text")).scalar().endswith("+04")
+    body = api.get("/measurements/metrics").json()
+    assert body["data_as_of"] == "2026-11-10T17:16:50Z"

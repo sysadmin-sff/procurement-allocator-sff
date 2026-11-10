@@ -8,7 +8,7 @@ group is completed if any of its visits is.
 
 from calendar import monthrange
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import Date, and_, cast, distinct, func, or_, select
@@ -244,6 +244,13 @@ def _section(counts: dict, period: date | None, measurers: list[str | None], day
     }
 
 
+def data_as_of(db: Session) -> datetime | None:
+    """Latest successful stream read, always in UTC: the DB session's time zone
+    must not show through the API."""
+    value = db.scalar(select(func.max(MeasurementsSyncState.last_success_at)))
+    return None if value is None else value.astimezone(timezone.utc)
+
+
 def compute_metrics(
     db: Session,
     *,
@@ -290,7 +297,7 @@ def compute_metrics(
         "from": start.isoformat(),
         "to": end.isoformat(),
         "group_by": group_by,
-        "data_as_of": db.scalar(select(func.max(MeasurementsSyncState.last_success_at))),
+        "data_as_of": data_as_of(db),
         "outcomes_stale": count_stale_outcomes(db),
         "periods": period_list,
         "total": {

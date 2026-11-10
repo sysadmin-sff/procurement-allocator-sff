@@ -42,6 +42,7 @@ ATTRIBUTION_RULES = (
     "early_entry",
     "upcoming",
     "late_decline",
+    "ambiguous_decline",
     "snapshot_fallback",
     "unmapped",
     "no_visit",

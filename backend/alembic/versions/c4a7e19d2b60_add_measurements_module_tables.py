@@ -154,7 +154,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("event_id", name="uq_measurements_result_attributions_event_id"),
         sa.CheckConstraint(
             "rule IN ('cleared', 'same_or_past', 'early_entry', 'upcoming', 'late_decline', "
-            "'snapshot_fallback', 'unmapped', 'no_visit')",
+            "'ambiguous_decline', 'snapshot_fallback', 'unmapped', 'no_visit')",
             name="ck_measurements_result_attributions_rule",
         ),
         sa.CheckConstraint(

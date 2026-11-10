@@ -18,6 +18,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
 from app.core.database import engine
+from app.measurements.models import ATTRIBUTION_RULES
 from app.models import Base
 from tests.db_guard import require_test_database_url
 
@@ -291,3 +292,21 @@ def test_deleting_the_granter_keeps_the_grant_and_clears_the_reference():
         ).all()
         connection.rollback()
     assert [tuple(row) for row in rows] == [(None,)]
+
+
+@pytest.mark.parametrize("rule", ATTRIBUTION_RULES)
+def test_check_constraint_allows_every_attribution_rule(rule):
+    with engine.connect() as connection:
+        connection.execute(
+            text(
+                "insert into measurements_result_attributions "
+                "(id, lead_id, rule, rule_version, computed_at) "
+                "values (gen_random_uuid(), 1, :rule, 1, now())"
+            ),
+            {"rule": rule},
+        )
+        connection.rollback()
+
+
+def test_ambiguous_decline_is_a_known_rule():
+    assert "ambiguous_decline" in ATTRIBUTION_RULES

@@ -158,6 +158,22 @@ def test_late_decline_when_every_future_visit_already_occurred():
     assert by_event(result)["e2"].task_id == 1
 
 
+def test_ambiguous_decline_when_no_visit_is_past_and_every_future_one_occurred():
+    """Decision 1 of the stage-5 review: not attached, counted."""
+    result = run(
+        [visit(1, at(3, 20))],
+        [change("e1", at(3, 10), SOLD), change("e2", at(3, 11), DECLINED, before=SOLD)],
+    )
+    row = by_event(result)["e2"]
+    assert (row.rule, row.task_id, row.deadline_source, row.is_effective) == (
+        "ambiguous_decline",
+        None,
+        None,
+        False,
+    )
+    assert effective(result) == {1: "e1"}
+
+
 # --- cleared
 
 
@@ -381,24 +397,28 @@ def test_scenario_legacy_before_cutover_gets_none():
 # --- determinism
 
 
-def test_result_does_not_depend_on_input_order():
-    visits = [visit(1, at(3, 10)), visit(2, at(3, 20)), visit(3, at(3, 12))]
+@pytest.mark.parametrize("seed", [1, 7, 42, 1234, 2026])
+def test_result_does_not_depend_on_input_order(seed):
+    visits = [visit(1, at(3, 10)), visit(2, at(3, 20)), visit(3, at(3, 12)), visit(4, at(3, 12))]
     changes = [
         change("e1", at(3, 10, 15), COMPLETED),
         change("e2", at(3, 13), DECLINED, before=COMPLETED),
-        change("e3", at(3, 22), SOLD, before=DECLINED),
+        change("e3", at(3, 13), SOLD, before=DECLINED),
+        change("e4", at(3, 22), None, before=SOLD),
+        change("e5", at(3, 23), NOT_SOLD),
     ]
     deadlines = [
         deadline("d1", 2, at(3, 2), at(3, 18), at(3, 19)),
-        deadline("d2", 2, at(3, 3), at(3, 19), at(3, 20)),
+        deadline("d2", 2, at(3, 2), at(3, 19), at(3, 20)),
+        deadline("d3", 3, at(3, 11), at(3, 9), at(3, 12)),
     ]
-    expected = run(visits, changes, deadlines, snapshot=SOLD)
-    shuffler = random.Random(7)
-    for _ in range(20):
+    expected = run(visits, changes, deadlines, snapshot=NOT_SOLD)
+    shuffler = random.Random(seed)
+    for _ in range(25):
         shuffler.shuffle(visits)
         shuffler.shuffle(changes)
         shuffler.shuffle(deadlines)
-        assert run(visits, changes, deadlines, snapshot=SOLD) == expected
+        assert run(visits, changes, deadlines, snapshot=NOT_SOLD) == expected
 
 
 def test_events_at_the_same_moment_are_ordered_by_event_id():

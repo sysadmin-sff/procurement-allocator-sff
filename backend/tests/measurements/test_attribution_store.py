@@ -1,5 +1,6 @@
 """Writing attributions and recomputing them from synced data (ADR-0051 §3)."""
 
+import random
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -16,6 +17,7 @@ from app.measurements.models import (
     MeasurementsVisit,
 )
 from tests.measurements.amo_fixtures import deadline_event, field_event, rows
+from tests.measurements.conftest import _reset_sync_tables
 from tests.measurements.test_sync import (
     ADDITIONAL,
     CUTOVER_TS,
@@ -242,3 +244,63 @@ def test_unchanged_leads_are_not_recomputed(env):
     env.now = NOW + timedelta(hours=1)
     env.cycle()
     assert attributions(env)["e1"].computed_at == first
+
+
+def test_ambiguous_decline_is_counted(env):
+    env.amo.add_task(visit_task(complete_till=T0 + 10 * DAY))
+    env.amo.events = [
+        field_event("e1", LEAD, T0 + 60, None, SOLD),
+        field_event("e2", LEAD, T0 + 120, SOLD, 627969),
+    ]
+    env.amo.leads[LEAD] = lead_snapshot(
+        custom_fields_values=[
+            {
+                **rows("leads.json", "leads")[0]["custom_fields_values"][0],
+                "values": [{"value": "Declined Before Visit", "enum_id": 627969}],
+            }
+        ]
+    )
+    env.cycle()
+    assert attributions(env)["e2"].rule == "ambiguous_decline"
+    assert env.state("attribution").counters["ambiguous_decline"] == 1
+
+
+def _history_events() -> list[dict]:
+    return [
+        field_event("e1", LEAD, T0 + 60, None, COMPLETED),
+        field_event("e2", LEAD, T0 + 60, COMPLETED, SOLD),
+        field_event("e3", LEAD, T0 + 3 * DAY, SOLD, 627969),
+        field_event("e4", LEAD, T0 + 4 * DAY, 627969, None),
+        field_event("e5", LEAD, T0 + 5 * DAY, None, 627963),
+        deadline_event("d1", TASK + 1, T0 + 30, T0 + 2 * DAY, T0 + 6 * DAY),
+        deadline_event("d2", TASK + 1, T0 + 30, T0 + 6 * DAY, T0 + 7 * DAY),
+    ]
+
+
+def _synced_shape(seed: int | None) -> set[tuple]:
+    _reset_sync_tables()
+    with SessionLocal() as db:
+        env = Env(db)
+        tasks = [
+            visit_task(complete_till=T0),
+            visit_task(task_id=TASK + 1, task_type=ADDITIONAL, complete_till=T0 + 7 * DAY),
+            visit_task(task_id=TASK + 2, task_type=LEGACY, complete_till=T0 + 5 * DAY),
+        ]
+        events = _history_events()
+        if seed is not None:
+            shuffler = random.Random(seed)
+            shuffler.shuffle(tasks)
+            shuffler.shuffle(events)
+        for item in tasks:
+            env.amo.add_task(item)
+        env.amo.events = events
+        env.amo.leads[LEAD] = lead_snapshot()
+        env.cycle()
+        return shape(env)
+
+
+@pytest.mark.parametrize("seed", [3, 11, 99])
+def test_synced_recompute_does_not_depend_on_arrival_order(sync_tables_clean, seed):
+    expected = _synced_shape(None)
+    assert len(expected) == 5
+    assert _synced_shape(seed) == expected

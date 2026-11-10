@@ -115,8 +115,10 @@ def _pick_occurred(
 
 def _pick_declined(
     deadlines: dict[int, datetime], moment: datetime, held: dict[int, _Held]
-) -> tuple[int, str]:
-    """`upcoming`, or `late_decline` when no free visit lies ahead."""
+) -> tuple[int | None, str]:
+    """`upcoming`; `late_decline` when no free visit lies ahead; `ambiguous_decline`
+    when there is no past visit either, because every future one already holds an
+    occurred result. That case is left unattached."""
 
     def key(task_id: int) -> tuple[datetime, int]:
         return deadlines[task_id], task_id
@@ -129,7 +131,9 @@ def _pick_declined(
     if free_ahead:
         return min(free_ahead, key=key), "upcoming"
     past = [task_id for task_id, deadline in deadlines.items() if deadline < moment]
-    return max(past or deadlines, key=key), "late_decline"
+    if not past:
+        return None, "ambiguous_decline"
+    return max(past, key=key), "late_decline"
 
 
 def attribute(
@@ -175,6 +179,9 @@ def attribute(
             task_id, rule = _pick_occurred(moments, change.occurred_at, zone)
         else:
             task_id, rule = _pick_declined(moments, change.occurred_at, held)
+        if task_id is None:
+            rows.append(Attribution(change.event_id, None, rule, None, False))
+            continue
         rows.append(Attribution(change.event_id, task_id, rule, resolved[task_id][1], False))
         held[task_id] = _Held(index=len(rows) - 1, enum_id=change.after, occurred=occurred)
 

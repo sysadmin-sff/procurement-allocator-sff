@@ -476,7 +476,7 @@ def _attribution_stream(ctx: SyncContext):
             counters["recomputed"] += 1
             counters["drift"] += int(result.drift)
             for row in result.attributions:
-                if row.rule in ("unmapped", "no_visit"):
+                if row.rule in ("unmapped", "no_visit", "ambiguous_decline"):
                     counters[row.rule] += 1
 
     return process

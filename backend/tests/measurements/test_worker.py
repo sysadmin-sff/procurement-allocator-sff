@@ -1,6 +1,7 @@
 """The worker process (ADR-0051 §1, §4): lock, schedule, stop, failures."""
 
 import logging
+import re
 import signal
 from datetime import datetime, timedelta, timezone
 
@@ -21,8 +22,8 @@ from app.measurements.worker import (
     make_engine,
     release_lock,
 )
-from tests.measurements.amo_fixtures import BASE_URL, TOKEN
-from tests.measurements.test_sync import NOW, TASK, Env, lead_snapshot, make_task
+from tests.measurements.amo_fixtures import BASE_URL, TOKEN, rows
+from tests.measurements.test_sync import NOW, T0, TASK, Env, lead_snapshot, make_task
 
 TEST_URL_ENV = "DATABASE_URL"
 
@@ -371,3 +372,69 @@ def test_previous_sigint_handler_is_restored(env, worker_engine):
     clock = Clock(NOW)
     make_worker(env, worker_engine, clock, stop_after(1, clock, signal.SIGINT)).run()
     assert signal.getsignal(signal.SIGINT) == before
+
+
+# --- cycle summary
+
+CYCLE_LINE = re.compile(
+    r"cycle: streams_ok=(\d+) streams_failed=(\d+) new_events=(\d+) new_tasks=(\d+) "
+    r"new_leads=(\d+) transport_retries=(\d+) duration_s=\d+\.\d"
+)
+
+
+def cycle_lines(caplog) -> list[re.Match]:
+    messages = [record.getMessage() for record in caplog.records]
+    lines = [message for message in messages if message.startswith("cycle:")]
+    matches = [CYCLE_LINE.fullmatch(line) for line in lines]
+    assert all(matches), lines
+    return matches
+
+
+def test_each_polling_tick_logs_a_numbers_only_summary(env, worker_engine, caplog):
+    caplog.set_level(logging.INFO, logger="app.measurements.worker")
+    env.amo.add_task(make_task())
+    env.amo.leads[777001] = lead_snapshot()
+    env.amo.events = [
+        {
+            **rows("events_task_deadline_changed.json", "events")[0],
+            "id": "evt-d",
+            "entity_id": TASK,
+            "created_at": T0 + 5,
+        }
+    ]
+    seed_reconcile_success(env, NOW - timedelta(hours=1))
+    clock = Clock(NOW)
+    make_worker(env, worker_engine, clock, stop_after(1, clock)).run()
+    [line] = cycle_lines(caplog)
+    ok, failed, events, tasks, leads, retries = (int(value) for value in line.groups())
+    assert (failed, events, tasks, leads, retries) == (0, 1, 1, 1, 0)
+    assert ok == 13  # three reference streams and ten polling streams
+
+
+def test_failed_streams_and_retries_are_counted(env, worker_engine, caplog):
+    caplog.set_level(logging.INFO, logger="app.measurements.worker")
+    drops = {"left": 1}
+
+    def fail(request):
+        if "filter%5Btask_type%5D%5B%5D=4410970" in str(request.url):
+            return httpx.Response(500)
+        if drops["left"]:
+            drops["left"] -= 1
+            raise httpx.RemoteProtocolError("dropped")
+        return None
+
+    env.amo.fail_when = fail
+    seed_reconcile_success(env, NOW - timedelta(hours=1))
+    clock = Clock(NOW)
+    make_worker(env, worker_engine, clock, stop_after(1, clock)).run()
+    [line] = cycle_lines(caplog)
+    assert int(line.group(2)) == 1
+    assert int(line.group(6)) == 1
+
+
+def test_ticks_that_do_not_poll_log_no_cycle(env, worker_engine, caplog):
+    caplog.set_level(logging.INFO, logger="app.measurements.worker")
+    env.settings = MeasurementsSettings(_env_file=None, sync_enabled=False)
+    clock = Clock(NOW)
+    make_worker(env, worker_engine, clock, stop_after(2, clock)).run()
+    assert cycle_lines(caplog) == []

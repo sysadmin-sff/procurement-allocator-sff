@@ -17,13 +17,18 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.measurements.amo_client import AmoAuthError, AmoClient
 from app.measurements.config import MeasurementsConfigError, MeasurementsSettings
-from app.measurements.models import MeasurementsSyncState
+from app.measurements.models import (
+    MeasurementsAmoEvent,
+    MeasurementsLead,
+    MeasurementsSyncState,
+    MeasurementsVisit,
+)
 from app.measurements.reconcile import run_reconcile
 from app.measurements.schedule import reconcile_due, reference_due
 from app.measurements.sync import SyncContext, run_cycle, run_reference_cycle
@@ -159,6 +164,9 @@ class Worker:
 
         self._heartbeat(session, "running")
         session.commit()
+        started_clock = time.monotonic()
+        counts_before = self._row_counts(session)
+        retries_before = self._client.transport_retries
         ctx = SyncContext(
             db=session,
             client=self._client,
@@ -178,10 +186,49 @@ class Worker:
             logger.error("amo rejected the token; polling paused until the next check")
             self._heartbeat(session, "auth_failed")
             session.commit()
+            self._log_cycle(session, now, counts_before, retries_before, started_clock)
             return
         self._auth_blocked_until = None
         self._heartbeat(session, "ok")
         session.commit()
+        self._log_cycle(session, now, counts_before, retries_before, started_clock)
+
+    @staticmethod
+    def _row_counts(session: Session) -> tuple[int, int, int]:
+        return tuple(
+            session.scalar(select(func.count()).select_from(model))
+            for model in (MeasurementsAmoEvent, MeasurementsVisit, MeasurementsLead)
+        )
+
+    def _log_cycle(
+        self,
+        session: Session,
+        tick_started: datetime,
+        counts_before: tuple[int, int, int],
+        retries_before: int,
+        started_clock: float,
+    ) -> None:
+        statuses = session.scalars(
+            select(MeasurementsSyncState.last_status).where(
+                MeasurementsSyncState.last_attempt_at >= tick_started,
+                MeasurementsSyncState.stream.not_in(("worker", "backfill")),
+            )
+        ).all()
+        events, tasks, leads = (
+            after - before
+            for after, before in zip(self._row_counts(session), counts_before, strict=True)
+        )
+        logger.info(
+            "cycle: streams_ok=%d streams_failed=%d new_events=%d new_tasks=%d new_leads=%d "
+            "transport_retries=%d duration_s=%.1f",
+            sum(1 for status in statuses if status == "ok"),
+            sum(1 for status in statuses if status != "ok"),
+            events,
+            tasks,
+            leads,
+            self._client.transport_retries - retries_before,
+            time.monotonic() - started_clock,
+        )
 
     def _ensure_settings(self, now: datetime) -> MeasurementsSettings | None:
         if self._settings is not None:

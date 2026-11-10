@@ -43,7 +43,7 @@ flowchart LR
         Amo[amoCRM API v4, только GET] --> Worker[measurements-worker: опрос, справочники, сверка 03:30]
         Backfill[scripts.backfill] --> MeasDB
         Worker --> MeasDB[(measurements_* таблицы)]
-        MeasDB --> Attribution[атрибуция Site Visit Result: детерминированная функция]
+        MeasDB --> Attribution[атрибуция Site Visit Result и исход замера: детерминированные функции]
         Attribution --> MeasDB
         MeasDB --> MeasAPI["/measurements API, флаг MEASUREMENTS_ENABLED"]
     end
@@ -94,6 +94,11 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
   `require_measurements_access` (активный `admin` или грант в
   `measurements_user_access`), а не значение `User.role`. Привязка результата
   Site Visit Result к замеру — чистая функция `attribution.attribute`, без LLM.
+  Исход и группа дублей замера (ADR-0053) — чистая функция
+  `outcomes.compute_outcomes`; её строки (`measurements_visit_outcomes`)
+  пересчитываются вместе с атрибуциями потоком `attribution`, сверкой (в том
+  числе при сработавшем предохранителе), бэкфиллом и скриптом `recompute`.
+  Таймзона модуля — константа `app.measurements.zone`, не настройка.
 
 ## Связанные документы
 

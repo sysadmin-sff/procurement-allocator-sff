@@ -443,6 +443,7 @@ erDiagram
     MeasurementsLead ||..o{ MeasurementsAmoEvent : "lead_id, без FK"
     MeasurementsVisit ||..o{ MeasurementsAmoEvent : "entity_id задачи, без FK"
     MeasurementsLead ||..o{ MeasurementsResultAttribution : "производная"
+    MeasurementsVisit ||..o| MeasurementsVisitOutcome : "производная, task_id"
     MeasurementsFieldValue ||..o{ MeasurementsLead : "site_visit_enum_id"
 
     MeasurementsLead {
@@ -495,6 +496,20 @@ erDiagram
         bool is_effective
         int rule_version
     }
+    MeasurementsVisitOutcome {
+        bigint task_id PK "активный замер"
+        bigint lead_id "индекс"
+        string measurer_key "nullable, из measurer_map"
+        date local_date "день NY, индекс"
+        bigint group_task_id "основной замер группы"
+        bool is_duplicate
+        string result_source "funnel/site_visit"
+        string funnel_outcome "produced/closed/not_held/no_data"
+        string no_data_reason "window/never_in_measurements"
+        string funnel_exit_event_id "событие, давшее исход"
+        string site_visit_outcome "как outcome_type"
+        int rule_version
+    }
     MeasurementsUserAccess {
         uuid user_id PK
         uuid granted_by_user_id "nullable"
@@ -518,3 +533,11 @@ erDiagram
   `late_decline`, `ambiguous_decline`, `snapshot_fallback`, `unmapped`, `no_visit`.
 - Маппинг исходов задан только по `enum_id`; новый `enum_id` получает `NULL`
   (правило `unmapped`), пока его не сопоставят вручную.
+- `measurements_visit_outcomes` (ADR-0053 §3, ревизия `a83d51c07e94`) — исход и
+  группа дублей каждого активного замера. Пересчитывается вместе с атрибуциями
+  по сделке, в одной транзакции (`attribution_store.recompute_lead`), функцией
+  `outcomes.compute_outcomes`. Колонки исхода у всех замеров группы — исход её
+  основного замера. Строк нет у удалённых и retyped замеров, у сделок из
+  `excluded_lead_ids` и у сделок с `deleted_at`. Первичное заполнение и смена
+  `rule_version` — скрипт `python -m app.measurements.scripts.recompute`;
+  `outcomes_stale` в `/measurements/status` — строки со старой `rule_version`.

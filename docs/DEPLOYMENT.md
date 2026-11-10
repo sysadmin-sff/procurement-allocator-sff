@@ -319,6 +319,12 @@ env-файла попадают в контейнер при его создан
    docker compose --profile measurements run --rm measurements-worker \
      python -m app.measurements.scripts.backfill --apply
    ```
+   Обрывы соединения и ответы 502/503/504 повторяются автоматически (до 4
+   попыток, паузы 1–2–4 с, каждый раз новое соединение). Число повторов —
+   `transport_retries` в выводе. Прогресс раз в 100 запросов идёт в stderr:
+   `progress: phase=<фаза> requests=<n>`. **Если бэкфилл всё же упал
+   (`backfill stopped: ...`, код 1), его просто запускают заново с начала: это
+   безопасно, все записи — идемпотентный upsert, а dry-run ничего не пишет.**
 4. **Включение воркера.** `MEASUREMENTS_SYNC_ENABLED=true` в
    `backend/.env.measurements`, затем:
    ```

@@ -4,6 +4,7 @@ Dry-run and --apply share `collect` and `summarize`, so the counters printed by
 a dry-run are the ones an apply would produce. A dry-run writes nothing.
 """
 
+import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -46,6 +47,25 @@ from app.measurements.sync import (
 _LEAD_BATCH = 50
 _WRITE_BATCH = 100
 _COUNTED_RULES = ("unmapped", "no_visit", "ambiguous_decline")
+_PROGRESS_EVERY = 100
+
+
+class Progress:
+    """Prints `progress: phase=<name> requests=<n>` to stderr every N requests."""
+
+    def __init__(self, stream=None):
+        self.phase = "start"
+        self.requests = 0
+        self._stream = stream
+
+    def tick(self) -> None:
+        self.requests += 1
+        if self.requests % _PROGRESS_EVERY == 0:
+            print(
+                f"progress: phase={self.phase} requests={self.requests}",
+                file=self._stream or sys.stderr,
+                flush=True,
+            )
 
 
 @dataclass
@@ -82,8 +102,15 @@ def _consider_task(collected: Collected, raw: dict, settings: MeasurementsSettin
     collected.lead_ids.add(lead_id)
 
 
-def collect(client: AmoClient, settings: MeasurementsSettings) -> Collected:
+def collect(
+    client: AmoClient, settings: MeasurementsSettings, progress: Progress | None = None
+) -> Collected:
     """All available legacy history, and new types from cutover_at."""
+    progress = progress or Progress()
+
+    def phase(name: str) -> None:
+        progress.phase = name
+
     collected = Collected()
     collected.counters["post_cutover_meeting_ignored"] += 0
     cutover = int(settings.cutover_at.timestamp())
@@ -96,11 +123,13 @@ def collect(client: AmoClient, settings: MeasurementsSettings) -> Collected:
             ("filter[updated_at][from]", cutover),
         ],
     ]
+    phase("tasks")
     for params in sources:
         for batch in client.iter_pages("/tasks", "tasks", params):
             for raw in batch:
                 _consider_task(collected, raw, settings)
 
+    phase("field_events")
     field_params = [
         ("filter[type]", settings.field_event_type),
         ("filter[created_at][from]", cutover),
@@ -110,6 +139,7 @@ def collect(client: AmoClient, settings: MeasurementsSettings) -> Collected:
             if raw["entity_type"] == "lead" and raw["entity_id"] not in settings.excluded_lead_ids:
                 collected.lead_ids.add(raw["entity_id"])
 
+    phase("lead_history")
     lead_types = {settings.field_event_type, _LEAD_STATUS_CHANGED}
     for lead_id in sorted(collected.lead_ids):
         params = [("filter[entity]", "lead"), ("filter[entity_id][]", lead_id)]
@@ -118,6 +148,7 @@ def collect(client: AmoClient, settings: MeasurementsSettings) -> Collected:
                 if raw["type"] in lead_types:
                     collected.events[raw["id"]] = (raw, lead_id)
 
+    phase("task_history")
     for task_id in sorted(collected.tasks):
         lead_id = collected.tasks[task_id]["entity_id"]
         params = [("filter[entity]", "task"), ("filter[entity_id][]", task_id)]
@@ -126,6 +157,7 @@ def collect(client: AmoClient, settings: MeasurementsSettings) -> Collected:
                 if raw["type"] in _TASK_HISTORY_TYPES:
                     collected.events[raw["id"]] = (raw, lead_id)
 
+    phase("leads")
     lead_ids = sorted(collected.lead_ids)
     for start in range(0, len(lead_ids), _LEAD_BATCH):
         params = [("filter[id][]", lead_id) for lead_id in lead_ids[start : start + _LEAD_BATCH]]
@@ -205,7 +237,9 @@ def summarize(
     return dict(counters)
 
 
-def apply(collected: Collected, ctx: SyncContext, started: datetime) -> None:
+def apply(
+    collected: Collected, ctx: SyncContext, started: datetime, counters: dict[str, int]
+) -> None:
     """Writes the collected data with the sync upserts, then recomputes attribution."""
     db = ctx.db
     for lead_id in sorted(collected.lead_ids):
@@ -239,4 +273,9 @@ def apply(collected: Collected, ctx: SyncContext, started: datetime) -> None:
     # Polling continues from the moment the backfill started reading.
     for stream in INCREMENTAL_STREAMS:
         _state(ctx, stream).watermark_at = started
+    record = _state(ctx, "backfill")
+    record.last_attempt_at = started
+    record.last_success_at = ctx.now()
+    record.last_status = "ok"
+    record.counters = dict(counters)
     _commit(ctx)

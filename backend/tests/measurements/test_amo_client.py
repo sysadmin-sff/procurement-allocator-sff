@@ -251,3 +251,125 @@ def test_token_is_not_logged(caplog):
 def test_httpx_loggers_are_raised_to_warning():
     assert logging.getLogger("httpx").level == logging.WARNING
     assert logging.getLogger("httpcore").level == logging.WARNING
+
+
+# --- transient failures (2026-11-10 change)
+
+
+def flaky(failures: list, final=None):
+    """Answers with the queued failures first; an exception class is raised."""
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if failures:
+            failure = failures.pop(0)
+            if isinstance(failure, Exception):
+                raise failure
+            return failure
+        return final or httpx.Response(200, json=load("tasks_page.json"))
+
+    return handler, calls
+
+
+def test_two_dropped_connections_then_success_count_two_retries():
+    fake = FakeTime()
+    handler, calls = flaky(
+        [httpx.RemoteProtocolError("dropped"), httpx.RemoteProtocolError("dropped")]
+    )
+    client = make_client(handler, fake)
+    assert len(collect(client)) == 2
+    assert client.transport_retries == 2
+    assert len(calls) == 3
+    assert [delay for delay in fake.sleeps if delay >= 1] == [1, 2]
+
+
+@pytest.mark.parametrize("status", [502, 503, 504])
+def test_gateway_errors_are_retried(status):
+    handler, calls = flaky([httpx.Response(status), httpx.Response(status)])
+    client = make_client(handler)
+    assert len(collect(client)) == 2
+    assert client.transport_retries == 2
+
+
+def test_gateway_error_gives_up_after_four_attempts():
+    handler, calls = flaky([httpx.Response(503)] * 10)
+    with pytest.raises(AmoHttpError) as exc_info:
+        collect(make_client(handler))
+    assert exc_info.value.status_code == 503
+    assert len(calls) == 4
+
+
+def test_dropped_connection_gives_up_after_four_attempts_without_the_token():
+    fake = FakeTime()
+    handler, calls = flaky([httpx.RemoteProtocolError("dropped")] * 10)
+    client = make_client(handler, fake)
+    with pytest.raises(AmoTransportError) as exc_info:
+        collect(client)
+    assert len(calls) == 4
+    assert client.transport_retries == 3
+    assert [delay for delay in fake.sleeps if delay >= 1] == [1, 2, 4]
+    assert TOKEN not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        httpx.ConnectError("refused"),
+        httpx.ReadTimeout("slow"),
+        httpx.WriteError("broken"),
+        httpx.PoolTimeout("busy"),
+    ],
+)
+def test_other_transient_network_errors_are_retried(error):
+    handler, calls = flaky([error])
+    client = make_client(handler)
+    assert len(collect(client)) == 2
+    assert client.transport_retries == 1
+
+
+@pytest.mark.parametrize("status", [400, 404, 409, 422, 500])
+def test_other_errors_are_not_retried(status):
+    handler, calls = flaky([httpx.Response(status)] * 5)
+    with pytest.raises(AmoHttpError):
+        collect(make_client(handler))
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_auth_failure_after_a_retry_is_still_not_retried(status):
+    handler, calls = flaky(
+        [httpx.RemoteProtocolError("dropped"), httpx.Response(status)]
+        + [httpx.Response(status)] * 5
+    )
+    with pytest.raises(AmoAuthError):
+        collect(make_client(handler))
+    assert len(calls) == 2
+
+
+def test_a_retry_uses_a_new_connection():
+    handler, calls = flaky([httpx.RemoteProtocolError("dropped")])
+    client = make_client(handler)
+    before = client._http
+    collect(client)
+    assert client._http is not before
+    assert before.is_closed
+
+
+def test_retries_still_respect_the_rate_limit():
+    fake = FakeTime()
+    handler, calls = flaky([httpx.Response(503)])
+    client = make_client(handler, fake)
+    fake.sleeps.clear()
+    collect(client)
+    # 1s backoff already covers the 0.2s interval, so no extra wait is needed.
+    assert fake.sleeps == [1]
+
+
+def test_every_request_attempt_is_reported():
+    seen = []
+    handler, calls = flaky([httpx.RemoteProtocolError("dropped")])
+    client = make_client(handler)
+    client.on_request = lambda: seen.append(1)
+    collect(client)
+    assert len(seen) == len(calls) == 2

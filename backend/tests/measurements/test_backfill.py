@@ -2,6 +2,7 @@
 
 import os
 
+import httpx
 import pytest
 from sqlalchemy import func, select
 
@@ -225,3 +226,53 @@ def test_measurer_and_other_counts_use_the_map(env, engine, capsys):
     run(env, engine)
     assert printed(capsys)["tasks.measurer.other"] == "1"
     assert NAZAR in env.settings.measurer_map
+
+
+def test_transport_retries_are_printed(env, engine, capsys):
+    drops = {"left": 2}
+
+    def drop_twice(request):
+        if drops["left"]:
+            drops["left"] -= 1
+            raise httpx.RemoteProtocolError("dropped")
+        return None
+
+    env.amo.fail_when = drop_twice
+    assert run(env, engine) == 0
+    assert printed(capsys)["transport_retries"] == "2"
+
+
+def test_final_failure_says_a_restart_from_scratch_is_safe(env, engine, capsys):
+    def always_drop(request):
+        raise httpx.RemoteProtocolError("dropped")
+
+    env.amo.fail_when = always_drop
+    assert run(env, engine, "--apply") == 1
+    err = capsys.readouterr().err
+    assert "backfill stopped: AmoTransportError" in err
+    assert "transport_retries: 3" in err
+    assert "re-run from the start" in err
+    assert set(counts().values()) == {0}
+    after = acquire_lock(engine)
+    assert after is not None
+    release_lock(after)
+
+
+def test_progress_goes_to_stderr_as_numbers_only(env, engine, capsys, monkeypatch):
+    import re
+
+    monkeypatch.setattr("app.measurements.backfill._PROGRESS_EVERY", 1)
+    run(env, engine)
+    lines = [line for line in capsys.readouterr().err.splitlines() if line]
+    assert lines
+    assert all(re.fullmatch(r"progress: phase=[a-z_]+ requests=\d+", line) for line in lines)
+    assert {line.split()[1] for line in lines} >= {"phase=tasks", "phase=lead_history"}
+
+
+def test_apply_records_its_counters_in_sync_state(env, engine):
+    run(env, engine, "--apply")
+    with SessionLocal() as db:
+        state = db.get(MeasurementsSyncState, "backfill")
+    assert state.last_status == "ok"
+    assert state.counters["transport_retries"] == 0
+    assert state.counters["tasks.kind.legacy"] == 3

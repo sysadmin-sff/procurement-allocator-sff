@@ -15,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
-from app.measurements.amo_client import AmoClient
-from app.measurements.backfill import apply, collect, summarize
+from app.measurements.amo_client import AmoClient, AmoError
+from app.measurements.backfill import Progress, apply, collect, summarize
 from app.measurements.config import MeasurementsConfigError, MeasurementsSettings
 from app.measurements.models import MeasurementsFieldValue
 from app.measurements.sync import SyncContext
@@ -78,24 +78,47 @@ def main(
             connection.rollback()
 
         started = now()
-        collected = collect(client, settings)
-        counters = summarize(collected, mapping, settings)
+        retries_before = client.transport_retries
+        progress = Progress()
+        client.on_request = progress.tick
+        try:
+            collected = collect(client, settings, progress)
+            counters = summarize(collected, mapping, settings)
+            counters["transport_retries"] = client.transport_retries - retries_before
 
-        print(f"mode: {'apply' if args.apply else 'dry-run'}")
-        for name in sorted(counters):
-            print(f"{name}: {counters[name]}")
+            print(f"mode: {'apply' if args.apply else 'dry-run'}")
+            for name in sorted(counters):
+                print(f"{name}: {counters[name]}")
 
-        if not args.apply:
-            print("DRY-RUN: nothing written, re-run with --apply")
+            if not args.apply:
+                print("DRY-RUN: nothing written, re-run with --apply")
+                return 0
+            with sessionmaker(bind=engine, autoflush=False)() as session:
+                apply(
+                    collected,
+                    SyncContext(db=session, client=client, settings=settings, now=now),
+                    started,
+                    counters,
+                )
+            print("APPLIED")
             return 0
-        with sessionmaker(bind=engine, autoflush=False)() as session:
-            apply(
-                collected,
-                SyncContext(db=session, client=client, settings=settings, now=now),
-                started,
+        except AmoError as exc:
+            print(f"backfill stopped: {type(exc).__name__}", file=sys.stderr)
+            if exc.status_code is not None:
+                print(f"http_status: {exc.status_code}", file=sys.stderr)
+            print(f"phase: {progress.phase}", file=sys.stderr)
+            print(f"requests: {progress.requests}", file=sys.stderr)
+            print(
+                f"transport_retries: {client.transport_retries - retries_before}", file=sys.stderr
             )
-        print("APPLIED")
-        return 0
+            print(
+                "Safe to re-run from the start: every write is an idempotent upsert, "
+                "and a dry-run writes nothing.",
+                file=sys.stderr,
+            )
+            return 1
+        finally:
+            client.on_request = None
     finally:
         release_lock(lock)
         if owns_resources:

@@ -175,3 +175,16 @@ def test_status_with_no_sync_yet(client, make_user, make_session):
     assert body["last_sync_at"] is None
     assert body["streams"] == []
     assert body["counts"] == {"leads": 0, "visits": 0, "events": 0}
+
+
+def test_status_shows_transport_retries(client, db_session, make_user, make_session):
+    session, _ = db_session
+    session.add(
+        MeasurementsSyncState(
+            stream="tasks_new", last_status="ok", counters={"transport_retries": 2}
+        )
+    )
+    session.flush()
+    client.cookies.set(SESSION_COOKIE, str(make_session(make_user(role="admin")).id))
+    [stream] = client.get("/measurements/status").json()["streams"]
+    assert stream["counters"] == {"transport_retries": 2}

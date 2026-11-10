@@ -345,9 +345,11 @@ def _run_stream(
     ctx.db.commit()
 
     counters: Counter = Counter()
+    retries_before = ctx.client.transport_retries
     try:
         process(watermark, counters)
     except Exception as exc:
+        counters["transport_retries"] = ctx.client.transport_retries - retries_before
         ctx.db.rollback()
         state = _state(ctx, stream)
         if isinstance(exc, AmoAuthError):
@@ -365,6 +367,7 @@ def _run_stream(
             raise
         return
 
+    counters["transport_retries"] = ctx.client.transport_retries - retries_before
     state = _state(ctx, stream)
     state.watermark_at = started
     state.last_success_at = started

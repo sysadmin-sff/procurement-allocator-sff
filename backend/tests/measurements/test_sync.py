@@ -685,3 +685,20 @@ def test_module_only_issues_get_requests(env):
     env.cycle()
     run_reference_cycle(env.ctx)
     assert {request.method for request in env.amo.requests} == {"GET"}
+
+
+def test_transport_retries_are_counted_per_stream(env):
+    env.amo.add_task(make_task())
+    drops = {"left": 2}
+
+    def drop_twice(request):
+        if request.url.path.endswith("/tasks") and drops["left"]:
+            drops["left"] -= 1
+            raise httpx.RemoteProtocolError("dropped")
+        return None
+
+    env.amo.fail_when = drop_twice
+    env.cycle()
+    assert env.state("tasks_new").counters["transport_retries"] == 2
+    assert env.state("tasks_legacy").counters.get("transport_retries", 0) == 0
+    assert env.visit() is not None

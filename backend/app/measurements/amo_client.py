@@ -23,6 +23,20 @@ _MIN_REQUEST_INTERVAL = 0.2  # 5 requests per second
 _MAX_429_RETRIES = 6
 _MAX_BACKOFF_SECONDS = 60
 _TIMEOUT_SECONDS = 30.0
+# Transient failures (ADR-0051, 2026-11-10 change): up to 4 attempts, 1-2-4 s
+# apart, each on a fresh connection. Safe because the client only sends GET.
+_TRANSIENT_BACKOFF = (1, 2, 4)
+_RETRYABLE_STATUSES = frozenset({502, 503, 504})
+_TRANSIENT_ERRORS = (
+    httpx.RemoteProtocolError,
+    httpx.ReadError,
+    httpx.WriteError,
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+    httpx.WriteTimeout,
+    httpx.PoolTimeout,
+)
 
 Params = Sequence[tuple[str, Any]]
 
@@ -65,10 +79,19 @@ class AmoClient:
         self._sleep = sleep
         self._clock = clock
         self._next_request_at = 0.0
+        self._base_url = base_url
+        self._transport = transport
+        self._http = self._new_http()
+        self.transport_retries = 0
+        """Retries after dropped connections and 502/503/504, since creation."""
+        self.on_request: Callable[[], None] | None = None
+        """Called before every attempt; the backfill uses it for progress."""
+
+    def _new_http(self) -> httpx.Client:
         # Redirects stay off: following one could carry the header to another host.
-        self._http = httpx.Client(
-            base_url=base_url,
-            transport=transport,
+        return httpx.Client(
+            base_url=self._base_url,
+            transport=self._transport,
             timeout=_TIMEOUT_SECONDS,
             follow_redirects=False,
         )
@@ -112,8 +135,12 @@ class AmoClient:
         return self._json(response)
 
     def _send(self, url: str, params: list[tuple[str, Any]] | None) -> httpx.Response:
-        for attempt in range(_MAX_429_RETRIES + 1):
+        rate_limited = 0
+        transient = 0
+        while True:
             self._wait_for_slot()
+            if self.on_request is not None:
+                self.on_request()
             try:
                 response = self._http.get(
                     url,
@@ -121,14 +148,32 @@ class AmoClient:
                     headers={"Authorization": f"Bearer {self._token.get_secret_value()}"},
                 )
             except httpx.TransportError as exc:
+                if isinstance(exc, _TRANSIENT_ERRORS) and transient < len(_TRANSIENT_BACKOFF):
+                    self._retry_on_new_connection(transient)
+                    transient += 1
+                    continue
                 raise AmoTransportError(f"amo transport failure: {type(exc).__name__}") from None
-            if response.status_code in (401, 403):
-                raise AmoAuthError("amo rejected the token", response.status_code)
-            if response.status_code != 429:
-                return response
-            if attempt < _MAX_429_RETRIES:
-                self._sleep(self._backoff(response, attempt))
-        raise AmoRateLimitError("amo kept answering 429", 429)
+
+            status = response.status_code
+            if status in (401, 403):
+                raise AmoAuthError("amo rejected the token", status)
+            if status in _RETRYABLE_STATUSES and transient < len(_TRANSIENT_BACKOFF):
+                self._retry_on_new_connection(transient)
+                transient += 1
+                continue
+            if status == 429:
+                if rate_limited >= _MAX_429_RETRIES:
+                    raise AmoRateLimitError("amo kept answering 429", 429)
+                self._sleep(self._backoff(response, rate_limited))
+                rate_limited += 1
+                continue
+            return response
+
+    def _retry_on_new_connection(self, attempt: int) -> None:
+        self.transport_retries += 1
+        self._sleep(_TRANSIENT_BACKOFF[attempt])
+        self._http.close()
+        self._http = self._new_http()
 
     def _wait_for_slot(self) -> None:
         now = self._clock()

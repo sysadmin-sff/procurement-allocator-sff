@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import update
 
 from app.core.database import SessionLocal
 from app.measurements.attribution_store import recompute_lead
@@ -22,7 +23,14 @@ from app.measurements.metrics import (
     ratio,
     validate_range,
 )
-from app.measurements.models import MeasurementsAmoEvent, MeasurementsLead, MeasurementsVisit
+from app.measurements.models import (
+    MeasurementsAmoEvent,
+    MeasurementsLead,
+    MeasurementsSyncState,
+    MeasurementsVisit,
+    MeasurementsVisitOutcome,
+)
+from app.measurements.outcomes import OUTCOME_RULE_VERSION
 from app.measurements.zone import ZONE
 
 NOW = datetime(2026, 11, 14, 12, tzinfo=ZONE)
@@ -379,8 +387,21 @@ def test_measurer_filter_limits_the_company_too(reference):
 def test_response_reports_stale_rows_and_data_as_of(reference):
     body = metrics(reference, date(2026, 10, 1), date(2026, 10, 31))
     assert body["timezone"] == "America/New_York"
-    assert body["outcomes_stale"] == 0
-    assert body["data_as_of"] is None
+    assert (body["outcomes_stale"], body["data_as_of"]) == (0, None)
+    reference.add_all(
+        [
+            MeasurementsSyncState(stream="tasks_new", last_success_at=utc(11, 14, 16)),
+            MeasurementsSyncState(stream="leads", last_success_at=utc(11, 14, 17)),
+        ]
+    )
+    reference.execute(
+        update(MeasurementsVisitOutcome)
+        .where(MeasurementsVisitOutcome.task_id == 10011)
+        .values(rule_version=OUTCOME_RULE_VERSION - 1)
+    )
+    reference.commit()
+    body = metrics(reference, date(2026, 10, 1), date(2026, 10, 31))
+    assert (body["outcomes_stale"], body["data_as_of"]) == (1, utc(11, 14, 17))
 
 
 def test_declined_on_the_duplicate_keeps_the_group_out_of_m1(db):
@@ -441,6 +462,15 @@ def test_visits_detail_filters_and_limit(reference):
         limit=2,
     )
     assert [row["task_id"] for row in found] == [10032, 10101]
+    primary = list_visits(
+        reference,
+        date_from=date(2026, 11, 1),
+        date_to=date(2026, 11, 30),
+        measurer=MATT_KEY,
+        kind="primary",
+        limit=200,
+    )
+    assert [row["task_id"] for row in primary] == [10131, 10171]
 
 
 # --- pure helpers

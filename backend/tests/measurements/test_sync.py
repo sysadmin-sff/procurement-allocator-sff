@@ -89,6 +89,8 @@ def lead_snapshot(lead_id=LEAD, updated_at=T0, **overrides) -> dict:
     return {
         **rows("leads.json", "leads")[0],
         "id": lead_id,
+        "pipeline_id": 8740486,
+        "status_id": 142,
         "updated_at": updated_at,
         **overrides,
     }
@@ -635,18 +637,45 @@ def test_reference_missing_field_changes_nothing(env):
 
 
 def test_reference_users(env):
+    users = env.amo.users["_embedded"]["users"]
+    next(user for user in users if user["id"] == 14156562)["rights"]["is_active"] = False
     run_reference_cycle(env.ctx)
-    assert env.db.get(MeasurementsAmoUser, 9861902).name == "Synthetic Surveyor One"
+    assert env.db.get(MeasurementsAmoUser, 9861902).name == "Synthetic Surveyor 1"
+    assert env.db.get(MeasurementsAmoUser, 9861902).is_active is True
     assert env.db.get(MeasurementsAmoUser, 14156562).is_active is False
 
 
 def test_reference_pipelines_use_a_composite_key(env):
+    pipelines = {
+        pipeline["id"]: pipeline for pipeline in env.amo.pipelines["_embedded"]["pipelines"]
+    }
+    pipelines[8740490]["is_archive"] = True
     run_reference_cycle(env.ctx)
     first = env.db.get(MeasurementsPipelineStatus, (8740486, 142))
     second = env.db.get(MeasurementsPipelineStatus, (8740490, 142))
-    assert first.pipeline_name == "Synthetic measurements pipeline"
+    assert first.pipeline_name == pipelines[8740486]["name"]
     assert first.is_archived is False
     assert second.is_archived is True
+
+
+def test_reference_stores_every_real_status(env):
+    run_reference_cycle(env.ctx)
+    expected = sum(
+        len(pipeline["_embedded"]["statuses"])
+        for pipeline in env.amo.pipelines["_embedded"]["pipelines"]
+    )
+    assert env.db.query(MeasurementsPipelineStatus).count() == expected
+
+
+def test_lead_with_the_real_field_layout_but_no_site_visit_value(env):
+    """The probed leads had no Site Visit Result: the field is absent, not empty."""
+    real = rows("leads.json", "leads")[1]
+    assert all(field["field_id"] != 784029 for field in real["custom_fields_values"])
+    env.amo.add_task(make_task())
+    env.amo.leads[LEAD] = {**real, "id": LEAD, "updated_at": T0}
+    env.cycle()
+    assert env.lead().site_visit_enum_id is None
+    assert env.lead().amo_updated_at is not None
 
 
 def test_module_only_issues_get_requests(env):

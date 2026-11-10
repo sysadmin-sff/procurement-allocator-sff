@@ -16,8 +16,13 @@
 | `events_task_type_changed.json` | `adr_events_task_type_changed.json` |
 | `events_task_completed.json` | `adr2_task_events.json` |
 | `custom_fields.json` | `adr_field.json` (элемент), конверт как в `amo_adr_probe.py` |
+| `leads.json` | `adr4_leads_200.json` (пачка из трёх `filter[id][]`) |
+| `pipelines.json` | `adr4_pipelines_200.json` |
+| `users.json` | `adr4_users_200.json`, оставлены два аккаунта замерщиков |
 
-**Не из реальных ответов.** В `probe_out` нет ответов `/leads`, `/leads/pipelines` и
-`/users`. `leads.json`, `pipelines.json` и `users.json` написаны по документации API
-v4 и по полям, которые читают пробные скрипты. Сверить со счётчиками dry-run
-(ADR-0051, критерий 12).
+**Одно исключение.** Ни у одной из трёх сделок пробы поле Site Visit Result
+(`784029`) в снимке не заполнено. Его запись в первой сделке `leads.json` собрана по
+структуре реального select-поля из того же ответа (те же ключи и вложенность
+`values[].value/enum_id/enum_code`, `is_masked`). Значения прочих полей, названия
+сделок, полей, тегов, воронок и статусов заменены синтетикой. Статусы сделок,
+воронки, `is_active` и `is_archive` сохранены как в ответах.

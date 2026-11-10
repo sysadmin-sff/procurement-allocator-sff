@@ -232,3 +232,147 @@ dev-предположение.
    через Google, и повторить проверку rate limiting из раздела выше (11
    запросов к `/auth/login` с одной машины → 429 на 11-м, с другой машины
    не блокируется).
+
+## Модуль «Замеры» (ADR-0051)
+
+Read-only синхронизация с amoCRM. Работает в отдельном контейнере
+`measurements-worker` под профилем Compose `measurements`. Основные сервисы от
+него не зависят. Флаги:
+
+| Переменная | Файл | Значение по умолчанию | Действие |
+|---|---|---|---|
+| `MEASUREMENTS_ENABLED` | `backend/.env` | `false` | API `/measurements`; меняется пересозданием `backend` |
+| `MEASUREMENTS_SYNC_ENABLED` | `backend/.env.measurements` | `false` | опрос amo; `backend` не затрагивается |
+
+### Отдельная интеграция amo
+
+Для модуля выпускается **своя** приватная интеграция amoCRM с долгоживущим
+токеном. Она не общая с n8n и rc2amocrm: лимит, ротация и отзыв независимы.
+
+1. В amoCRM: «amoМаркет» → «Создать интеграцию» → «Внешняя» (приватная),
+   назвать понятно (например, `procurement-allocator measurements`). Названия
+   пунктов меню сверить с текущим интерфейсом amo: здесь они не проверялись.
+2. Сгенерировать долгосрочный токен с **максимальным сроком**.
+3. Записать дату истечения сюда:
+
+   | Выпущен | Истекает | Кто выпустил |
+   |---|---|---|
+   | _заполнить при выпуске_ | _заполнить при выпуске_ | _заполнить_ |
+
+Модуль выполняет только GET. Других прав, кроме чтения сделок, задач,
+событий, полей, пользователей и воронок, ему не нужно.
+
+### Файл секрета `backend/.env.measurements`
+
+Только на сервере, рядом с `backend/.env`. В git его нет: строка в `.gitignore`
+добавлена до создания файла, проверка — `git check-ignore -v
+backend/.env.measurements`. В образ он тоже не попадает: `backend/Dockerfile`
+копирует только `app`, `alembic`, `data` и `pyproject.toml`.
+
+```
+MEASUREMENTS_SYNC_ENABLED=false
+MEASUREMENTS_AMO_BASE_URL=https://<поддомен>.amocrm.com
+MEASUREMENTS_AMO_ACCESS_TOKEN=<токен>
+```
+
+`chmod 600`, владелец — пользователь деплоя. Файл подключается только к
+`measurements-worker` (`env_file` в `docker-compose.yml`). `backend` и
+`postgres` его не получают. Токен передаётся только в заголовке
+`Authorization`, логгер `httpx` поднят до WARNING, в
+`measurements_sync_state` пишутся только код статуса и класс ошибки.
+
+Воркер при старте проверяет настройки: токен, `https` и домен
+`amocrm.ru`/`amocrm.com` у `MEASUREMENTS_AMO_BASE_URL`, карту замерщиков.
+При ошибке он выходит с кодом 2, сообщение в логе называет параметр, но не его
+значение.
+
+### Порядок выката
+
+По «Плану выката» ADR-0051:
+
+1. **Миграция при выключенных флагах.** `MEASUREMENTS_ENABLED` в
+   `backend/.env` отсутствует или `false`.
+   ```
+   docker compose run --rm backend alembic upgrade head
+   ```
+2. **Выкат кода и проверка конфигурации.** Переменные модуля должны быть
+   только у `measurements-worker`. Команда печатает имена, не значения:
+   ```
+   docker compose --profile measurements config --format json \
+     | jq -r '.services | to_entries[] | "\(.key): \((.value.environment // {}) | keys | map(select(startswith("MEASUREMENTS_"))) | join(","))"'
+   ```
+   Ожидается: у `backend` и `postgres` после двоеточия пусто, у
+   `measurements-worker` — три имени из файла секрета (и `MEASUREMENTS_ENABLED`,
+   если он задан в `backend/.env`).
+3. **Бэкфилл.** Сначала dry-run, сверка счётчиков с amo (включая чтение сделок
+   пачками по 50), затем `--apply`. Воркер в это время остановлен: бэкфилл
+   держит тот же advisory lock, второй процесс выходит с кодом 3.
+   ```
+   docker compose --profile measurements stop measurements-worker
+   docker compose --profile measurements run --rm measurements-worker \
+     python -m app.measurements.scripts.backfill
+   docker compose --profile measurements run --rm measurements-worker \
+     python -m app.measurements.scripts.backfill --apply
+   ```
+4. **Включение воркера.** `MEASUREMENTS_SYNC_ENABLED=true` в
+   `backend/.env.measurements`, затем:
+   ```
+   docker compose --profile measurements up -d measurements-worker
+   docker compose --profile measurements ps   # ждать healthy
+   ```
+5. **Выдача грантов.** Только `admin` и существующим пользователям закупок,
+   см. условие в «Последствиях» ADR-0051. По умолчанию dry-run:
+   ```
+   docker compose run --rm backend python -m app.measurements.scripts.grant_access \
+     --email <email> [--by <email администратора>]
+   docker compose run --rm backend python -m app.measurements.scripts.grant_access \
+     --email <email> [--by <email администратора>] --apply
+   ```
+6. **Включение API.** `MEASUREMENTS_ENABLED=true` в `backend/.env`, затем
+   `docker compose up -d --force-recreate backend`. Простой — несколько секунд.
+
+Проверка критерия 11 (токена нет в контейнерах `backend` и `postgres`),
+печатает только количество:
+```
+for s in backend postgres; do
+  docker inspect "$(docker compose ps -q $s)" \
+    --format '{{range .Config.Env}}{{println .}}{{end}}' \
+    | grep -c '^MEASUREMENTS_AMO_ACCESS_TOKEN=' ; done
+```
+Ожидается `0` и `0`.
+
+### Ротация токена
+
+1. Выпустить новый токен в той же интеграции и обновить таблицу дат выше.
+2. Заменить значение `MEASUREMENTS_AMO_ACCESS_TOKEN` в
+   `backend/.env.measurements`.
+3. Пересоздать только воркер:
+   ```
+   docker compose --profile measurements up -d --force-recreate measurements-worker
+   ```
+4. Отозвать старый токен в amo.
+
+Если токен истёк или отозван, воркер получает 401/403: статус потоков
+становится `auth_failed`, опрос останавливается, проверка повторяется раз в
+час. Основное приложение не затрагивается, `GET /measurements/status`
+показывает дату последней успешной синхронизации.
+
+### Эксплуатация
+
+- **Расписание:** опрос каждые 5 минут, справочники раз в час, сверка в 03:30
+  America/New_York.
+- **Предохранитель сверки:** если на удаление попадает больше 5% строк, сверка
+  прерывается со статусом `aborted` и ничего не пишет. Счётчики
+  `visit_removals`/`lead_removals` в `measurements_sync_state.counters`.
+- **Healthcheck** (`python -m app.measurements.healthcheck`): unhealthy, если
+  heartbeat старше трёх интервалов опроса (15 минут). При
+  `MEASUREMENTS_SYNC_ENABLED=false` всегда healthy: воркер намеренно спит.
+- **Остановка:** SIGTERM откатывает текущую транзакцию, освобождает advisory
+  lock и завершает процесс с кодом 0 (`stop_grace_period: 30s`).
+- **Коды выхода:** 0 — штатная остановка, 2 — неверные настройки, 3 — lock
+  занят другим воркером или бэкфиллом.
+- **Логи:** драйвер `json-file`, `max-size: 10m`, `max-file: 5` (только для
+  этого сервиса): `docker compose --profile measurements logs measurements-worker`.
+- **Откат:** см. «План отката» ADR-0051. Уровень 1 —
+  `MEASUREMENTS_SYNC_ENABLED=false` или `docker compose --profile measurements
+  stop measurements-worker`.

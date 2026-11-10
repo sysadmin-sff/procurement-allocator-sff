@@ -10,6 +10,8 @@
 
 # Deploy-time secrets and build output — never committed.
 backend/.env
+# amoCRM token of measurements-worker (ADR-0051 §5): server only.
+backend/.env.measurements
 deploy/frontend_dist/
 
 # Local amoCRM probe for ADR-0051: script, its token file, raw API responses.

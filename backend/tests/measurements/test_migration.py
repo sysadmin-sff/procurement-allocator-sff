@@ -116,15 +116,18 @@ def drift() -> list[tuple[str, str, str]]:
         return [_drift_key(diff) for diff in compare_metadata(context, Base.metadata)]
 
 
-def test_migration_is_the_single_child_of_the_previous_head():
+MODULE_REVISIONS = ["c4a7e19d2b60", "f2b9d6a41c83"]
+
+
+def test_module_revisions_form_one_chain_on_top_of_the_previous_head():
     scripts = ScriptDirectory(str(BACKEND_DIR / "alembic"))
-    children = [
-        script.revision
-        for script in scripts.walk_revisions()
-        if script.down_revision == PREVIOUS_HEAD
-    ]
-    assert len(children) == 1
-    assert scripts.get_heads() == children
+    [head] = scripts.get_heads()
+    chain = []
+    revision = scripts.get_revision(head)
+    while revision.revision != PREVIOUS_HEAD:
+        chain.append(revision.revision)
+        revision = scripts.get_revision(revision.down_revision)
+    assert list(reversed(chain)) == MODULE_REVISIONS
 
 
 def test_upgrade_creates_every_module_table():
@@ -310,3 +313,9 @@ def test_check_constraint_allows_every_attribution_rule(rule):
 
 def test_ambiguous_decline_is_a_known_rule():
     assert "ambiguous_decline" in ATTRIBUTION_RULES
+
+
+@pytest.mark.parametrize("table", ["measurements_pipeline_statuses", "measurements_amo_users"])
+def test_reference_tables_have_missing_since(table):
+    columns = {column["name"]: column for column in inspect(engine).get_columns(table)}
+    assert columns["missing_since"]["nullable"] is True

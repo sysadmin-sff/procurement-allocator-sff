@@ -505,7 +505,9 @@ erDiagram
 Ещё три таблицы без связей: `measurements_sync_state` (поток → watermark,
 статусы, `heartbeat_at`, целочисленные `counters`), `measurements_amo_users`,
 `measurements_pipeline_statuses` (составной PK `(pipeline_id, status_id)`:
-статусы `142`/`143` есть в каждой воронке).
+статусы `142`/`143` есть в каждой воронке). У `measurements_pipeline_statuses` и
+`measurements_amo_users` есть `missing_since`: синхронизация не удаляет строки,
+пропавшие из ответа amo, а помечает их (ревизия `f2b9d6a41c83`).
 
 - `measurements_amo_events` — только `INSERT ... ON CONFLICT DO NOTHING`.
   Хранятся типы: `custom_field_784029_value_changed`, `lead_status_changed`,

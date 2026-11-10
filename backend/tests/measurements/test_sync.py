@@ -702,3 +702,87 @@ def test_transport_retries_are_counted_per_stream(env):
     assert env.state("tasks_new").counters["transport_retries"] == 2
     assert env.state("tasks_legacy").counters.get("transport_retries", 0) == 0
     assert env.visit() is not None
+
+
+def _pipelines(env) -> list[dict]:
+    return env.amo.pipelines["_embedded"]["pipelines"]
+
+
+def test_a_stage_missing_from_amo_is_kept_and_marked(env):
+    run_reference_cycle(env.ctx)
+    statuses = _pipelines(env)[0]["_embedded"]["statuses"]
+    removed = statuses.pop(1)
+    env.now = NOW + timedelta(hours=1)
+    run_reference_cycle(env.ctx)
+    env.db.expire_all()
+    pipeline_id = _pipelines(env)[0]["id"]
+    row = env.db.get(MeasurementsPipelineStatus, (pipeline_id, removed["id"]))
+    assert row is not None
+    assert row.missing_since == env.now
+    assert (
+        env.db.get(MeasurementsPipelineStatus, (pipeline_id, statuses[0]["id"])).missing_since
+        is None
+    )
+
+
+def test_a_stage_keeps_its_first_missing_time(env):
+    run_reference_cycle(env.ctx)
+    removed = _pipelines(env)[0]["_embedded"]["statuses"].pop(1)
+    env.now = NOW + timedelta(hours=1)
+    run_reference_cycle(env.ctx)
+    first = env.now
+    env.now = NOW + timedelta(hours=2)
+    run_reference_cycle(env.ctx)
+    env.db.expire_all()
+    row = env.db.get(MeasurementsPipelineStatus, (_pipelines(env)[0]["id"], removed["id"]))
+    assert row.missing_since == first
+
+
+def test_a_stage_that_comes_back_is_unmarked(env):
+    run_reference_cycle(env.ctx)
+    statuses = _pipelines(env)[0]["_embedded"]["statuses"]
+    removed = statuses.pop(1)
+    env.now = NOW + timedelta(hours=1)
+    run_reference_cycle(env.ctx)
+    statuses.insert(1, removed)
+    env.now = NOW + timedelta(hours=2)
+    run_reference_cycle(env.ctx)
+    env.db.expire_all()
+    row = env.db.get(MeasurementsPipelineStatus, (_pipelines(env)[0]["id"], removed["id"]))
+    assert row.missing_since is None
+
+
+def test_an_amo_user_missing_from_amo_is_kept_and_marked(env):
+    run_reference_cycle(env.ctx)
+    users = env.amo.users["_embedded"]["users"]
+    removed = users.pop()
+    env.now = NOW + timedelta(hours=1)
+    run_reference_cycle(env.ctx)
+    env.db.expire_all()
+    assert env.db.get(MeasurementsAmoUser, removed["id"]).missing_since == env.now
+    users.append(removed)
+    env.now = NOW + timedelta(hours=2)
+    run_reference_cycle(env.ctx)
+    env.db.expire_all()
+    assert env.db.get(MeasurementsAmoUser, removed["id"]).missing_since is None
+
+
+def test_an_empty_reference_answer_marks_nothing(env):
+    run_reference_cycle(env.ctx)
+    env.amo.pipelines["_embedded"]["pipelines"] = []
+    env.amo.users["_embedded"]["users"] = []
+    env.now = NOW + timedelta(hours=1)
+    run_reference_cycle(env.ctx)
+    env.db.expire_all()
+    assert (
+        env.db.query(MeasurementsPipelineStatus)
+        .filter(MeasurementsPipelineStatus.missing_since.is_not(None))
+        .count()
+        == 0
+    )
+    assert (
+        env.db.query(MeasurementsAmoUser)
+        .filter(MeasurementsAmoUser.missing_since.is_not(None))
+        .count()
+        == 0
+    )

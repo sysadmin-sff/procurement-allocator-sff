@@ -232,6 +232,8 @@ class MeasurementsAmoUser(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """Set when amo stops returning the account; rows are never deleted."""
 
 
 class MeasurementsPipelineStatus(Base):
@@ -246,3 +248,5 @@ class MeasurementsPipelineStatus(Base):
     sort: Mapped[int | None] = mapped_column(Integer)
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False)
     synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    """Set when amo stops returning the stage: history still refers to it by id."""

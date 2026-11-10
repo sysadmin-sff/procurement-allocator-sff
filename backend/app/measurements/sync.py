@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, or_, select, union, update
+from sqlalchemy import case, func, or_, select, tuple_, union, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -614,12 +614,15 @@ def _custom_fields_stream(ctx: SyncContext):
 def _users_stream(ctx: SyncContext):
     def process(_watermark: datetime | None, counters: Counter) -> None:
         table = MeasurementsAmoUser.__table__
+        seen: list[int] = []
         for batch in ctx.client.iter_pages("/users", "users"):
             for raw in batch:
+                seen.append(raw["id"])
                 values = {
                     "name": raw["name"],
                     "is_active": bool((raw.get("rights") or {}).get("is_active", True)),
                     "synced_at": ctx.now(),
+                    "missing_since": None,
                 }
                 statement = insert(table).values(amo_user_id=raw["id"], **values)
                 ctx.db.execute(
@@ -630,22 +633,37 @@ def _users_stream(ctx: SyncContext):
                 )
                 counters["stored"] += 1
             _commit(ctx)
+        counters["missing"] = _mark_missing(ctx, table, table.c.amo_user_id.not_in(seen), seen)
 
     return process
+
+
+def _mark_missing(ctx: SyncContext, table, absent, seen: list) -> int:
+    """Marks rows amo no longer returns; never deletes. An empty answer marks nothing."""
+    if not seen:
+        return 0
+    result = ctx.db.execute(
+        update(table).where(absent, table.c.missing_since.is_(None)).values(missing_since=ctx.now())
+    )
+    _commit(ctx)
+    return result.rowcount
 
 
 def _pipelines_stream(ctx: SyncContext):
     def process(_watermark: datetime | None, counters: Counter) -> None:
         table = MeasurementsPipelineStatus.__table__
+        seen: list[tuple[int, int]] = []
         for batch in ctx.client.iter_pages("/leads/pipelines", "pipelines"):
             for pipeline in batch:
                 for status in (pipeline.get("_embedded") or {}).get("statuses", []):
+                    seen.append((pipeline["id"], status["id"]))
                     values = {
                         "pipeline_name": pipeline["name"],
                         "status_name": status["name"],
                         "sort": status.get("sort"),
                         "is_archived": bool(pipeline.get("is_archive", False)),
                         "synced_at": ctx.now(),
+                        "missing_since": None,
                     }
                     statement = insert(table).values(
                         pipeline_id=pipeline["id"], status_id=status["id"], **values
@@ -658,6 +676,8 @@ def _pipelines_stream(ctx: SyncContext):
                     )
                     counters["stored"] += 1
             _commit(ctx)
+        absent = tuple_(table.c.pipeline_id, table.c.status_id).not_in(seen)
+        counters["missing"] = _mark_missing(ctx, table, absent, seen)
 
     return process
 

@@ -19,7 +19,7 @@ from app.measurements.models import (
     MeasurementsSyncState,
     MeasurementsVisit,
 )
-from app.measurements.sync import SyncContext, run_cycle, run_reference_cycle
+from app.measurements.sync import SyncContext, _upsert_lead, run_cycle, run_reference_cycle
 from tests.measurements.amo_fixtures import (
     BASE_URL,
     TOKEN,
@@ -551,6 +551,70 @@ def test_lead_snapshot_fields(env):
     assert lead.site_visit_enum_id == 627967
     assert lead.price == 12500
     assert lead.closed_at == datetime.fromtimestamp(T0 + 1, timezone.utc)
+
+
+DEAL_NUMBER_FIELD = 990001
+
+
+def deal_number_field(*values) -> dict:
+    return {
+        "field_id": DEAL_NUMBER_FIELD,
+        "field_name": "Deal Number",
+        "field_code": None,
+        "field_type": "text",
+        "values": [{"value": value} for value in values],
+        "is_masked": False,
+    }
+
+
+def test_lead_snapshot_stores_the_deal_number(env):
+    env.settings.deal_number_field_id = DEAL_NUMBER_FIELD
+    env.amo.add_task(make_task())
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=[deal_number_field("  SF-1042 ")])
+    env.cycle()
+    assert env.lead().deal_number == "SF-1042"
+
+
+def test_numeric_deal_number_is_stored_as_text(env):
+    env.settings.deal_number_field_id = DEAL_NUMBER_FIELD
+    env.amo.add_task(make_task())
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=[deal_number_field(1042)])
+    env.cycle()
+    assert env.lead().deal_number == "1042"
+
+
+@pytest.mark.parametrize(
+    "custom_fields",
+    [None, [], [deal_number_field()], [deal_number_field("   ")]],
+    ids=["null", "no-fields", "no-values", "blank"],
+)
+def test_missing_or_blank_deal_number_is_null(env, custom_fields):
+    env.settings.deal_number_field_id = DEAL_NUMBER_FIELD
+    env.amo.add_task(make_task())
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=custom_fields)
+    env.cycle()
+    assert env.lead().deal_number is None
+
+
+def test_deal_number_is_not_read_while_the_field_id_is_unset(env):
+    assert env.settings.deal_number_field_id is None
+    env.amo.add_task(make_task())
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=[deal_number_field("SF-1042")])
+    env.cycle()
+    assert env.lead().deal_number is None
+
+
+def test_a_newer_snapshot_replaces_the_deal_number(env):
+    """Poll, backfill and the nightly reconcile all write leads through _upsert_lead."""
+    env.settings.deal_number_field_id = DEAL_NUMBER_FIELD
+    _upsert_lead(
+        env.ctx, lead_snapshot(updated_at=T0, custom_fields_values=[deal_number_field("SF-1")])
+    )
+    _upsert_lead(
+        env.ctx, lead_snapshot(updated_at=T0 + 60, custom_fields_values=[deal_number_field("SF-2")])
+    )
+    env.db.commit()
+    assert env.lead().deal_number == "SF-2"
 
 
 def test_lead_with_null_custom_fields_has_no_result(env):

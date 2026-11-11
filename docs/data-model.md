@@ -451,6 +451,7 @@ erDiagram
         bigint pipeline_id "nullable до первого снимка"
         bigint status_id
         bigint site_visit_enum_id "снимок поля 784029"
+        string deal_number "снимок поля Deal Number, String(64)"
         numeric price "Numeric(12,3)"
         datetime amo_updated_at "upsert не откатывает назад"
         datetime deleted_at "ставит ночная сверка"

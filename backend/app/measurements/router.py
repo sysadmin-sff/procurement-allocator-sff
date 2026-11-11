@@ -181,7 +181,8 @@ class MeasurementsMetricsOut(BaseModel):
 
 
 class MeasurementsVisitRowOut(BaseModel):
-    """Identifiers and outcomes only: no lead names, result_text or price (§5)."""
+    """Identifiers and outcomes only: no lead names, result_text or price (§5).
+    `deal_number` is the amo «Deal Number» identifier (ADR-0053, 2026-11-11)."""
 
     task_id: int
     lead_id: int
@@ -192,6 +193,7 @@ class MeasurementsVisitRowOut(BaseModel):
     outcome: str | None
     is_completed: bool
     is_duplicate: bool
+    deal_number: str | None
 
 
 def _default_range(

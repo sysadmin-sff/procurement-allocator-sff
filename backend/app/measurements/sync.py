@@ -163,12 +163,26 @@ def _site_visit_enum(raw: dict, field_id: int) -> int | None:
     return None
 
 
+def _deal_number(raw: dict, field_id: int | None) -> str | None:
+    """Text of the «Deal Number» field; blank or absent is None."""
+    if field_id is None:
+        return None
+    for field in raw.get("custom_fields_values") or []:
+        if field.get("field_id") == field_id:
+            values = field.get("values") or []
+            value = values[0].get("value") if values else None
+            text = "" if value is None else str(value).strip()
+            return text[:64] or None
+    return None
+
+
 def _upsert_lead(ctx: SyncContext, raw: dict) -> None:
     table = MeasurementsLead.__table__
     values = {
         "pipeline_id": raw.get("pipeline_id"),
         "status_id": raw.get("status_id"),
         "site_visit_enum_id": _site_visit_enum(raw, ctx.settings.field_id),
+        "deal_number": _deal_number(raw, ctx.settings.deal_number_field_id),
         "closed_at": _as_datetime(raw.get("closed_at")),
         "price": raw.get("price"),
         "amo_updated_at": _as_datetime(raw.get("updated_at")),

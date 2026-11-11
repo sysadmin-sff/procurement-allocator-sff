@@ -58,11 +58,12 @@ class Seed:
         self.leads: set[int] = set()
         self._event = 0
 
-    def lead(self, lead_id, deleted=False) -> None:
+    def lead(self, lead_id, deleted=False, deal_number=None) -> None:
         self.leads.add(lead_id)
         self.db.add(
             MeasurementsLead(
                 lead_id=lead_id,
+                deal_number=deal_number,
                 amo_updated_at=NOW,
                 deleted_at=NOW if deleted else None,
                 synced_at=NOW,
@@ -446,6 +447,7 @@ def test_visits_detail_has_no_client_data(reference):
         "outcome",
         "is_completed",
         "is_duplicate",
+        "deal_number",  # an amo identifier, ADR-0053 change 2026-11-11
     }
     assert {row["lead_id"] for row in found}.isdisjoint({1009, L22, L26})
     assert [row["local_date"] for row in found] == sorted(row["local_date"] for row in found)

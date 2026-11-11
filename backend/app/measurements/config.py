@@ -42,6 +42,8 @@ class MeasurementsSettings(MeasurementsFlags):
     amo_base_url: str | None = None
 
     field_id: int = 784029
+    deal_number_field_id: int | None = None
+    """amo lead field «Deal Number» (ADR-0053, 2026-11-11 change); unset — not read."""
     task_type_primary: int = 4410970
     task_type_additional: int = 4410974
     task_type_legacy: int = 2

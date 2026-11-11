@@ -15,6 +15,7 @@ from sqlalchemy import Date, and_, cast, distinct, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.measurements.models import (
+    MeasurementsLead,
     MeasurementsSyncState,
     MeasurementsVisit,
     MeasurementsVisitOutcome,
@@ -30,6 +31,7 @@ _TWO_PLACES = Decimal("0.01")
 
 _OUTCOMES = MeasurementsVisitOutcome.__table__
 _VISITS = MeasurementsVisit.__table__
+_LEADS = MeasurementsLead.__table__
 _DAY = _OUTCOMES.c.local_date
 """The New York day of a visit, materialized by the worker."""
 
@@ -332,8 +334,13 @@ def list_visits(
             ),
             _VISITS.c.is_completed,
             _OUTCOMES.c.is_duplicate,
+            _LEADS.c.deal_number,
         )
-        .select_from(_OUTCOMES.join(_VISITS, _VISITS.c.task_id == _OUTCOMES.c.task_id))
+        .select_from(
+            _OUTCOMES.join(_VISITS, _VISITS.c.task_id == _OUTCOMES.c.task_id).outerjoin(
+                _LEADS, _LEADS.c.lead_id == _OUTCOMES.c.lead_id
+            )
+        )
         .where(_VISITS.c.deleted_at.is_(None), _DAY.between(date_from, date_to))
         .order_by(_DAY, _VISITS.c.scheduled_at, _OUTCOMES.c.task_id)
         .limit(limit)

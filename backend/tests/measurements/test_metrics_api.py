@@ -4,11 +4,11 @@ from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import text, update
 
 from app.auth.cookies import SESSION_COOKIE
 from app.core.database import SessionLocal
-from app.measurements.models import MeasurementsSyncState
+from app.measurements.models import MeasurementsLead, MeasurementsSyncState
 from app.measurements.router import get_now
 from tests.measurements.helpers import load_app
 from tests.measurements.test_metrics import MATT_KEY, NAZAR, NOW, Seed, seed_reference
@@ -120,7 +120,26 @@ def test_visits_detail(seeded):
         "outcome": "closed",
         "is_completed": True,
         "is_duplicate": False,
+        "deal_number": None,
     }
+
+
+def test_visits_detail_carries_the_deal_number_of_the_lead(seeded):
+    with SessionLocal() as db:
+        db.execute(
+            update(MeasurementsLead)
+            .where(MeasurementsLead.lead_id == 1003)
+            .values(deal_number="SF-1003")
+        )
+        db.commit()
+    rows = seeded.get(
+        "/measurements/metrics/visits",
+        params={"from": "2026-10-01", "to": "2026-10-31", "measurer": MATT_KEY, "limit": 2},
+    ).json()
+    assert [(row["lead_id"], row["deal_number"]) for row in rows] == [
+        (1003, "SF-1003"),
+        (rows[1]["lead_id"], None),
+    ]
 
 
 # --- 422

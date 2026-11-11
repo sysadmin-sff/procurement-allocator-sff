@@ -25,8 +25,9 @@ import styles from './Measurements.module.css';
 
 /* «Замеры за период» — GET /measurements/metrics/visits with the URL
    parameters as they are. All visits of the range are listed, not only the
-   conducted ones: the API has no such filter (docs/known-issues.md). Lead
-   ids are text; no amo link — the backend does not expose the amo base URL. */
+   conducted ones: the API has no such filter (docs/known-issues.md). Deal
+   Number and lead id are text; no amo link — the backend does not expose the
+   amo base URL. */
 
 function describeQuery(query: MeasurementsVisitsQuery): string {
   const parts = [
@@ -97,6 +98,7 @@ export function MeasurementVisitsPage() {
                       <th>Исход</th>
                       <th>Выполнен</th>
                       <th>Дубль</th>
+                      <th>Deal Number</th>
                       <th>ID сделки</th>
                     </tr>
                   </thead>
@@ -110,6 +112,9 @@ export function MeasurementVisitsPage() {
                         <td>{outcomeLabel(visit.outcome)}</td>
                         <td>{visit.is_completed ? 'Да' : 'Нет'}</td>
                         <td>{visit.is_duplicate ? 'Дубль' : '—'}</td>
+                        <td>
+                          {visit.deal_number == null ? '—' : <CopyableId value={visit.deal_number} />}
+                        </td>
                         <td>
                           <CopyableId value={visit.lead_id} />
                         </td>

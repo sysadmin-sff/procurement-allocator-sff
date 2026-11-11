@@ -88,6 +88,8 @@ export interface MeasurementsVisitRow {
   outcome: string | null;
   is_completed: boolean;
   is_duplicate: boolean;
+  /** amo field «Deal Number» (ADR-0053, change 2026-11-11); null when empty. */
+  deal_number: string | null;
 }
 
 export interface MeasurementsMetricsQuery {

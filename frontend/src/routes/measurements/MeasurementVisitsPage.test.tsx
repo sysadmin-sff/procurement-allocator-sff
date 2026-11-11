@@ -28,6 +28,7 @@ function row(overrides: Partial<MeasurementsVisitRow> = {}): MeasurementsVisitRo
     outcome: 'produced',
     is_completed: true,
     is_duplicate: false,
+    deal_number: 'SF-1042',
     ...overrides,
   };
 }
@@ -80,6 +81,7 @@ describe('MeasurementVisitsPage', () => {
         outcome: null,
         is_completed: false,
         is_duplicate: true,
+        deal_number: null,
       }),
     ]);
     renderPage('/measurements/visits?from=2026-10-01&to=2026-10-31');
@@ -94,6 +96,7 @@ describe('MeasurementVisitsPage', () => {
       'Передан в продажу',
       'Да',
       '—',
+      'SF-1042Копировать',
       '24681357Копировать',
     ]);
     expect(within(second).getAllByRole('cell').map((c) => c.textContent)).toEqual([
@@ -104,6 +107,7 @@ describe('MeasurementVisitsPage', () => {
       '—',
       'Нет',
       'Дубль',
+      '—',
       '13572468Копировать',
     ]);
   });
@@ -125,12 +129,24 @@ describe('MeasurementVisitsPage', () => {
     expect(await screen.findByText('something_new')).toBeInTheDocument();
   });
 
+  it('copies the deal number as text', async () => {
+    const user = userEvent.setup();
+    visitsMock.mockResolvedValue([row()]);
+    renderPage('/measurements/visits?from=2026-10-01&to=2026-10-31');
+
+    const [dealNumberCopy] = await screen.findAllByRole('button', { name: 'Копировать' });
+    await user.click(dealNumberCopy);
+
+    expect(await navigator.clipboard.readText()).toBe('SF-1042');
+  });
+
   it('copies the lead id as text', async () => {
     const user = userEvent.setup();
     visitsMock.mockResolvedValue([row()]);
     renderPage('/measurements/visits?from=2026-10-01&to=2026-10-31');
 
-    await user.click(await screen.findByRole('button', { name: 'Копировать' }));
+    const copyButtons = await screen.findAllByRole('button', { name: 'Копировать' });
+    await user.click(copyButtons[1]);
 
     expect(await navigator.clipboard.readText()).toBe('24681357');
     expect(screen.getByRole('button', { name: 'Скопировано' })).toBeInTheDocument();

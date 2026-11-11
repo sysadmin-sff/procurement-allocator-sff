@@ -79,7 +79,7 @@ export function measurerLabel(key: string | null): string {
 export const KIND_LABEL: Record<MeasurementsVisitKind, string> = {
   primary: 'Замер',
   additional: 'Доп. замер',
-  legacy: 'Legacy',
+  legacy: 'Встреча',
 };
 
 export const RESULT_SOURCE_LABEL: Record<string, string> = {

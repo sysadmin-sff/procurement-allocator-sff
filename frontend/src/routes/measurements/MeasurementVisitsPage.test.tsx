@@ -108,6 +108,16 @@ describe('MeasurementVisitsPage', () => {
     ]);
   });
 
+  it('calls a legacy visit «Встреча» (amo task type 2)', async () => {
+    visitsMock.mockResolvedValue([row({ kind: 'legacy' })]);
+    renderPage('/measurements/visits?from=2026-11-01&to=2026-11-30&kind=legacy');
+
+    const table = await screen.findByRole('table', { name: 'Замеры' });
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('Встреча');
+    expect(screen.getByText('01.11–30.11 · Встреча')).toBeInTheDocument();
+    expect(screen.queryByText(/Legacy/)).not.toBeInTheDocument();
+  });
+
   it('shows an unknown outcome value as it came', async () => {
     visitsMock.mockResolvedValue([row({ outcome: 'something_new' })]);
     renderPage('/measurements/visits?from=2026-10-01&to=2026-10-31');

@@ -46,6 +46,7 @@ flowchart LR
         MeasDB --> Attribution[атрибуция Site Visit Result и исход замера: детерминированные функции]
         Attribution --> MeasDB
         MeasDB --> MeasAPI["/measurements API, флаг MEASUREMENTS_ENABLED"]
+        MeasAPI --> MeasUI["экран «Замеры» /measurements: только отображение ответа"]
     end
 
     SessionDB -.->|require_measurements_access: admin или грант| MeasAPI
@@ -83,6 +84,12 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
 `health.py` остаётся публичным; `auth.py` смешанный (публичные `/login`,
 `/callback`, защищённые `/me`, `/logout`).
 
+- **Матрица цен** (`app/services/price_matrix.py`, ADR-0054) — только чтение
+  `Price`: `GET /prices/matrix` (материалы × поставщики, сравнение с предыдущей
+  версией или с датой, «давно не обновлялся») и `GET /prices/history` (версии
+  пары с источником). Под admin-роутером `/prices`. Экран — `/prices`
+  (`frontend/src/routes/price-matrix/`).
+
 - **Measurements** (`backend/app/measurements/`, ADR-0051) — изолированный
   модуль: логику закупок не импортирует, таблицы с префиксом `measurements_`.
   Данные читаются из amoCRM только GET-запросами отдельным процессом
@@ -103,7 +110,11 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
   `measurements_visit_outcomes` с соединением на `measurements_visits`, отношения
   в `Decimal`; маршруты `GET /measurements/metrics` и `/metrics/visits` в том же
   роутере, под тем же `require_measurements_access`, только агрегаты и
-  идентификаторы.
+  идентификаторы. Экран — `frontend/src/routes/measurements/` (страницы
+  `/measurements` и `/measurements/visits`). Он ничего не считает, кроме
+  пиксельной высоты столбиков графика. Пункт меню показывается по
+  `GET /measurements/access` (`useMeasurementsAccess`), а не по роли
+  (`docs/ui-reference.md` §9).
 
 ## Связанные документы
 

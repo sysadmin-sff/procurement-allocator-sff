@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/auth';
 import { useCurrentUser } from '../auth/AuthContext';
+import { useMeasurementsAccess } from '../hooks/useMeasurementsAccess';
 import styles from './AppLayout.module.css';
 
 /* Видны всем аутентифицированным (project/allocation/order/purchase_record —
@@ -23,10 +24,17 @@ const ADMIN_NAV_ITEMS = [
    поэтому нет и отдельного пункта верхней навигации. Сам /suppliers уже
    скрыт от employee выше, так что вложенный флоу тоже недостижим. */
 
+/* «Замеры» — третья категория доступа (admin или грант, ADR-0051 §2): роль из
+   /auth/me её не выражает, поэтому пункт показывается по ответу
+   /measurements/access. Любая ошибка — пункт скрыт, без сообщений. */
+const MEASUREMENTS_NAV_ITEM = { to: '/measurements', label: 'Замеры' };
+
 export function AppLayout() {
   const user = useCurrentUser();
   const navigate = useNavigate();
-  const navItems = user.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
+  const hasMeasurementsAccess = useMeasurementsAccess();
+  const roleItems = user.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
+  const navItems = hasMeasurementsAccess ? [...roleItems, MEASUREMENTS_NAV_ITEM] : roleItems;
 
   async function handleLogout() {
     await authApi.logout();

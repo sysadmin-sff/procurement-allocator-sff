@@ -697,3 +697,72 @@ export type ApplyPriceListEntryIn =
   | { action: 'match'; material_id: string }
   | { action: 'new'; category_id: string; canonical_name: string }
   | { action: 'skip' };
+
+// --- Матрица цен «материалы × поставщики» (ADR-0054) -----------------------
+
+export type PriceChange = 'up' | 'down' | 'same' | 'new';
+
+export interface PriceChangeCounts {
+  up: number;
+  down: number;
+  new: number;
+  same: number;
+}
+
+export interface PriceMatrixCell {
+  supplier_id: string;
+  price_id: string;
+  price: number;
+  currency: string;
+  valid_from: string;
+  baseline_price: number | null;
+  baseline_valid_from: string | null;
+  change: PriceChange;
+  change_pct: number | null;
+  is_cheapest: boolean;
+}
+
+export interface PriceMatrixRow {
+  material_id: string;
+  internal_sku: string;
+  canonical_name: string;
+  unit: string;
+  category_name: string | null;
+  cells: PriceMatrixCell[];
+}
+
+export interface PriceMatrixSupplier {
+  id: string;
+  name: string;
+  short_name: string | null;
+  is_active_for_allocation: boolean;
+  last_price_date: string | null;
+  days_since_update: number | null;
+  is_stale: boolean;
+  active_price_count: number;
+  changes: PriceChangeCounts;
+}
+
+export interface PriceMatrix {
+  as_of: string;
+  compare_to: string | null;
+  stale_after_days: number;
+  suppliers: PriceMatrixSupplier[];
+  rows: PriceMatrixRow[];
+  summary: PriceChangeCounts;
+}
+
+export interface PriceHistoryEntry {
+  id: string;
+  price: number;
+  currency: string;
+  valid_from: string;
+  valid_to: string | null;
+  source: 'import' | 'order' | 'manual';
+  import_id: string | null;
+  import_uploaded_at: string | null;
+  order_id: string | null;
+  order_title: string | null;
+  created_by_name: string | null;
+  change: PriceChange | null;
+}

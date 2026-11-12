@@ -84,6 +84,12 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
 `health.py` остаётся публичным; `auth.py` смешанный (публичные `/login`,
 `/callback`, защищённые `/me`, `/logout`).
 
+- **Матрица цен** (`app/services/price_matrix.py`, ADR-0054) — только чтение
+  `Price`: `GET /prices/matrix` (материалы × поставщики, сравнение с предыдущей
+  версией или с датой, «давно не обновлялся») и `GET /prices/history` (версии
+  пары с источником). Под admin-роутером `/prices`. Экран — `/prices`
+  (`frontend/src/routes/price-matrix/`).
+
 - **Measurements** (`backend/app/measurements/`, ADR-0051) — изолированный
   модуль: логику закупок не импортирует, таблицы с префиксом `measurements_`.
   Данные читаются из amoCRM только GET-запросами отдельным процессом

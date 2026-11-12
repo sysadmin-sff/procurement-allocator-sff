@@ -474,8 +474,9 @@ D = 7:
   на ближайшей ночной сверке (она перечитывает все известные сделки) или при
   повторном бэкфилле. Новая ревизия поверх `a83d51c07e94`.
 - **Конфиг воркера.** `MeasurementsSettings.deal_number_field_id` — id поля в
-  amo, рядом с `field_id` (Site Visit Result). Пока `None`, поле не читается и
-  колонка остаётся `NULL`.
+  amo, рядом с `field_id` (Site Visit Result). По умолчанию `530977` (поле
+  «Deal Number:», тип `text`, по `GET /leads/custom_fields` 2026-11-12). `None`
+  — поле не читается, колонка остаётся `NULL`.
 - **API (§5).** `GET /measurements/metrics/visits` отдаёт `deal_number`
   (`str | null`) — номер берётся из `measurements_leads` по `lead_id`. Это
   идентификатор сделки, как `lead_id`, а не данные клиента: запрет §5 на

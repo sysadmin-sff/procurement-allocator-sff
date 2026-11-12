@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.schemas.user import UserCreate, UserOut, UserUpdate
 from app.auth.dependencies import get_current_user, require_role
 from app.core.database import get_db
-from app.models import User
+from app.models import User, UserSession
 
 router = APIRouter(prefix="/users", dependencies=[Depends(require_role("admin"))])
 
@@ -61,6 +61,9 @@ def update_user(
         user.role = payload.role
     if payload.is_active is not None:
         user.is_active = payload.is_active
+    if payload.is_active is False:
+        # Otherwise a later reactivation would revive the old sessions.
+        db.query(UserSession).filter(UserSession.user_id == user.id).delete()
 
     db.commit()
     db.refresh(user)

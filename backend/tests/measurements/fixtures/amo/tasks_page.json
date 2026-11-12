@@ -1,0 +1,60 @@
+{
+  "_page": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/tasks?page=1&limit=250"
+    }
+  },
+  "_embedded": {
+    "tasks": [
+      {
+        "id": 18313159,
+        "created_by": 0,
+        "updated_by": 8644141,
+        "created_at": 1793985136,
+        "updated_at": 1793985288,
+        "responsible_user_id": 8644141,
+        "group_id": 592418,
+        "entity_id": 25341615,
+        "entity_type": "leads",
+        "duration": 0,
+        "is_completed": true,
+        "task_type_id": 1,
+        "text": "Synthetic task text",
+        "result": {
+          "text": "Synthetic result text"
+        },
+        "complete_till": 1793985436,
+        "account_id": 32002014,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/tasks/18313159?filter%5Bentity_type%5D=leads&filter%5Bentity_id%5D%5B0%5D=25341615&limit=250&page=1"
+          }
+        }
+      },
+      {
+        "id": 18313193,
+        "created_by": 8644141,
+        "updated_by": 8644141,
+        "created_at": 1793985464,
+        "updated_at": 1793985464,
+        "responsible_user_id": 9861902,
+        "group_id": 592426,
+        "entity_id": 25341615,
+        "entity_type": "leads",
+        "duration": 3600,
+        "is_completed": false,
+        "task_type_id": 2,
+        "text": "Synthetic task text",
+        "result": [],
+        "complete_till": 1794247200,
+        "account_id": 32002014,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/tasks/18313193?filter%5Bentity_type%5D=leads&filter%5Bentity_id%5D%5B0%5D=25341615&limit=250&page=1"
+          }
+        }
+      }
+    ]
+  }
+}

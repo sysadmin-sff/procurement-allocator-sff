@@ -1,0 +1,278 @@
+{
+  "_total_items": 2,
+  "_page": 1,
+  "_page_count": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/users/?limit=250&page=1"
+    }
+  },
+  "_embedded": {
+    "users": [
+      {
+        "id": 9861902,
+        "name": "Synthetic Surveyor 1",
+        "email": "surveyor.1@example.invalid",
+        "lang": "ru",
+        "rights": {
+          "leads": {
+            "view": "A",
+            "edit": "A",
+            "add": "A",
+            "delete": "D",
+            "export": "D"
+          },
+          "contacts": {
+            "view": "A",
+            "edit": "A",
+            "add": "A",
+            "delete": "D",
+            "export": "D"
+          },
+          "companies": {
+            "view": "A",
+            "edit": "A",
+            "add": "A",
+            "delete": "D",
+            "export": "D"
+          },
+          "tasks": {
+            "edit": "A",
+            "delete": "D"
+          },
+          "mail_access": false,
+          "catalog_access": false,
+          "files_access": false,
+          "status_rights": [
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740374,
+              "status_id": 70751738,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740474,
+              "status_id": 70752406,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740486,
+              "status_id": 70752458,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740490,
+              "status_id": 70752474,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740494,
+              "status_id": 70752490,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740498,
+              "status_id": 70752506,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740506,
+              "status_id": 70752542,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740510,
+              "status_id": 70752558,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            }
+          ],
+          "catalog_rights": null,
+          "custom_fields_rights": null,
+          "oper_day_reports_view_access": false,
+          "oper_day_user_tracking": false,
+          "is_admin": false,
+          "is_free": false,
+          "is_active": true,
+          "group_id": 592426,
+          "role_id": 912434
+        },
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/users/9861902/?limit=250&page=1"
+          }
+        }
+      },
+      {
+        "id": 14156562,
+        "name": "Synthetic Surveyor 2",
+        "email": "surveyor.2@example.invalid",
+        "lang": "en",
+        "rights": {
+          "leads": {
+            "view": "A",
+            "edit": "A",
+            "add": "A",
+            "delete": "D",
+            "export": "D"
+          },
+          "contacts": {
+            "view": "A",
+            "edit": "A",
+            "add": "A",
+            "delete": "D",
+            "export": "D"
+          },
+          "companies": {
+            "view": "A",
+            "edit": "A",
+            "add": "A",
+            "delete": "D",
+            "export": "D"
+          },
+          "tasks": {
+            "edit": "A",
+            "delete": "D"
+          },
+          "mail_access": false,
+          "catalog_access": false,
+          "files_access": false,
+          "status_rights": [
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740374,
+              "status_id": 70751738,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740474,
+              "status_id": 70752406,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740486,
+              "status_id": 70752458,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740490,
+              "status_id": 70752474,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740494,
+              "status_id": 70752490,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740498,
+              "status_id": 70752506,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740506,
+              "status_id": 70752542,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            },
+            {
+              "entity_type": "leads",
+              "pipeline_id": 8740510,
+              "status_id": 70752558,
+              "rights": {
+                "edit": "A",
+                "view": "A",
+                "delete": "D"
+              }
+            }
+          ],
+          "catalog_rights": null,
+          "custom_fields_rights": null,
+          "oper_day_reports_view_access": false,
+          "oper_day_user_tracking": false,
+          "is_admin": false,
+          "is_free": false,
+          "is_active": true,
+          "group_id": 592426,
+          "role_id": 912434
+        },
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/users/14156562/?limit=250&page=1"
+          }
+        }
+      }
+    ]
+  }
+}

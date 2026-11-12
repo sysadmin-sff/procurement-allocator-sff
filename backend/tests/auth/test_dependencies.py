@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.auth.dependencies import _csrf_token_matches, get_current_user, require_role
 from app.core.database import get_db
+from app.main import app
 
 
 @pytest.fixture
@@ -190,3 +191,76 @@ def test_csrf_token_matches_returns_false_when_encode_raises():
     # session_token is normally a plain str (uuid4().hex per app.auth.service),
     # but the fail-closed guarantee must hold even if that ever changes.
     assert _csrf_token_matches("secret-csrf", _ExplodesOnEncode()) is False
+
+
+# --- Deactivation takes effect on the next request (ADR-0024 §3) ---
+
+
+def _app_client_as(user_session):
+    client = TestClient(app)
+    client.cookies.set("session_id", str(user_session.id))
+    return client
+
+
+def test_deactivated_user_with_live_session_gets_401_on_get_current_user_router(
+    make_user, make_session
+):
+    user = make_user(is_active=False)
+
+    response = _app_client_as(make_session(user)).get("/projects")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_deactivated_admin_with_live_session_gets_401_not_403_on_require_role_router(
+    make_user, make_session
+):
+    admin = make_user(role="admin", is_active=False)
+
+    response = _app_client_as(make_session(admin)).get("/users")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_deactivated_user_post_without_csrf_gets_401_not_403(probe_app, make_user, make_session):
+    user = make_user(is_active=False)
+    probe_app.cookies.set("session_id", str(make_session(user).id))
+
+    response = probe_app.post("/probe/mutate")
+
+    assert response.status_code == 401
+
+
+def test_deactivated_user_request_does_not_extend_the_session(
+    db_session, probe_app, make_user, make_session
+):
+    session, _ = db_session
+    user_session = make_session(make_user(is_active=False))
+    expires_at, last_seen_at = user_session.expires_at, user_session.last_seen_at
+    probe_app.cookies.set("session_id", str(user_session.id))
+
+    probe_app.get("/probe/me")
+
+    session.refresh(user_session)
+    assert user_session.expires_at == expires_at
+    assert user_session.last_seen_at == last_seen_at
+
+
+def test_active_user_on_get_current_user_router_is_unchanged(make_user, make_session):
+    employee = make_user(is_active=True)
+
+    assert _app_client_as(make_session(employee)).get("/projects").status_code == 200
+
+
+def test_active_admin_on_require_role_router_is_unchanged(make_user, make_session):
+    admin = make_user(role="admin", is_active=True)
+
+    assert _app_client_as(make_session(admin)).get("/users").status_code == 200
+
+
+def test_active_user_with_the_wrong_role_still_gets_403(make_user, make_session):
+    employee = make_user(is_active=True)
+
+    assert _app_client_as(make_session(employee)).get("/users").status_code == 403

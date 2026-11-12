@@ -200,3 +200,10 @@ def test_bootstrap_admin_does_not_repromote_after_manual_demotion(db_session, ma
     bootstrap_admin(session, "demoted@screen-factory-florida.com")
     session.refresh(demoted)
     assert demoted.role == "employee"
+
+
+def test_get_valid_session_returns_none_for_deactivated_user(db_session, make_user, make_session):
+    session, _ = db_session
+    user_session = make_session(make_user(is_active=False))
+
+    assert get_valid_session(session, str(user_session.id)) is None

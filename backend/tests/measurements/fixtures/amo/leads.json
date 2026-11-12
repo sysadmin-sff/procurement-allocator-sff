@@ -1,0 +1,787 @@
+{
+  "_page": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/leads?filter%5Bid%5D%5B0%5D=25341615&filter%5Bid%5D%5B1%5D=3695039&filter%5Bid%5D%5B2%5D=3694969&page=1&limit=250"
+    }
+  },
+  "_embedded": {
+    "leads": [
+      {
+        "id": 3694969,
+        "name": "Synthetic lead 1",
+        "price": 12500,
+        "price_with_minor_units": 1250000.0,
+        "responsible_user_id": 11692878,
+        "group_id": 592410,
+        "status_id": 143,
+        "pipeline_id": 8740490,
+        "loss_reason_id": null,
+        "created_by": 8322115,
+        "updated_by": 10219178,
+        "created_at": 1729864246,
+        "updated_at": 1791840012,
+        "closed_at": 1732638977,
+        "closest_task_at": null,
+        "is_deleted": false,
+        "custom_fields_values": [
+          {
+            "field_id": 784029,
+            "field_name": "Site Visit Result",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Sold On-Site",
+                "enum_id": 627967,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 530977,
+            "field_name": "Synthetic field 1",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 1"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531129,
+            "field_name": "Synthetic field 2",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 2"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531387,
+            "field_name": "Synthetic field 3",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 3",
+                "enum_id": 389405,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531437,
+            "field_name": "Synthetic field 4",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 4",
+                "enum_id": 389429,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531443,
+            "field_name": "Synthetic field 5",
+            "field_code": null,
+            "field_type": "url",
+            "values": [
+              {
+                "value": "https://example.invalid/synthetic"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531631,
+            "field_name": "Synthetic field 6",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 6",
+                "enum_id": 389501,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531763,
+            "field_name": "Synthetic field 7",
+            "field_code": null,
+            "field_type": "date",
+            "values": [
+              {
+                "value": 1794000000
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531911,
+            "field_name": "Synthetic field 8",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 8",
+                "enum_id": 389607,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531933,
+            "field_name": "Synthetic field 9",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 9"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531551,
+            "field_name": "Synthetic field 10",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 10"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531277,
+            "field_name": "Synthetic field 11",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 11",
+                "enum_id": 389305,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 532665,
+            "field_name": "Synthetic field 12",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 12",
+                "enum_id": 390065,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 533009,
+            "field_name": "Synthetic field 13",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 13",
+                "enum_id": 390237,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 590335,
+            "field_name": "Synthetic field 14",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 14",
+                "enum_id": 431397,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 590635,
+            "field_name": "Synthetic field 15",
+            "field_code": null,
+            "field_type": "textarea",
+            "values": [
+              {
+                "value": "Synthetic value 15"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531441,
+            "field_name": "Synthetic field 16",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 16",
+                "enum_id": 411423,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 704687,
+            "field_name": "Synthetic field 17",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 17",
+                "enum_id": 508389,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          }
+        ],
+        "score": null,
+        "account_id": 32002014,
+        "labor_cost": 0,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/leads/3694969?filter%5Bid%5D%5B0%5D=25341615&filter%5Bid%5D%5B1%5D=3695039&filter%5Bid%5D%5B2%5D=3694969&page=1&limit=250"
+          }
+        },
+        "_embedded": {
+          "tags": [
+            {
+              "id": 21311,
+              "name": "Synthetic tag 1",
+              "color": null
+            },
+            {
+              "id": 36289,
+              "name": "Synthetic tag 2",
+              "color": "EBEBEB"
+            }
+          ],
+          "companies": []
+        }
+      },
+      {
+        "id": 3695039,
+        "name": "Synthetic lead 2",
+        "price": 12500,
+        "price_with_minor_units": 1250000.0,
+        "responsible_user_id": 11692878,
+        "group_id": 592410,
+        "status_id": 143,
+        "pipeline_id": 8740490,
+        "loss_reason_id": null,
+        "created_by": 8322115,
+        "updated_by": 10219178,
+        "created_at": 1729718685,
+        "updated_at": 1791840012,
+        "closed_at": 1733149999,
+        "closest_task_at": null,
+        "is_deleted": false,
+        "custom_fields_values": [
+          {
+            "field_id": 530977,
+            "field_name": "Synthetic field 1",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 1"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531129,
+            "field_name": "Synthetic field 2",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 2"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531387,
+            "field_name": "Synthetic field 3",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 3",
+                "enum_id": 389405,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531437,
+            "field_name": "Synthetic field 4",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 4",
+                "enum_id": 389429,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531443,
+            "field_name": "Synthetic field 5",
+            "field_code": null,
+            "field_type": "url",
+            "values": [
+              {
+                "value": "https://example.invalid/synthetic"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531631,
+            "field_name": "Synthetic field 6",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 6",
+                "enum_id": 389507,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531763,
+            "field_name": "Synthetic field 7",
+            "field_code": null,
+            "field_type": "date",
+            "values": [
+              {
+                "value": 1794000000
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531911,
+            "field_name": "Synthetic field 8",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 8",
+                "enum_id": 389619,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531933,
+            "field_name": "Synthetic field 9",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 9"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531551,
+            "field_name": "Synthetic field 10",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 10"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531277,
+            "field_name": "Synthetic field 11",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 11",
+                "enum_id": 389309,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 532665,
+            "field_name": "Synthetic field 12",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 12",
+                "enum_id": 390065,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 533009,
+            "field_name": "Synthetic field 13",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 13",
+                "enum_id": 390237,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 590335,
+            "field_name": "Synthetic field 14",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 14",
+                "enum_id": 431385,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 590635,
+            "field_name": "Synthetic field 15",
+            "field_code": null,
+            "field_type": "textarea",
+            "values": [
+              {
+                "value": "Synthetic value 15"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531441,
+            "field_name": "Synthetic field 16",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 16",
+                "enum_id": 411423,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 704687,
+            "field_name": "Synthetic field 17",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 17",
+                "enum_id": 508389,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          }
+        ],
+        "score": null,
+        "account_id": 32002014,
+        "labor_cost": 0,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/leads/3695039?filter%5Bid%5D%5B0%5D=25341615&filter%5Bid%5D%5B1%5D=3695039&filter%5Bid%5D%5B2%5D=3694969&page=1&limit=250"
+          }
+        },
+        "_embedded": {
+          "tags": [
+            {
+              "id": 21311,
+              "name": "Synthetic tag 1",
+              "color": null
+            },
+            {
+              "id": 36289,
+              "name": "Synthetic tag 2",
+              "color": "EBEBEB"
+            }
+          ],
+          "companies": []
+        }
+      },
+      {
+        "id": 25341615,
+        "name": "Synthetic lead 3",
+        "price": 12500,
+        "price_with_minor_units": 1250000.0,
+        "responsible_user_id": 13088238,
+        "group_id": 592418,
+        "status_id": 70752478,
+        "pipeline_id": 8740490,
+        "loss_reason_id": null,
+        "created_by": 8644141,
+        "updated_by": 11692878,
+        "created_at": 1793985133,
+        "updated_at": 1794269578,
+        "closed_at": null,
+        "closest_task_at": 1794342600,
+        "is_deleted": false,
+        "custom_fields_values": [
+          {
+            "field_id": 531277,
+            "field_name": "Synthetic field 1",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 1",
+                "enum_id": 389305,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531387,
+            "field_name": "Synthetic field 2",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 2",
+                "enum_id": 389371,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531437,
+            "field_name": "Synthetic field 3",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 3",
+                "enum_id": 614093,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531441,
+            "field_name": "Synthetic field 4",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 4",
+                "enum_id": 389433,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531631,
+            "field_name": "Synthetic field 5",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 5",
+                "enum_id": 389501,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531763,
+            "field_name": "Synthetic field 6",
+            "field_code": null,
+            "field_type": "date",
+            "values": [
+              {
+                "value": 1794000000
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531911,
+            "field_name": "Synthetic field 7",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 7",
+                "enum_id": 389615,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531933,
+            "field_name": "Synthetic field 8",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 8"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531551,
+            "field_name": "Synthetic field 9",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 9"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531129,
+            "field_name": "Synthetic field 10",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 10"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531123,
+            "field_name": "Synthetic field 11",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 11",
+                "enum_id": 389247,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 530977,
+            "field_name": "Synthetic field 12",
+            "field_code": null,
+            "field_type": "text",
+            "values": [
+              {
+                "value": "Synthetic value 12"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 531443,
+            "field_name": "Synthetic field 13",
+            "field_code": null,
+            "field_type": "url",
+            "values": [
+              {
+                "value": "https://example.invalid/synthetic"
+              }
+            ],
+            "is_masked": false
+          },
+          {
+            "field_id": 704687,
+            "field_name": "Synthetic field 14",
+            "field_code": null,
+            "field_type": "select",
+            "values": [
+              {
+                "value": "Synthetic value 14",
+                "enum_id": 508391,
+                "enum_code": null
+              }
+            ],
+            "is_masked": false
+          }
+        ],
+        "score": null,
+        "account_id": 32002014,
+        "labor_cost": 0,
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/leads/25341615?filter%5Bid%5D%5B0%5D=25341615&filter%5Bid%5D%5B1%5D=3695039&filter%5Bid%5D%5B2%5D=3694969&page=1&limit=250"
+          }
+        },
+        "_embedded": {
+          "tags": [
+            {
+              "id": 36291,
+              "name": "Synthetic tag 1",
+              "color": "D8D5FF"
+            },
+            {
+              "id": 114505,
+              "name": "Synthetic tag 2",
+              "color": "D1A4DC"
+            }
+          ],
+          "companies": []
+        }
+      }
+    ]
+  }
+}

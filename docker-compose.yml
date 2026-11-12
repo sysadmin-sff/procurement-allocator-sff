@@ -48,5 +48,36 @@ services:
     volumes:
       - ./deploy/frontend_dist:/frontend_dist
 
+  # Measurements module, ADR-0051 §1/§5. Started only with
+  # `--profile measurements`; no main service depends on it. Same image as
+  # backend. The amoCRM token lives only in backend/.env.measurements (git-
+  # ignored, server only), which is passed to this service alone.
+  measurements-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    profiles: ["measurements"]
+    restart: unless-stopped
+    command: ["python", "-m", "app.measurements.worker"]
+    env_file:
+      - backend/.env
+      - backend/.env.measurements
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # SIGTERM rolls back the open transaction and releases the advisory lock.
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.measurements.healthcheck"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
 volumes:
   postgres_data:

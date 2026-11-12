@@ -427,3 +427,120 @@ needed_quantity` переносится из `AllocationLine.needed_quantity` п
 он создан. Строго внутреннее поле: видно на `AllocationResultPage`/
 `OrderDetailPage`, никогда не попадает в исходящий поставщику текст
 ордера (`buildOrderText`/`buildTargetPriceOrderText`).
+
+## Модуль «Замеры» (ADR-0051)
+
+Таблицы с префиксом `measurements_`, ревизия `c4a7e19d2b60`. id из amoCRM — натуральные
+ключи `BigInteger`. Жёстких FK между таблицами синхронизации нет (данные
+приходят не по порядку); единственный FK на основную схему — из
+`measurements_user_access` в `users`. Строковые перечисления — `String` с `CHECK`.
+
+```mermaid
+erDiagram
+    User ||--o| MeasurementsUserAccess : "грант (CASCADE)"
+    User ||--o{ MeasurementsUserAccess : "выдал (SET NULL)"
+    MeasurementsLead ||..o{ MeasurementsVisit : "lead_id, без FK"
+    MeasurementsLead ||..o{ MeasurementsAmoEvent : "lead_id, без FK"
+    MeasurementsVisit ||..o{ MeasurementsAmoEvent : "entity_id задачи, без FK"
+    MeasurementsLead ||..o{ MeasurementsResultAttribution : "производная"
+    MeasurementsVisit ||..o| MeasurementsVisitOutcome : "производная, task_id"
+    MeasurementsFieldValue ||..o{ MeasurementsLead : "site_visit_enum_id"
+
+    MeasurementsLead {
+        bigint lead_id PK
+        bigint pipeline_id "nullable до первого снимка"
+        bigint status_id
+        bigint site_visit_enum_id "снимок поля 784029"
+        string deal_number "снимок поля Deal Number, String(64)"
+        numeric price "Numeric(12,3)"
+        datetime amo_updated_at "upsert не откатывает назад"
+        datetime deleted_at "ставит ночная сверка"
+    }
+    MeasurementsVisit {
+        bigint task_id PK
+        bigint lead_id
+        bigint task_type_id
+        string kind "primary/additional/legacy"
+        bigint responsible_amo_user_id
+        datetime scheduled_at "complete_till"
+        bool is_all_day
+        datetime completed_at "из task_completed"
+        text result_text "API не отдаёт"
+        datetime amo_created_at "классификация из нашей БД"
+        datetime deleted_at
+        string deleted_reason "deleted/retyped"
+    }
+    MeasurementsAmoEvent {
+        string event_id PK
+        string event_type
+        string entity_type
+        bigint entity_id
+        bigint lead_id
+        datetime occurred_at
+        jsonb value_before
+        jsonb value_after
+    }
+    MeasurementsFieldValue {
+        bigint enum_id PK
+        string label "обновляет синхронизация"
+        bool visit_occurred "маппинг, синхронизация не трогает"
+        string outcome_type "not_sold/completed/sold/declined"
+        bool is_active
+    }
+    MeasurementsResultAttribution {
+        uuid id PK
+        string event_id "unique, nullable"
+        bigint lead_id
+        bigint task_id "nullable"
+        string rule
+        string deadline_source "history/current"
+        bool is_effective
+        int rule_version
+    }
+    MeasurementsVisitOutcome {
+        bigint task_id PK "активный замер"
+        bigint lead_id "индекс"
+        string measurer_key "nullable, из measurer_map"
+        date local_date "день NY, индекс"
+        bigint group_task_id "основной замер группы"
+        bool is_duplicate
+        string result_source "funnel/site_visit"
+        string funnel_outcome "produced/closed/not_held/no_data"
+        string no_data_reason "window/never_in_measurements"
+        string funnel_exit_event_id "событие, давшее исход"
+        string site_visit_outcome "как outcome_type"
+        int rule_version
+    }
+    MeasurementsUserAccess {
+        uuid user_id PK
+        uuid granted_by_user_id "nullable"
+        datetime granted_at
+    }
+```
+
+Ещё три таблицы без связей: `measurements_sync_state` (поток → watermark,
+статусы, `heartbeat_at`, целочисленные `counters`), `measurements_amo_users`,
+`measurements_pipeline_statuses` (составной PK `(pipeline_id, status_id)`:
+статусы `142`/`143` есть в каждой воронке). У `measurements_pipeline_statuses` и
+`measurements_amo_users` есть `missing_since`: синхронизация не удаляет строки,
+пропавшие из ответа amo, а помечает их (ревизия `f2b9d6a41c83`).
+
+- `measurements_amo_events` — только `INSERT ... ON CONFLICT DO NOTHING`.
+  Хранятся типы: `custom_field_784029_value_changed`, `lead_status_changed`,
+  `task_deadline_changed`, `task_deleted`, `task_completed`,
+  `task_type_changed`. `text` задачи не хранится нигде.
+- `measurements_result_attributions` полностью пересчитывается по сделке в одной
+  транзакции. Правила: `cleared`, `same_or_past`, `early_entry`, `upcoming`,
+  `late_decline`, `ambiguous_decline`, `snapshot_fallback`, `unmapped`, `no_visit`.
+- Маппинг исходов задан только по `enum_id`; новый `enum_id` получает `NULL`
+  (правило `unmapped`), пока его не сопоставят вручную.
+- `measurements_visit_outcomes` (ADR-0053 §3, ревизия `a83d51c07e94`) — исход и
+  группа дублей каждого активного замера. Пересчитывается вместе с атрибуциями
+  по сделке, в одной транзакции (`attribution_store.recompute_lead`), функцией
+  `outcomes.compute_outcomes`. Колонки исхода у всех замеров группы — исход
+  группы: `funnel` — у основного замера, `site_visit` — действующий результат
+  любого замера группы с наиболее поздним событием (ADR-0053, «Уточнения
+  реализации»). Строк нет у удалённых и retyped замеров, у сделок из
+  `excluded_lead_ids` и у сделок с `deleted_at`. Первичное заполнение и смена
+  `rule_version` — скрипт `python -m app.measurements.scripts.recompute`;
+  `outcomes_stale` в `/measurements/status` — строки со старой `rule_version`.

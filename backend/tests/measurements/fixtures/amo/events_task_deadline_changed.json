@@ -1,0 +1,94 @@
+{
+  "_page": 1,
+  "_links": {
+    "self": {
+      "href": "https://example.amocrm.com/api/v4/events?page=1&limit=250"
+    }
+  },
+  "_embedded": {
+    "events": [
+      {
+        "id": "01m708xacd2ey6ejyng62rmzjq",
+        "type": "task_deadline_changed",
+        "entity_id": 18313375,
+        "entity_type": "task",
+        "created_by": 11692878,
+        "created_at": 1794231937,
+        "value_after": [
+          {
+            "task_deadline": {
+              "timestamp": 1794236400
+            }
+          }
+        ],
+        "value_before": [
+          {
+            "task_deadline": {
+              "timestamp": 1793989238
+            }
+          }
+        ],
+        "account_id": 32002014,
+        "name": "synthetic event",
+        "entity_type_name": "task",
+        "oauth_client_uuid": "",
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/events/01m708xacd2ey6ejyng62rmzjq"
+          }
+        },
+        "_embedded": {
+          "entity": {
+            "id": 18313375,
+            "_links": {
+              "self": {
+                "href": "https://example.amocrm.com/api/v4/tasks/18313375"
+              }
+            }
+          }
+        }
+      },
+      {
+        "id": "01m708d4npdqk90hne9tvw8as0",
+        "type": "task_deadline_changed",
+        "entity_id": 18314017,
+        "entity_type": "task",
+        "created_by": 13088238,
+        "created_at": 1794231407,
+        "value_after": [
+          {
+            "task_deadline": {
+              "timestamp": 1794252600
+            }
+          }
+        ],
+        "value_before": [
+          {
+            "task_deadline": {
+              "timestamp": 1794001471
+            }
+          }
+        ],
+        "account_id": 32002014,
+        "name": "synthetic event",
+        "entity_type_name": "task",
+        "oauth_client_uuid": "",
+        "_links": {
+          "self": {
+            "href": "https://example.amocrm.com/api/v4/events/01m708d4npdqk90hne9tvw8as0"
+          }
+        },
+        "_embedded": {
+          "entity": {
+            "id": 18314017,
+            "_links": {
+              "self": {
+                "href": "https://example.amocrm.com/api/v4/tasks/18314017"
+              }
+            }
+          }
+        }
+      }
+    ]
+  }
+}

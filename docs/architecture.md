@@ -39,6 +39,17 @@ flowchart LR
         OrderDB --> Doc[Генерация PDF по поставщику]
     end
 
+    subgraph Measurements["5. Замеры (ADR-0051, отдельный процесс)"]
+        Amo[amoCRM API v4, только GET] --> Worker[measurements-worker: опрос, справочники, сверка 03:30]
+        Backfill[scripts.backfill] --> MeasDB
+        Worker --> MeasDB[(measurements_* таблицы)]
+        MeasDB --> Attribution[атрибуция Site Visit Result и исход замера: детерминированные функции]
+        Attribution --> MeasDB
+        MeasDB --> MeasAPI["/measurements API, флаг MEASUREMENTS_ENABLED"]
+        MeasAPI --> MeasUI["экран «Замеры» /measurements: только отображение ответа"]
+    end
+
+    SessionDB -.->|require_measurements_access: admin или грант| MeasAPI
     SessionDB -.->|get_current_user / require_role| Ingestion
     SessionDB -.->|require_role admin| Templates
     SessionDB -.->|get_current_user / require_role| Project
@@ -78,6 +89,32 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
   версией или с датой, «давно не обновлялся») и `GET /prices/history` (версии
   пары с источником). Под admin-роутером `/prices`. Экран — `/prices`
   (`frontend/src/routes/price-matrix/`).
+
+- **Measurements** (`backend/app/measurements/`, ADR-0051) — изолированный
+  модуль: логику закупок не импортирует, таблицы с префиксом `measurements_`.
+  Данные читаются из amoCRM только GET-запросами отдельным процессом
+  `measurements-worker` (свой engine на 2 соединения, единственность через
+  `pg_try_advisory_lock`, общий с бэкфиллом). Роутер `/measurements`
+  подключается в `main.py`, только если `MEASUREMENTS_ENABLED=true`; при
+  выключенном флаге загружаются лишь `app.measurements.flags` и
+  `app.measurements.models`. Доступ — третья категория к ADR-0024 §4:
+  `require_measurements_access` (активный `admin` или грант в
+  `measurements_user_access`), а не значение `User.role`. Привязка результата
+  Site Visit Result к замеру — чистая функция `attribution.attribute`, без LLM.
+  Исход и группа дублей замера (ADR-0053) — чистая функция
+  `outcomes.compute_outcomes`; её строки (`measurements_visit_outcomes`)
+  пересчитываются вместе с атрибуциями потоком `attribution`, сверкой (в том
+  числе при сработавшем предохранителе), бэкфиллом и скриптом `recompute`.
+  Таймзона модуля — константа `app.measurements.zone`, не настройка.
+  Метрики (ADR-0053) — `metrics.py`: SQL через SQLAlchemy Core по
+  `measurements_visit_outcomes` с соединением на `measurements_visits`, отношения
+  в `Decimal`; маршруты `GET /measurements/metrics` и `/metrics/visits` в том же
+  роутере, под тем же `require_measurements_access`, только агрегаты и
+  идентификаторы. Экран — `frontend/src/routes/measurements/` (страницы
+  `/measurements` и `/measurements/visits`). Он ничего не считает, кроме
+  пиксельной высоты столбиков графика. Пункт меню показывается по
+  `GET /measurements/access` (`useMeasurementsAccess`), а не по роли
+  (`docs/ui-reference.md` §9).
 
 ## Связанные документы
 

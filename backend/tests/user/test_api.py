@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.models import UserSession
 
 
 def _client_as(user_session):
@@ -150,3 +151,71 @@ def test_self_deactivation_when_another_admin_exists_succeeds(make_user, make_se
     )
     assert response.status_code == 200
     assert response.json()["is_active"] is False
+
+
+def _session_ids(db_session, user):
+    session, _ = db_session
+    return {row.id for row in session.query(UserSession).filter_by(user_id=user.id)}
+
+
+def test_deactivation_deletes_only_that_users_sessions(db_session, make_user, make_session):
+    admin = make_user(email="deactivating-admin@screen-factory-florida.com", role="admin")
+    admin_session = make_session(admin, csrf_token="csrf-deactivate")
+    target = make_user(email="target@screen-factory-florida.com")
+    make_session(target)
+    make_session(target)
+    bystander = make_user(email="bystander@screen-factory-florida.com")
+    bystander_session = make_session(bystander)
+
+    response = _client_as(admin_session).patch(
+        f"/users/{target.id}",
+        json={"is_active": False},
+        headers={"X-CSRF-Token": "csrf-deactivate"},
+    )
+
+    assert response.status_code == 200
+    assert _session_ids(db_session, target) == set()
+    assert _session_ids(db_session, bystander) == {bystander_session.id}
+    assert _session_ids(db_session, admin) == {admin_session.id}
+
+
+def test_role_change_keeps_the_users_sessions(db_session, make_user, make_session):
+    admin = make_user(email="role-admin@screen-factory-florida.com", role="admin")
+    admin_session = make_session(admin, csrf_token="csrf-role")
+    target = make_user(email="role-target@screen-factory-florida.com")
+    target_session = make_session(target)
+
+    response = _client_as(admin_session).patch(
+        f"/users/{target.id}", json={"role": "admin"}, headers={"X-CSRF-Token": "csrf-role"}
+    )
+
+    assert response.status_code == 200
+    assert _session_ids(db_session, target) == {target_session.id}
+
+
+def test_refused_self_deactivation_keeps_the_session(db_session, make_user, make_session):
+    admin = make_user(email="only-admin@screen-factory-florida.com", role="admin")
+    admin_session = make_session(admin, csrf_token="csrf-only")
+
+    response = _client_as(admin_session).patch(
+        f"/users/{admin.id}", json={"is_active": False}, headers={"X-CSRF-Token": "csrf-only"}
+    )
+
+    assert response.status_code == 409
+    assert _session_ids(db_session, admin) == {admin_session.id}
+
+
+def test_reactivated_user_old_session_stays_dead(make_user, make_session):
+    admin = make_user(email="reactivating-admin@screen-factory-florida.com", role="admin")
+    admin_session = make_session(admin, csrf_token="csrf-react")
+    target = make_user(email="reactivated@screen-factory-florida.com")
+    old_session_id = make_session(target).id
+    admin_client = _client_as(admin_session)
+    headers = {"X-CSRF-Token": "csrf-react"}
+
+    admin_client.patch(f"/users/{target.id}", json={"is_active": False}, headers=headers)
+    admin_client.patch(f"/users/{target.id}", json={"is_active": True}, headers=headers)
+
+    old_cookie_client = TestClient(app)
+    old_cookie_client.cookies.set("session_id", str(old_session_id))
+    assert old_cookie_client.get("/auth/me").status_code == 401

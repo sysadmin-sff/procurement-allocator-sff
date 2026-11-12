@@ -596,8 +596,12 @@ def test_missing_or_blank_deal_number_is_null(env, custom_fields):
     assert env.lead().deal_number is None
 
 
+def test_deal_number_field_defaults_to_the_amo_field():
+    assert MeasurementsSettings(_env_file=None).deal_number_field_id == 530977
+
+
 def test_deal_number_is_not_read_while_the_field_id_is_unset(env):
-    assert env.settings.deal_number_field_id is None
+    env.settings.deal_number_field_id = None
     env.amo.add_task(make_task())
     env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=[deal_number_field("SF-1042")])
     env.cycle()

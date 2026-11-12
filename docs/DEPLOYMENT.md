@@ -398,6 +398,34 @@ dry-run → `--apply` → включение API.
    же (`MEASUREMENTS_ENABLED`). `outcomes_stale` в `/measurements/status` и в
    ответе метрик должен быть `0`.
 
+### Выкат Deal Number и экрана «Замеры» (ADR-0053, изменение 2026-11-11)
+
+Поле сделки amo «Deal Number:» (id `530977`, значение по умолчанию
+`deal_number_field_id`) хранится в `measurements_leads.deal_number` и
+отдаётся в `/measurements/metrics/visits`. Экран `/measurements` и пункт меню
+«Замеры» приходят с frontend; пункт виден только при доступе (admin или грант).
+
+1. **Миграция** (ревизия `b5d3e8a17f42`, добавляет nullable-колонку, данных не
+   переносит). Перед ней — дамп БД.
+   ```
+   docker compose run --rm backend alembic upgrade head
+   ```
+2. **Выкат кода** `backend`, `measurements-worker` и frontend.
+3. **Заполнение номеров у уже загруженных сделок** — бэкфилл (dry-run, затем
+   `--apply`, воркер остановлен), как в шаге 3 «Порядка выката». Без него
+   номера появятся на ближайшей ночной сверке (03:30 NY), которая
+   перечитывает все известные сделки.
+4. **Проверка** — только числа:
+   ```
+   docker compose exec postgres psql -U <user> -d <db> -c \
+     "select count(*), count(deal_number) from measurements_leads"
+   ```
+   На странице «Замеры за период» колонка «Deal Number» заполнена, у сделок
+   без номера — «—».
+
+Откат: колонку можно оставить (код без неё её не читает) или
+`alembic downgrade a83d51c07e94`.
+
 ### Ротация токена
 
 1. Выпустить новый токен в той же интеграции и обновить таблицу дат выше.

@@ -14,3 +14,4 @@ export { SuppliersPage } from './SuppliersPage';
 export { SupplierDetailPage } from './suppliers/SupplierDetailPage';
 export { UsersPage } from './UsersPage';
 export { ProjectTemplatesPage } from './ProjectTemplatesPage';
+export { PriceMatrixPage } from './price-matrix/PriceMatrixPage';

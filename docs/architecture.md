@@ -73,6 +73,12 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
 `health.py` остаётся публичным; `auth.py` смешанный (публичные `/login`,
 `/callback`, защищённые `/me`, `/logout`).
 
+- **Матрица цен** (`app/services/price_matrix.py`, ADR-0054) — только чтение
+  `Price`: `GET /prices/matrix` (материалы × поставщики, сравнение с предыдущей
+  версией или с датой, «давно не обновлялся») и `GET /prices/history` (версии
+  пары с источником). Под admin-роутером `/prices`. Экран — `/prices`
+  (`frontend/src/routes/price-matrix/`).
+
 ## Связанные документы
 
 - Данные: `docs/data-model.md`

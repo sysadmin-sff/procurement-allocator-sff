@@ -1,5 +1,5 @@
 import { diff, http } from './client';
-import type { Price, PriceCreate, PriceUpdate } from './types';
+import type { Price, PriceCreate, PriceHistoryEntry, PriceMatrix, PriceUpdate } from './types';
 
 export interface PriceListFilter {
   material_id?: string;
@@ -29,4 +29,14 @@ export const pricesApi = {
     return http.put<Price>(`/prices/${id}`, payload);
   },
   remove: (id: string) => http.delete<void>(`/prices/${id}`),
+  /** Матрица «все материалы × все поставщики» (ADR-0054). Без compareTo —
+   * сравнение с предыдущей версией каждой цены, с compareTo (YYYY-MM-DD) —
+   * с ценой, действовавшей на эту дату. */
+  matrix: (compareTo?: string | null) =>
+    http.get<PriceMatrix>(`/prices/matrix${compareTo ? `?compare_to=${compareTo}` : ''}`),
+  /** Все версии пары материал + поставщик с источником, новые первыми. */
+  history: (materialId: string, supplierId: string) =>
+    http.get<PriceHistoryEntry[]>(
+      `/prices/history?material_id=${materialId}&supplier_id=${supplierId}`,
+    ),
 };

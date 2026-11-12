@@ -1,0 +1,463 @@
+/* Матрица цен (ADR-0054). Каркас таблицы — тот же, что у сравнения цен в
+   проекте (price-comparison/PriceComparison.module.css): sticky-шапка и
+   sticky-колонка материала внутри скролл-контейнера с ограниченной высотой.
+   Цвета изменений — те же success/danger токены, что в истории цены ордера. */
+
+/* Поставщиков бывает 8–12, 1180px стандартного .inner на это не хватает. */
+.wideInner {
+  max-width: 1680px;
+}
+
+.asOf {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+}
+
+/* --- Панель фильтров ------------------------------------------------------ */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-5) var(--space-8);
+}
+
+.toolbarGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.toolbarLabel {
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.segment,
+.segmentActive {
+  border: none;
+  padding: var(--space-3) var(--space-5);
+  font: inherit;
+  font-size: var(--text-sm-alt2);
+  cursor: pointer;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.segment + .segmentActive,
+.segmentActive + .segment,
+.segment + .segment {
+  border-left: 1px solid var(--color-border);
+}
+
+.segmentActive {
+  background: var(--color-brand);
+  color: var(--color-surface);
+  font-weight: 600;
+}
+
+.preset {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm-alt2);
+  color: var(--color-brand);
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.dateInput {
+  width: auto;
+}
+
+.searchInput {
+  width: 240px;
+}
+
+.categorySelect {
+  width: auto;
+  min-width: 180px;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3) var(--space-7);
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+}
+
+.summaryDown {
+  color: var(--color-success-alt);
+}
+
+.summaryUp {
+  color: var(--color-danger-text);
+}
+
+.summaryNeutral {
+  color: var(--color-text-secondary);
+}
+
+.summaryHint {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--color-text-tertiary-alt);
+}
+
+/* --- Матрица -------------------------------------------------------------- */
+
+.reloading {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.matrixScroll {
+  overflow: auto;
+  max-height: 75vh;
+}
+
+.matrixTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-base);
+  white-space: nowrap;
+}
+
+.matrixTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: center;
+  vertical-align: top;
+  padding: var(--space-4) var(--space-6);
+  background: var(--color-surface-subtle);
+  border-bottom: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border-subtle);
+}
+
+.supplierLink {
+  display: block;
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-brand);
+  text-decoration: none;
+}
+
+.supplierLink:hover {
+  text-decoration: underline;
+}
+
+.supplierMeta,
+.staleText {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-xs-alt);
+  font-weight: 500;
+  color: var(--color-text-tertiary-alt);
+}
+
+.staleText {
+  display: inline;
+  font-weight: 700;
+  color: var(--color-danger-text);
+}
+
+th .staleText {
+  display: block;
+}
+
+.matrixTable tbody td {
+  padding: var(--space-2) var(--space-3);
+  text-align: center;
+  border-bottom: 1px solid var(--color-border-subtle);
+  border-left: 1px solid var(--color-border-subtle);
+  vertical-align: middle;
+}
+
+.matrixTable tbody tr:hover td {
+  background: var(--color-surface-subtle);
+}
+
+.materialColHeader,
+.materialColCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left !important;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  min-width: 220px;
+  width: 340px;
+  white-space: normal;
+}
+
+.matrixTable thead th.materialColHeader {
+  z-index: 3;
+  vertical-align: bottom;
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--color-text-tertiary-alt);
+}
+
+.matrixTable tbody td.materialColCell {
+  padding: var(--space-3) var(--space-6);
+}
+
+.materialName {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.materialMeta {
+  display: block;
+  font-size: var(--text-xs-alt);
+  color: var(--color-text-tertiary-alt);
+}
+
+.matrixTable tbody tr.categoryRow td {
+  position: static;
+  background: var(--color-brand-tint-alt);
+  padding: 0;
+  text-align: left;
+}
+
+/* Подпись категории липнет к левому краю при горизонтальной прокрутке. */
+.categoryLabel {
+  position: sticky;
+  left: 0;
+  display: inline-block;
+  padding: var(--space-3) var(--space-6);
+  font-family: var(--font-heading);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-brand);
+}
+
+.categoryCell {
+  border-left: none !important;
+}
+
+.priceTd {
+  min-width: 96px;
+}
+
+.emptyCell {
+  background: transparent;
+}
+
+.priceButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.priceButton:hover {
+  border-color: var(--color-border);
+}
+
+.priceButton:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+}
+
+.cellDown {
+  color: var(--color-success-alt);
+  font-weight: 700;
+}
+
+.priceButton.cellDown {
+  background: var(--color-success-tint);
+}
+
+.cellUp {
+  color: var(--color-danger-text);
+  font-weight: 700;
+}
+
+.priceButton.cellUp {
+  background: var(--color-danger-tint);
+}
+
+.cheapest {
+  border-color: var(--color-success-alt);
+}
+
+.cheapest:hover {
+  border-color: var(--color-success-alt);
+}
+
+.arrow {
+  font-size: 0.7em;
+}
+
+.newMark {
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  color: var(--color-brand);
+}
+
+.emptyState {
+  padding: var(--space-9) var(--space-8);
+  color: var(--color-text-tertiary-alt);
+  font-size: var(--text-base-alt);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-7);
+  margin: 0;
+  font-size: var(--text-xs-alt);
+  color: var(--color-text-tertiary-alt);
+}
+
+.legend .cellDown,
+.legend .cellUp,
+.legendCheapest {
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-xs);
+}
+
+.legend .cellDown {
+  background: var(--color-success-tint);
+}
+
+.legend .cellUp {
+  background: var(--color-danger-tint);
+}
+
+.legendCheapest {
+  border: 1px solid var(--color-success-alt);
+  color: var(--color-text-secondary);
+}
+
+/* --- Попап истории -------------------------------------------------------- */
+
+.historyPopup {
+  z-index: 50;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card-sm);
+  padding: var(--space-5);
+  text-align: left;
+}
+
+.historyHeader {
+  margin-bottom: var(--space-4);
+}
+
+.historyTitle {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--color-brand);
+}
+
+.historySubtitle {
+  font-size: var(--text-xs-alt);
+  color: var(--color-text-secondary);
+}
+
+.historyMuted {
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-tertiary-alt);
+}
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.historyRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-sm-alt2);
+}
+
+.historyValue {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.historyDates {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.historySource {
+  grid-column: 1 / -1;
+  font-size: var(--text-xs-alt);
+  color: var(--color-text-tertiary-alt);
+}
+
+.historyLink {
+  color: var(--color-brand);
+}
+
+@media (max-width: 480px) {
+  .searchInput {
+    width: 100%;
+  }
+
+  .summaryHint {
+    margin-left: 0;
+  }
+
+  .materialColHeader,
+  .materialColCell {
+    min-width: 150px;
+    width: 180px;
+  }
+}

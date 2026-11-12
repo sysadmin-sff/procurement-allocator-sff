@@ -5,10 +5,22 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.schemas.price import PriceCreate, PriceOut, PriceUpdate
+from app.api.schemas.price import (
+    PriceCreate,
+    PriceHistoryEntryOut,
+    PriceMatrixOut,
+    PriceOut,
+    PriceUpdate,
+)
 from app.auth.dependencies import require_role
 from app.core.database import get_db
 from app.models import Material, Price, Supplier
+from app.services.price_matrix import (
+    PriceHistoryEntry,
+    PriceMatrix,
+    build_price_matrix,
+    price_history,
+)
 
 router = APIRouter(prefix="/prices", dependencies=[Depends(require_role("admin"))])
 
@@ -142,6 +154,29 @@ def list_prices(
     if supplier_id is not None:
         query = query.filter(Price.supplier_id == supplier_id)
     return list(query.order_by(Price.valid_from.desc()).all())
+
+
+@router.get("/matrix", response_model=PriceMatrixOut)
+def get_price_matrix(
+    compare_to: datetime.date | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> PriceMatrix:
+    """Матрица «все материалы × все поставщики» (ADR-0054). Без compare_to
+    — сравнение с предыдущей версией каждой пары, с compare_to — с ценой,
+    действовавшей на эту дату. Объявлен до /{price_id}: иначе "matrix"
+    уходит в разбор UUID и даёт 422."""
+    return build_price_matrix(db, compare_to=compare_to)
+
+
+@router.get("/history", response_model=list[PriceHistoryEntryOut])
+def get_price_history(
+    material_id: uuid.UUID = Query(),
+    supplier_id: uuid.UUID = Query(),
+    db: Session = Depends(get_db),
+) -> list[PriceHistoryEntry]:
+    """История пары материал + поставщик с источником каждой версии
+    (ADR-0054 §6), новые первыми."""
+    return price_history(db, material_id=material_id, supplier_id=supplier_id)
 
 
 @router.get("/{price_id}", response_model=PriceOut)

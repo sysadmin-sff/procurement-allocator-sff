@@ -17,7 +17,17 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Category, Material, Order, OrderItem, Price, PriceListImport, Supplier, User
+from app.models import (
+    Category,
+    Material,
+    Order,
+    OrderItem,
+    Price,
+    PriceListImport,
+    Project,
+    Supplier,
+    User,
+)
 
 STALE_AFTER_DAYS = 30
 """Поставщик без новых версий цен дольше этого — «давно не обновлялся»."""
@@ -269,12 +279,14 @@ def price_history(
         else {}
     )
     item_ids = {p.source_order_item_id for p in versions if p.source_order_item_id is not None}
-    orders_by_item: dict[uuid.UUID, Order] = (
+    # У Order нет своего названия: подписью служит название проекта ордера.
+    orders_by_item: dict[uuid.UUID, tuple[uuid.UUID, str]] = (
         {
-            item_id: order
-            for item_id, order in db.execute(
-                select(OrderItem.id, Order)
+            item_id: (order_id, project_title)
+            for item_id, order_id, project_title in db.execute(
+                select(OrderItem.id, Order.id, Project.title)
                 .join(Order, OrderItem.order_id == Order.id)
+                .join(Project, Order.project_id == Project.id)
                 .where(OrderItem.id.in_(item_ids))
             )
         }
@@ -316,8 +328,8 @@ def price_history(
                 source=source,
                 import_id=import_.id if import_ is not None else None,
                 import_uploaded_at=import_.uploaded_at if import_ is not None else None,
-                order_id=order.id if order is not None else None,
-                order_title=order.title if order is not None else None,
+                order_id=order[0] if order is not None else None,
+                order_title=order[1] if order is not None else None,
                 created_by_name=(user.name or user.email) if user is not None else None,
                 change=change,
             )

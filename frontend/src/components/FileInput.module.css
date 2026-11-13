@@ -3,6 +3,17 @@
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-5);
+  /* Drop target outline — transparent until a file is dragged over. */
+  padding: var(--space-2);
+  margin: calc(-1 * var(--space-2));
+  border: 1px dashed transparent;
+  border-radius: var(--radius-md);
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.wrapDragging {
+  border-color: var(--color-accent);
+  background: var(--color-accent-tint);
 }
 
 .input {
@@ -56,6 +67,11 @@
      this the name runs past the card edge once it wraps to its own line. */
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.fileNameError {
+  font-size: var(--text-sm-alt2);
+  color: var(--color-danger);
 }
 
 @media (max-width: 480px) {

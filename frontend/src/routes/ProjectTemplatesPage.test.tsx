@@ -135,14 +135,14 @@ describe('ProjectTemplatesPage', () => {
     await screen.findByText('Шаблонов пока нет');
   });
 
-  it('disables create/rename/delete/material actions for employee role', async () => {
+  it('enables create/rename/delete actions for employee role (ADR-0055)', async () => {
     listMock.mockResolvedValue([emptyTemplate]);
     renderAs('employee');
 
     await screen.findByText('Стандартная дверь');
-    expect(screen.getByRole('button', { name: /создать шаблон/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /переименовать/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^удалить$/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /создать шаблон/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /переименовать/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^удалить$/i })).toBeEnabled();
   });
 
   it('shows an insufficient-permissions message on 403 instead of crashing', async () => {

@@ -290,6 +290,16 @@ def test_matrix_endpoint_admin_only(db_session, make_user, make_session):
     assert _client(make_user, make_session, "admin").get("/prices/matrix").status_code == 200
 
 
+def test_history_endpoint_admin_only(
+    db_session, make_material, make_supplier, make_user, make_session
+):
+    """ADR-0055: CRUD /prices открыт сотруднику, а сводный контроль — нет."""
+    params = {"material_id": str(make_material().id), "supplier_id": str(make_supplier().id)}
+    employee = _client(make_user, make_session, "employee")
+    assert employee.get("/prices/history", params=params).status_code == 403
+    assert employee.get("/prices").status_code == 200
+
+
 def test_matrix_endpoint_returns_cell_and_supplier(
     db_session, make_material, make_supplier, make_price, make_user, make_session
 ):

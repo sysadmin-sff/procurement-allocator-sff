@@ -49,7 +49,7 @@ flowchart LR
         MeasAPI --> MeasUI["экран «Замеры» /measurements: только отображение ответа"]
     end
 
-    SessionDB -.->|require_measurements_access: admin или грант| MeasAPI
+    SessionDB -.->|require_measurements_access: только admin, ADR-0055| MeasAPI
     SessionDB -.->|get_current_user / require_role| Ingestion
     SessionDB -.->|require_role admin| Templates
     SessionDB -.->|get_current_user / require_role| Project
@@ -71,13 +71,12 @@ flowchart LR
 - **Allocation** — детерминированный сервис, без вызовов LLM. См. ADR по алгоритму.
 - **Order generation** — чистая шаблонизация, без бизнес-логики.
 
-Все 11 бизнес-роутеров (`supplier`/`material`/`category`/`price`/`price_ingestion`/
-`template`/`project`/`allocation`/`order`/`purchase_record` + `/users`)
-защищены на уровне `APIRouter(dependencies=[...])` — `require_role("admin")`
-для справочных данных (`supplier`/`material`/`category`/`price`/`price_ingestion`/
-`template`/`users`), `get_current_user` (любая роль) для операционной работы
-(`project`/`allocation`/`order`/`purchase_record`) — см. ADR-0024 §4/§5,
-ADR-0032 §2. `category` (`/categories`) — справочник категорий материала
+Все бизнес-роутеры защищены на уровне `APIRouter(dependencies=[...])`
+(ADR-0024 §5). Матрица прав — ADR-0055: `get_current_user` (любая роль) у
+`project`/`allocation`/`order`/`purchase_record`/`supplier`/`material`/
+`price` (CRUD)/`price_ingestion`/`template` и у чтения `/categories`;
+`require_role("admin")` у `price_matrix` (`/prices/matrix`, `/prices/history`),
+изменения `/categories` (`category.admin_router`) и `/users`. `category` (`/categories`) — справочник категорий материала
 (`Category`), заменяет хардкод-константу `STRICT_CATEGORIES` управляемым
 через БД полем `requires_single_supplier`, и выдаёт `internal_sku` новым
 материалам атомарно — см. `docs/decisions/0034-material-category-entity-and-sku-autogeneration.md`.
@@ -87,7 +86,8 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
 - **Матрица цен** (`app/services/price_matrix.py`, ADR-0054) — только чтение
   `Price`: `GET /prices/matrix` (материалы × поставщики, сравнение с предыдущей
   версией или с датой, «давно не обновлялся») и `GET /prices/history` (версии
-  пары с источником). Под admin-роутером `/prices`. Экран — `/prices`
+  пары с источником). Admin-роутер `app/api/price_matrix.py` (ADR-0055),
+  подключён до `price.py`. Экран — `/prices`
   (`frontend/src/routes/price-matrix/`).
 
 - **Measurements** (`backend/app/measurements/`, ADR-0051) — изолированный
@@ -98,8 +98,8 @@ ADR-0032 §2. `category` (`/categories`) — справочник категор
   подключается в `main.py`, только если `MEASUREMENTS_ENABLED=true`; при
   выключенном флаге загружаются лишь `app.measurements.flags` и
   `app.measurements.models`. Доступ — третья категория к ADR-0024 §4:
-  `require_measurements_access` (активный `admin` или грант в
-  `measurements_user_access`), а не значение `User.role`. Привязка результата
+  `require_measurements_access` — с ADR-0055 только активный `admin`; гранты
+  в `measurements_user_access` больше ничего не открывают (таблица оставлена). Привязка результата
   Site Visit Result к замеру — чистая функция `attribution.attribute`, без LLM.
   Исход и группа дублей замера (ADR-0053) — чистая функция
   `outcomes.compute_outcomes`; её строки (`measurements_visit_outcomes`)

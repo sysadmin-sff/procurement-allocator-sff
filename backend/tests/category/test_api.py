@@ -33,11 +33,12 @@ def test_list_categories_no_session_returns_401():
     assert response.status_code == 401
 
 
-def test_list_categories_as_employee_returns_403(make_user, make_session):
+def test_list_categories_as_employee_succeeds(make_user, make_session):
     employee = make_user(role="employee")
     employee_session = make_session(employee)
+    """ADR-0055: the material form needs the list; mutations stay admin."""
     response = _client_as(employee_session).get("/categories")
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 def test_create_category_as_employee_returns_403(make_user, make_session):

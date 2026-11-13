@@ -6,11 +6,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
-from app.auth.dependencies import require_role
+from app.auth.dependencies import get_current_user, require_role
 from app.core.database import get_db
 from app.models import Category, Material
 
-router = APIRouter(prefix="/categories", dependencies=[Depends(require_role("admin"))])
+# Чтение списка — любая роль: форма материала выбирает категорию (ADR-0055).
+# Изменение справочника категорий — только admin, отдельным роутером.
+router = APIRouter(prefix="/categories", dependencies=[Depends(get_current_user)])
+admin_router = APIRouter(prefix="/categories", dependencies=[Depends(require_role("admin"))])
 
 
 @router.get("", response_model=list[CategoryOut])
@@ -18,7 +21,7 @@ def list_categories(db: Session = Depends(get_db)) -> list[Category]:
     return list(db.query(Category).order_by(Category.display_order, Category.name).all())
 
 
-@router.post("", response_model=CategoryOut, status_code=201)
+@admin_router.post("", response_model=CategoryOut, status_code=201)
 def create_category(payload: CategoryCreate, db: Session = Depends(get_db)) -> Category:
     # New categories always append to the end of the fixed order (ADR-0042
     # п.1) — display_order is never accepted from the client, see CategoryCreate.
@@ -42,7 +45,7 @@ def create_category(payload: CategoryCreate, db: Session = Depends(get_db)) -> C
     return category
 
 
-@router.patch("/{category_id}", response_model=CategoryOut)
+@admin_router.patch("/{category_id}", response_model=CategoryOut)
 def update_category(
     category_id: uuid.UUID, payload: CategoryUpdate, db: Session = Depends(get_db)
 ) -> Category:
@@ -65,7 +68,7 @@ def update_category(
     return category
 
 
-@router.delete("/{category_id}", status_code=204)
+@admin_router.delete("/{category_id}", status_code=204)
 def delete_category(category_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
     category = db.get(Category, category_id)
     if category is None:

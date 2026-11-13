@@ -528,7 +528,7 @@ def test_list_offices_no_session_returns_401(make_supplier):
     assert response.status_code == 401
 
 
-def test_supplier_directory_as_employee_returns_403(make_supplier, make_user, make_session):
+def test_supplier_directory_as_employee_succeeds(make_supplier, make_user, make_session):
     supplier = make_supplier()
     employee = make_user(role="employee")
     employee_session = make_session(employee, csrf_token=CSRF)
@@ -537,4 +537,4 @@ def test_supplier_directory_as_employee_returns_403(make_supplier, make_user, ma
 
     response = client.get(f"/suppliers/{supplier.id}")
 
-    assert response.status_code == 403
+    assert response.status_code == 200

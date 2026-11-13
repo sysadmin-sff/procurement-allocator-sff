@@ -2,7 +2,6 @@ import { Fragment, useEffect, useState } from 'react';
 import { templatesApi } from '../api/templates';
 import type { ProjectTemplate } from '../api/types';
 import { ApiError } from '../api/client';
-import { useCurrentUser } from '../auth/AuthContext';
 import { Button } from '../components/Button';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { EmptyState } from '../components/EmptyState';
@@ -32,7 +31,6 @@ function pluralizeItems(count: number): string {
 export function ProjectTemplatesPage() {
   /* UI convenience only, not a security boundary — real enforcement is
      require_role("admin") on the backend router (ADR-0032 §2, ADR-0024 §4/§5). */
-  const isAdmin = useCurrentUser().role === 'admin';
   const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -138,7 +136,7 @@ export function ProjectTemplatesPage() {
         <div className={styles.header}>
           <h1 className={styles.title}>Шаблоны проектов</h1>
           {status === 'ready' && !createOpen && (
-            <Button variant="primary" disabled={!isAdmin} onClick={openCreate}>
+            <Button variant="primary" onClick={openCreate}>
               + Создать шаблон
             </Button>
           )}
@@ -195,7 +193,7 @@ export function ProjectTemplatesPage() {
                 title="Шаблонов пока нет"
                 description="Создайте первый шаблон, чтобы сотрудники могли быстро подставлять стандартный набор материалов при создании проекта."
                 action={
-                  <Button variant="primary" disabled={!isAdmin} onClick={openCreate}>
+                  <Button variant="primary" onClick={openCreate}>
                     Создать шаблон »
                   </Button>
                 }
@@ -253,7 +251,7 @@ export function ProjectTemplatesPage() {
                                 {!renaming && (
                                   <Button
                                     variant="ghost"
-                                    disabled={!isAdmin}
+                                   
                                     onClick={() => setRenamingId(template.id)}
                                   >
                                     Переименовать
@@ -261,7 +259,7 @@ export function ProjectTemplatesPage() {
                                 )}
                                 <ConfirmButton
                                   label="Удалить"
-                                  disabled={!isAdmin}
+                                 
                                   onConfirm={() => handleDelete(template)}
                                 />
                               </div>
@@ -272,7 +270,6 @@ export function ProjectTemplatesPage() {
                               <td colSpan={4}>
                                 <TemplateItemsPanel
                                   template={template}
-                                  isAdmin={isAdmin}
                                   onAddItem={(materialId) => handleAddItem(template.id, materialId)}
                                   onRemoveItem={(itemId) => handleRemoveItem(template.id, itemId)}
                                 />

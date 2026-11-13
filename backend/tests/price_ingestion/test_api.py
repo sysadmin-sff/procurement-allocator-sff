@@ -742,13 +742,17 @@ def test_upload_no_session_returns_401(make_supplier):
     assert response.status_code == 401
 
 
-def test_upload_as_employee_returns_403(make_supplier, make_user, make_session):
+def test_upload_as_employee_succeeds(make_supplier, make_user, make_session):
+    """ADR-0055: employees import price lists end to end."""
     supplier = make_supplier()
     employee = make_user(role="employee")
     employee_session = make_session(employee, csrf_token=CSRF)
     client = _client_as(employee_session)
-    response = _upload(client, supplier.id)
-    assert response.status_code == 403
+    with patch("app.price_ingestion.service.extract_price_list_lines", return_value=[]), patch(
+        "app.price_ingestion.service.match_price_list_lines", return_value=[]
+    ):
+        response = _upload(client, supplier.id)
+    assert response.status_code == 201
 
 
 def test_upload_as_admin_succeeds(make_supplier, make_user, make_session):

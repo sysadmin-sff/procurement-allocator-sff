@@ -19,7 +19,7 @@ FORBIDDEN_KEY_PARTS = ("result_text", "name", "price")
 @pytest.fixture
 def api(sync_tables_clean, client, enabled_app, make_user, make_session):
     enabled_app.dependency_overrides[get_now] = lambda: NOW
-    client.cookies.set(SESSION_COOKIE, str(make_session(make_user(granted=True)).id))
+    client.cookies.set(SESSION_COOKIE, str(make_session(make_user(role="admin")).id))
     return client
 
 
@@ -46,7 +46,7 @@ def test_all_keys_walks_nested_lists_and_dicts():
 
 
 @pytest.mark.parametrize("path", ["/measurements/metrics", "/measurements/metrics/visits"])
-def test_plain_get_with_a_grant_is_200(api, path):
+def test_plain_get_as_admin_is_200(api, path):
     assert api.get(path).status_code == 200
 
 

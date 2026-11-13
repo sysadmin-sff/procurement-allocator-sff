@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { suppliersApi } from '../api/suppliers';
 import type { Supplier, SupplierCreate } from '../api/types';
-import { useCurrentUser } from '../auth/AuthContext';
 import { Button } from '../components/Button';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { EmptyState } from '../components/EmptyState';
@@ -17,7 +16,6 @@ export function SuppliersPage() {
   const navigate = useNavigate();
   /* UI convenience only, not a security boundary — real enforcement is
      require_role("admin") on the backend router (ADR-0024 §4/§5). */
-  const isAdmin = useCurrentUser().role === 'admin';
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -78,7 +76,7 @@ export function SuppliersPage() {
         <div className={styles.header}>
           <h1 className={styles.title}>Поставщики</h1>
           {!formOpen && (
-            <Button variant="primary" disabled={!isAdmin} onClick={openCreate}>
+            <Button variant="primary" onClick={openCreate}>
               + Добавить поставщика
             </Button>
           )}
@@ -118,7 +116,7 @@ export function SuppliersPage() {
                 title="Поставщиков пока нет"
                 description="Добавьте первого поставщика, чтобы начать заносить цены и распределять закупки."
                 action={
-                  <Button variant="primary" disabled={!isAdmin} onClick={openCreate}>
+                  <Button variant="primary" onClick={openCreate}>
                     Добавить поставщика »
                   </Button>
                 }
@@ -156,7 +154,7 @@ export function SuppliersPage() {
                           <div className={styles.actionsCell}>
                             <ConfirmButton
                               label="Удалить"
-                              disabled={!isAdmin}
+                             
                               onConfirm={() => handleDelete(supplier)}
                             />
                           </div>

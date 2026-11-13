@@ -8,14 +8,12 @@ import styles from '../../components/CrudScreen.module.css';
 
 interface TemplateItemsPanelProps {
   template: ProjectTemplate;
-  isAdmin: boolean;
   onAddItem: (materialId: string) => Promise<void>;
   onRemoveItem: (itemId: string) => Promise<void>;
 }
 
 export function TemplateItemsPanel({
   template,
-  isAdmin,
   onAddItem,
   onRemoveItem,
 }: TemplateItemsPanelProps) {
@@ -83,7 +81,6 @@ export function TemplateItemsPanel({
                           <div className={styles.actionsCell}>
                             <Button
                               variant="ghost"
-                              disabled={!isAdmin}
                               onClick={() => void onRemoveItem(item.id)}
                             >
                               Убрать
@@ -100,39 +97,37 @@ export function TemplateItemsPanel({
         </div>
       )}
 
-      {isAdmin && (
-        <div className={styles.formGrid}>
-          <div className={`${styles.field} ${styles.fieldFull}`}>
-            <label className={styles.label}>Добавить материал</label>
-            <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start' }}>
-              <div style={{ flex: 1 }}>
-                <MaterialCombobox
-                  query={query}
-                  selected={selected}
-                  invalid={false}
-                  onQueryChange={(q) => {
-                    setQuery(q);
-                    setSelected(null);
-                  }}
-                  onSelect={(material) => {
-                    setSelected(material);
-                    setQuery(material.canonical_name);
-                  }}
-                  onQuantityFocus={() => {}}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!selected || adding}
-                onClick={() => void handleAdd()}
-              >
-                Добавить
-              </Button>
+      <div className={styles.formGrid}>
+        <div className={`${styles.field} ${styles.fieldFull}`}>
+          <label className={styles.label}>Добавить материал</label>
+          <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <MaterialCombobox
+                query={query}
+                selected={selected}
+                invalid={false}
+                onQueryChange={(q) => {
+                  setQuery(q);
+                  setSelected(null);
+                }}
+                onSelect={(material) => {
+                  setSelected(material);
+                  setQuery(material.canonical_name);
+                }}
+                onQuantityFocus={() => {}}
+              />
             </div>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!selected || adding}
+              onClick={() => void handleAdd()}
+            >
+              Добавить
+            </Button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
-"""Protection of every /measurements route (ADR-0051 criterion 3, amended 2026-11-09)."""
+"""Protection of every /measurements route (ADR-0051 criterion 3, amended 2026-11-09;
+admin only since ADR-0055 — a grant no longer opens the module)."""
 
 from datetime import datetime, timezone
 
@@ -72,8 +73,9 @@ def test_employee_without_grant_gets_403(client, enabled_app, make_user, make_se
     _assert_every_route_returns(client, enabled_app, 403, make_session(make_user()))
 
 
-def test_employee_with_grant_gets_200(client, enabled_app, make_user, make_session):
-    _assert_every_route_returns(client, enabled_app, 200, make_session(make_user(granted=True)))
+def test_employee_with_grant_gets_403(client, enabled_app, make_user, make_session):
+    """ADR-0055: measurements are admin only, a leftover grant row opens nothing."""
+    _assert_every_route_returns(client, enabled_app, 403, make_session(make_user(granted=True)))
 
 
 def test_admin_without_grant_gets_200(client, enabled_app, make_user, make_session):
@@ -90,10 +92,9 @@ def test_deactivated_user_with_live_session_gets_401(
 
 @pytest.mark.parametrize("role", ["employee", "admin"])
 def test_dependency_itself_rejects_an_inactive_user(db_session, make_user, role):
-    session, _ = db_session
     user = make_user(role=role, is_active=False, granted=True)
     with pytest.raises(HTTPException) as exc_info:
-        require_measurements_access(user=user, db=session)
+        require_measurements_access(user=user)
     assert exc_info.value.status_code == 403
 
 

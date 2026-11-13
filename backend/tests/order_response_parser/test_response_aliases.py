@@ -239,7 +239,7 @@ def test_create_alias_conflict_with_force_overwrites(
     assert response.json()["origin"] == "order_response"
 
 
-def test_delete_alias_requires_admin(
+def test_delete_alias_as_employee_succeeds(
     db_session, make_supplier, make_material, make_alias, make_user, make_session
 ):
     session, *_ = db_session
@@ -250,7 +250,7 @@ def test_delete_alias_requires_admin(
 
     response = _delete_alias(client, supplier.id, alias.id)
 
-    assert response.status_code == 403
+    assert response.status_code == 204
 
 
 def test_delete_alias_admin_succeeds(

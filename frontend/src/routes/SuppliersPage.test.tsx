@@ -41,12 +41,12 @@ function renderAs(role: CurrentUser['role']) {
 }
 
 describe('SuppliersPage admin-only actions (ADR-0024 §7 — UI convenience only)', () => {
-  it('disables add/delete actions for employee role', async () => {
+  it('enables add/delete actions for employee role (ADR-0055)', async () => {
     renderAs('employee');
 
     expect(await screen.findByText('Alutex')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /добавить поставщика/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /удалить/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /добавить поставщика/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /удалить/i })).toBeEnabled();
   });
 
   it('enables add/delete actions for admin role', async () => {

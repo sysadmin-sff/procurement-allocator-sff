@@ -348,9 +348,9 @@ def test_confirm_price_updates_as_employee_succeeds(
     assert response.status_code == 200
 
 
-def test_prices_router_still_403s_employee_after_this_change(make_user, make_session):
-    """Regression guard on ADR-0024 §4: price.py stays admin-only in its
-    entirety — this ADR does not loosen it anywhere."""
+def test_prices_router_is_open_to_employee_since_adr_0055(make_user, make_session):
+    """ADR-0055 opened CRUD /prices to any role (employees edit prices on
+    the material card); only /prices/matrix and /prices/history stay admin."""
     _employee_email_counter[0] += 1
     email = f"employee-confirm-price-guard{_employee_email_counter[0]}@screen-factory-florida.com"
     employee = make_user(email=email, role="employee")
@@ -359,7 +359,8 @@ def test_prices_router_still_403s_employee_after_this_change(make_user, make_ses
 
     response = client.get("/prices")
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert client.get("/prices/matrix").status_code == 403
 
 
 def test_confirm_price_updates_no_session_returns_401():

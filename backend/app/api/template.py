@@ -11,12 +11,12 @@ from app.api.schemas.template import (
     ProjectTemplateOut,
     ProjectTemplateUpdate,
 )
-from app.auth.dependencies import require_role
+from app.auth.dependencies import get_current_user
 from app.core.database import get_db
 from app.models import Material, ProjectTemplate, ProjectTemplateItem
 
 router = APIRouter(
-    prefix="/project-templates", dependencies=[Depends(require_role("admin"))]
+    prefix="/project-templates", dependencies=[Depends(get_current_user)]
 )
 
 

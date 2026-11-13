@@ -4,12 +4,14 @@ from slowapi.errors import RateLimitExceeded
 
 from app.api.allocation import router as allocation_router
 from app.api.auth import router as auth_router
+from app.api.category import admin_router as category_admin_router
 from app.api.category import router as category_router
 from app.api.health import router as health_router
 from app.api.material import router as material_router
 from app.api.order import router as order_router
 from app.api.price import router as price_router
 from app.api.price_ingestion import router as price_ingestion_router
+from app.api.price_matrix import router as price_matrix_router
 from app.api.project import router as project_router
 from app.api.purchase_record import router as purchase_record_router
 from app.api.supplier import router as supplier_router
@@ -53,6 +55,9 @@ app.include_router(template_router)
 app.include_router(supplier_router)
 app.include_router(material_router)
 app.include_router(category_router)
+app.include_router(category_admin_router)
+# price_matrix до price: "/prices/matrix" не должен попасть в "/prices/{price_id}"
+app.include_router(price_matrix_router)
 app.include_router(price_router)
 app.include_router(price_ingestion_router)
 

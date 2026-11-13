@@ -289,13 +289,13 @@ describe('PriceListImportReviewPage', () => {
       };
     }
 
-    it('disables apply/skip actions for employee role', async () => {
+    it('enables apply/skip actions for employee role (ADR-0055)', async () => {
       renderPage(pendingImport(), 'employee');
 
       await screen.findByText('Screen mesh 18x14');
 
-      expect(screen.getByRole('button', { name: /Применить выбранные/ })).toBeDisabled();
-      expect(screen.getByRole('button', { name: /Пропустить/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Применить выбранные/ })).toBeEnabled();
+      expect(screen.getByRole('button', { name: /Пропустить/ })).toBeEnabled();
     });
 
     it('enables apply/skip actions for admin role', async () => {

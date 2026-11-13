@@ -566,11 +566,11 @@ def test_list_materials_no_session_returns_401():
     assert response.status_code == 401
 
 
-def test_list_materials_as_employee_returns_403(make_user, make_session):
+def test_list_materials_as_employee_succeeds(make_user, make_session):
     employee = make_user(role="employee")
     employee_session = make_session(employee)
     response = _client_as(employee_session).get("/materials")
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 def test_list_materials_as_admin_succeeds(make_user, make_session):

@@ -346,7 +346,9 @@ env-файла попадают в контейнер при его создан
    docker compose --profile measurements up -d measurements-worker
    docker compose --profile measurements ps   # ждать healthy
    ```
-5. **Выдача грантов.** Только `admin` и существующим пользователям закупок,
+5. **Выдача грантов — не действует с ADR-0055:** «Замеры» видит только admin,
+   выданные гранты ничего не открывают. Шаг оставлен на случай отката решения.
+   Исходный текст: только `admin` и существующим пользователям закупок,
    см. условие в «Последствиях» ADR-0051. По умолчанию dry-run:
    ```
    docker compose run --rm backend python -m app.measurements.scripts.grant_access \
@@ -403,7 +405,7 @@ dry-run → `--apply` → включение API.
 Поле сделки amo «Deal Number:» (id `530977`, значение по умолчанию
 `deal_number_field_id`) хранится в `measurements_leads.deal_number` и
 отдаётся в `/measurements/metrics/visits`. Экран `/measurements` и пункт меню
-«Замеры» приходят с frontend; пункт виден только при доступе (admin или грант).
+«Замеры» приходят с frontend; пункт виден только admin (ADR-0055).
 
 1. **Миграция** (ревизия `b5d3e8a17f42`, добавляет nullable-колонку, данных не
    переносит). Перед ней — дамп БД.

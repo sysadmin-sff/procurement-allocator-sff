@@ -16,7 +16,7 @@ from app.api.schemas.supplier import (
     SupplierOut,
     SupplierUpdate,
 )
-from app.auth.dependencies import require_role
+from app.auth.dependencies import get_current_user
 from app.core.database import get_db
 from app.models import Office, Supplier, SupplierContact
 from app.order_response_parser.service import AliasNotFoundError, delete_response_alias
@@ -32,7 +32,7 @@ from app.supplier_directory.service import (
     update_office,
 )
 
-router = APIRouter(prefix="/suppliers", dependencies=[Depends(require_role("admin"))])
+router = APIRouter(prefix="/suppliers", dependencies=[Depends(get_current_user)])
 
 
 @router.post("", response_model=SupplierOut, status_code=201)
@@ -112,7 +112,7 @@ def delete_supplier(supplier_id: uuid.UUID, db: Session = Depends(get_db)) -> No
 def delete_supplier_alias(
     supplier_id: uuid.UUID, alias_id: uuid.UUID, db: Session = Depends(get_db)
 ) -> None:
-    """Admin-only (router-level require_role("admin")) — see ADR-0046 §5:
+    """Any role (router-level get_current_user, ADR-0055) — see ADR-0046 §5:
     removes an origin='order_response' SupplierMaterialAlias, i.e. undoes
     a mistaken "Связать" link (ADR-0046 §6). Does NOT touch price_import-
     origin aliases — those have their own confirmation flow via the

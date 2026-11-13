@@ -5,13 +5,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.schemas.material import MaterialCreate, MaterialOut, MaterialUpdate
-from app.auth.dependencies import require_role
+from app.auth.dependencies import get_current_user
 from app.core.database import get_db
 from app.models import Material
 from app.price_ingestion.embeddings import EmbeddingError, embed_text, material_embedding_input
 from app.services.material_sku import generate_next_sku
 
-router = APIRouter(prefix="/materials", dependencies=[Depends(require_role("admin"))])
+router = APIRouter(prefix="/materials", dependencies=[Depends(get_current_user)])
 
 
 def _escape_ilike(value: str) -> str:

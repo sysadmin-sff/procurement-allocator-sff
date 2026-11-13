@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './layout/AppLayout';
+import { RequireAdmin } from './auth/RequireAdmin';
 import { RequireAuth } from './auth/RequireAuth';
 import {
   AllocationResultPage,
@@ -42,12 +43,12 @@ function App() {
         <Route path="/projects/:projectId/comparison" element={<PriceComparisonPage />} />
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
         <Route path="/price-list-imports/:importId" element={<PriceListImportReviewPage />} />
-        <Route path="/prices" element={<PriceMatrixPage />} />
+        <Route path="/prices" element={<RequireAdmin><PriceMatrixPage /></RequireAdmin>} />
         <Route path="/materials" element={<MaterialsPage />} />
-        <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/categories" element={<RequireAdmin><CategoriesPage /></RequireAdmin>} />
         <Route path="/suppliers" element={<SuppliersPage />} />
         <Route path="/suppliers/:supplierId" element={<SupplierDetailPage />} />
-        <Route path="/users" element={<UsersPage />} />
+        <Route path="/users" element={<RequireAdmin><UsersPage /></RequireAdmin>} />
         <Route path="/project-templates" element={<ProjectTemplatesPage />} />
         <Route path="/measurements" element={<MeasurementsPage />} />
         <Route path="/measurements/visits" element={<MeasurementVisitsPage />} />

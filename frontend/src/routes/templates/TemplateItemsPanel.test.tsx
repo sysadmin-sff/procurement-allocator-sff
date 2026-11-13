@@ -71,7 +71,7 @@ describe('TemplateItemsPanel', () => {
     render(
       <TemplateItemsPanel
         template={t}
-        isAdmin={true}
+        
         onAddItem={vi.fn()}
         onRemoveItem={vi.fn()}
       />,
@@ -107,7 +107,7 @@ describe('TemplateItemsPanel', () => {
     render(
       <TemplateItemsPanel
         template={t}
-        isAdmin={true}
+        
         onAddItem={vi.fn()}
         onRemoveItem={vi.fn()}
       />,
@@ -135,7 +135,7 @@ describe('TemplateItemsPanel', () => {
     render(
       <TemplateItemsPanel
         template={t}
-        isAdmin={true}
+        
         onAddItem={onAddItem}
         onRemoveItem={vi.fn()}
       />,
@@ -160,7 +160,7 @@ describe('TemplateItemsPanel', () => {
     render(
       <TemplateItemsPanel
         template={template([])}
-        isAdmin={true}
+        
         onAddItem={onAddItem}
         onRemoveItem={vi.fn()}
       />,
@@ -189,7 +189,7 @@ describe('TemplateItemsPanel', () => {
     const { rerender } = render(
       <TemplateItemsPanel
         template={dup}
-        isAdmin={true}
+        
         onAddItem={vi.fn()}
         onRemoveItem={vi.fn()}
       />,
@@ -204,7 +204,7 @@ describe('TemplateItemsPanel', () => {
     rerender(
       <TemplateItemsPanel
         template={single}
-        isAdmin={true}
+        
         onAddItem={vi.fn()}
         onRemoveItem={vi.fn()}
       />,
@@ -222,7 +222,7 @@ describe('TemplateItemsPanel', () => {
       { id: 'i6', material_id: skuPatio2x2.id, canonical_name: skuPatio2x2.canonical_name, unit: 'pcs', category_name: 'Profil', internal_sku: skuPatio2x2.internal_sku },
     ]);
 
-    render(<TemplateItemsPanel template={t} isAdmin={true} onAddItem={vi.fn()} onRemoveItem={vi.fn()} />);
+    render(<TemplateItemsPanel template={t}  onAddItem={vi.fn()} onRemoveItem={vi.fn()} />);
 
     await waitFor(() => {
       const rendered = [...document.querySelectorAll('td')]

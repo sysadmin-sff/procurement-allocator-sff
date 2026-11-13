@@ -33,23 +33,27 @@ def test_list_templates_no_session_returns_401():
     assert response.status_code == 401
 
 
-def test_list_templates_as_employee_returns_403(make_user, make_session):
+def test_list_templates_as_employee_succeeds(make_user, make_session):
     employee = make_user(role="employee")
     employee_session = make_session(employee)
     response = _client_as(employee_session).get("/project-templates")
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
-def test_create_template_as_employee_returns_403(make_user, make_session):
+def test_create_template_as_employee_succeeds(make_user, make_session):
     employee = make_user(email="employee-create@screen-factory-florida.com", role="employee")
     employee_session = make_session(employee, csrf_token=CSRF)
     response = _client_as(employee_session).post(
         "/project-templates", json={"name": "X"}, headers={"X-CSRF-Token": CSRF}
     )
-    assert response.status_code == 403
+    assert response.status_code == 201
+    cleanup = _client_as(employee_session).delete(
+        f"/project-templates/{response.json()['id']}", headers={"X-CSRF-Token": CSRF}
+    )
+    assert cleanup.status_code == 204
 
 
-def test_patch_template_as_employee_returns_403(make_template, make_user, make_session):
+def test_patch_template_as_employee_succeeds(make_template, make_user, make_session):
     template = make_template()
     employee = make_user(email="employee-patch@screen-factory-florida.com", role="employee")
     employee_session = make_session(employee, csrf_token=CSRF)
@@ -58,20 +62,20 @@ def test_patch_template_as_employee_returns_403(make_template, make_user, make_s
         json={"name": "Y"},
         headers={"X-CSRF-Token": CSRF},
     )
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
-def test_delete_template_as_employee_returns_403(make_template, make_user, make_session):
+def test_delete_template_as_employee_succeeds(make_template, make_user, make_session):
     template = make_template()
     employee = make_user(email="employee-delete@screen-factory-florida.com", role="employee")
     employee_session = make_session(employee, csrf_token=CSRF)
     response = _client_as(employee_session).delete(
         f"/project-templates/{template.id}", headers={"X-CSRF-Token": CSRF}
     )
-    assert response.status_code == 403
+    assert response.status_code == 204
 
 
-def test_add_template_item_as_employee_returns_403(
+def test_add_template_item_as_employee_succeeds(
     make_template, make_material, make_user, make_session
 ):
     template = make_template()
@@ -83,10 +87,10 @@ def test_add_template_item_as_employee_returns_403(
         json={"material_id": str(material.id)},
         headers={"X-CSRF-Token": CSRF},
     )
-    assert response.status_code == 403
+    assert response.status_code == 201
 
 
-def test_remove_template_item_as_employee_returns_403(
+def test_remove_template_item_as_employee_succeeds(
     make_template, make_material, make_user, make_session
 ):
     material = make_material()
@@ -98,7 +102,7 @@ def test_remove_template_item_as_employee_returns_403(
         f"/project-templates/{template.id}/items/{item_id}",
         headers={"X-CSRF-Token": CSRF},
     )
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 def test_no_session_returns_401_on_all_paths(make_template, make_material):

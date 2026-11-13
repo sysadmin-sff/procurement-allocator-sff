@@ -4,36 +4,32 @@ import { useCurrentUser } from '../auth/AuthContext';
 import { useMeasurementsAccess } from '../hooks/useMeasurementsAccess';
 import styles from './AppLayout.module.css';
 
-/* Видны всем аутентифицированным (project/allocation/order/purchase_record —
-   get_current_user, ADR-0024 §4). */
-const NAV_ITEMS = [{ to: '/projects', label: 'Проекты' }];
-
-/* admin-only целиком на backend (require_role("admin") на весь роутер,
-   ADR-0024 §4) — ссылка скрывается полностью, не дизейблится, иначе
-   employee кликает и видит "недостаточно прав" вместо рабочего экрана. */
-const ADMIN_NAV_ITEMS = [
-  { to: '/suppliers', label: 'Поставщики' },
-  { to: '/materials', label: 'Материалы' },
-  { to: '/prices', label: 'Цены' },
-  { to: '/categories', label: 'Категории' },
-  { to: '/project-templates', label: 'Шаблоны' },
-  { to: '/users', label: 'Пользователи' },
+/* Права по ролям — ADR-0055 (поверх ADR-0024 §4). Сотрудник ведёт проекты,
+   поставщиков (включая импорт прайс-листа со страницы поставщика),
+   материалы и шаблоны. Сводная матрица «Цены», справочник категорий и
+   пользователи — только admin: пункт скрывается полностью, а прямой
+   переход на адрес отсекает RequireAdmin в App.tsx. Порядок пунктов один
+   для обеих ролей, у employee просто нет adminOnly. */
+const NAV_ITEMS = [
+  { to: '/projects', label: 'Проекты', adminOnly: false },
+  { to: '/suppliers', label: 'Поставщики', adminOnly: false },
+  { to: '/materials', label: 'Материалы', adminOnly: false },
+  { to: '/prices', label: 'Цены', adminOnly: true },
+  { to: '/categories', label: 'Категории', adminOnly: true },
+  { to: '/project-templates', label: 'Шаблоны', adminOnly: false },
+  { to: '/users', label: 'Пользователи', adminOnly: true },
 ];
-/* Импорт прайс-листа запускается со страницы конкретного поставщика
-   (SupplierDetailPage → "Прайс-лист") — нет отдельного списка импортов,
-   поэтому нет и отдельного пункта верхней навигации. Сам /suppliers уже
-   скрыт от employee выше, так что вложенный флоу тоже недостижим. */
 
-/* «Замеры» — третья категория доступа (admin или грант, ADR-0051 §2): роль из
-   /auth/me её не выражает, поэтому пункт показывается по ответу
-   /measurements/access. Любая ошибка — пункт скрыт, без сообщений. */
+/* «Замеры» — только admin (ADR-0055). Пункт по-прежнему показывается по
+   ответу /measurements/access, а не по роли: так он скрыт и при выключенном
+   модуле (MEASUREMENTS_ENABLED=false). Любая ошибка — пункт скрыт. */
 const MEASUREMENTS_NAV_ITEM = { to: '/measurements', label: 'Замеры' };
 
 export function AppLayout() {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const hasMeasurementsAccess = useMeasurementsAccess();
-  const roleItems = user.role === 'admin' ? [...NAV_ITEMS, ...ADMIN_NAV_ITEMS] : NAV_ITEMS;
+  const roleItems = NAV_ITEMS.filter((item) => user.role === 'admin' || !item.adminOnly);
   const navItems = hasMeasurementsAccess ? [...roleItems, MEASUREMENTS_NAV_ITEM] : roleItems;
 
   async function handleLogout() {

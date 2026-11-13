@@ -47,20 +47,25 @@ describe('AppLayout', () => {
     expect(await screen.findByText('Страница входа')).toBeInTheDocument();
   });
 
-  it('hides admin-only nav links (Поставщики/Материалы/Пользователи) for employee role', () => {
+  // ADR-0055: employee works with projects, suppliers, materials and templates;
+  // the price matrix, categories and users stay admin-only.
+  it('shows the employee set of nav links and hides admin-only ones for employee role', () => {
     renderLayout({ id: 'u1', email: 'jane@screen-factory-florida.com', name: 'Jane Doe', role: 'employee' });
 
-    expect(screen.queryByRole('link', { name: /поставщики/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /материалы/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /пользователи/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /проекты/i })).toBeInTheDocument();
-  });
-
-  it('shows admin-only nav links (Поставщики/Материалы/Пользователи) for admin role', () => {
-    renderLayout({ id: 'u1', email: 'admin@screen-factory-florida.com', name: 'Admin', role: 'admin' });
-
     expect(screen.getByRole('link', { name: /поставщики/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /материалы/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /пользователи/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /шаблоны/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /^цены$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /категории/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /пользователи/i })).not.toBeInTheDocument();
+  });
+
+  it('shows every nav link for admin role', () => {
+    renderLayout({ id: 'u1', email: 'admin@screen-factory-florida.com', name: 'Admin', role: 'admin' });
+
+    for (const name of [/проекты/i, /поставщики/i, /материалы/i, /^цены$/i, /категории/i, /шаблоны/i, /пользователи/i]) {
+      expect(screen.getByRole('link', { name })).toBeInTheDocument();
+    }
   });
 });

@@ -17,3 +17,4 @@ export { ProjectTemplatesPage } from './ProjectTemplatesPage';
 export { MeasurementsPage } from './measurements/MeasurementsPage';
 export { MeasurementVisitsPage } from './measurements/MeasurementVisitsPage';
 export { PriceMatrixPage } from './price-matrix/PriceMatrixPage';
+export { PriceDynamicsPage } from './price-matrix/PriceDynamicsPage';

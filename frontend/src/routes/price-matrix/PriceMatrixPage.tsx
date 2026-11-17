@@ -12,6 +12,7 @@ import crudStyles from '../../components/CrudScreen.module.css';
 import { useCategories } from '../../hooks/useCategories';
 import { buildCategoryOrder, groupByCategory } from '../../lib/groupByCategory';
 import { PriceHistoryPopover } from './PriceHistoryPopover';
+import { PricesTabs } from './PricesTabs';
 import { formatDate, formatMoney, formatPct } from './format';
 import styles from './PriceMatrix.module.css';
 
@@ -24,6 +25,8 @@ import styles from './PriceMatrix.module.css';
 export function PriceMatrixPage() {
   const [params, setParams] = useSearchParams();
   const compareTo = params.get('compare_to');
+  const periodEnd = compareTo ? params.get('period_end') : null;
+  const mode: CompareMode = periodEnd ? 'period' : compareTo ? 'date' : 'previous';
   const query = params.get('q') ?? '';
   const category = params.get('category') ?? '';
   const onlyChanged = params.get('changed') === '1';
@@ -44,7 +47,7 @@ export function PriceMatrixPage() {
     setLoading(true);
     setLoadError(null);
     pricesApi
-      .matrix(compareTo)
+      .matrix(compareTo, periodEnd)
       .then((data) => {
         if (!cancelled) setMatrix(data);
       })
@@ -57,18 +60,32 @@ export function PriceMatrixPage() {
     return () => {
       cancelled = true;
     };
-  }, [compareTo]);
+  }, [compareTo, periodEnd]);
 
-  function updateParam(key: string, value: string | null) {
+  function updateParams(values: Record<string, string | null>) {
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        if (value) next.set(key, value);
-        else next.delete(key);
+        for (const [key, value] of Object.entries(values)) {
+          if (value) next.set(key, value);
+          else next.delete(key);
+        }
         return next;
       },
       { replace: true },
     );
+  }
+
+  function updateParam(key: string, value: string | null) {
+    updateParams({ [key]: value });
+  }
+
+  const today = localIsoDate(new Date());
+
+  /** Период держим корректным: конец не позже сегодня, начало не позже конца. */
+  function setPeriod(from: string, to: string) {
+    const end = to > today ? today : to;
+    updateParams({ compare_to: from > end ? end : from, period_end: end });
   }
 
   const categoryOrder = useMemo(() => buildCategoryOrder(categories), [categories]);
@@ -106,8 +123,15 @@ export function PriceMatrixPage() {
       <div className={`${crudStyles.inner} ${styles.wideInner}`}>
         <div className={crudStyles.header}>
           <h1 className={crudStyles.title}>Цены поставщиков</h1>
-          {matrix && <span className={styles.asOf}>на {formatDate(matrix.as_of)}</span>}
+          {matrix && (
+            <span className={styles.asOf}>
+              {matrix.period_end && matrix.compare_to
+                ? `за ${formatDate(matrix.compare_to)} — ${formatDate(matrix.period_end)}`
+                : `на ${formatDate(matrix.as_of)}`}
+            </span>
+          )}
         </div>
+        <PricesTabs />
 
         <div className={crudStyles.stack}>
           <div className={`${crudStyles.card} ${crudStyles.cardPadded}`}>
@@ -117,20 +141,78 @@ export function PriceMatrixPage() {
                 <div className={styles.segmented} role="group" aria-label="База сравнения">
                   <button
                     type="button"
-                    className={compareTo == null ? styles.segmentActive : styles.segment}
-                    onClick={() => updateParam('compare_to', null)}
+                    className={mode === 'previous' ? styles.segmentActive : styles.segment}
+                    onClick={() => updateParams({ compare_to: null, period_end: null })}
                   >
                     предыдущей ценой
                   </button>
                   <button
                     type="button"
-                    className={compareTo != null ? styles.segmentActive : styles.segment}
-                    onClick={() => updateParam('compare_to', compareTo ?? startOfMonth(new Date()))}
+                    className={mode === 'date' ? styles.segmentActive : styles.segment}
+                    onClick={() =>
+                      updateParams({
+                        compare_to: compareTo ?? startOfMonth(new Date()),
+                        period_end: null,
+                      })
+                    }
                   >
                     ценой на дату
                   </button>
+                  <button
+                    type="button"
+                    className={mode === 'period' ? styles.segmentActive : styles.segment}
+                    onClick={() => setPeriod(compareTo ?? startOfMonth(new Date()), periodEnd ?? today)}
+                  >
+                    за период
+                  </button>
                 </div>
-                {compareTo != null && (
+                {mode === 'period' && compareTo != null && periodEnd != null && (
+                  <>
+                    <span className={styles.toolbarLabel}>с</span>
+                    <input
+                      type="date"
+                      aria-label="Начало периода"
+                      className={`${crudStyles.input} ${styles.dateInput}`}
+                      value={compareTo}
+                      max={periodEnd}
+                      onChange={(e) => e.target.value && setPeriod(e.target.value, periodEnd)}
+                    />
+                    <span className={styles.toolbarLabel}>по</span>
+                    <input
+                      type="date"
+                      aria-label="Конец периода"
+                      className={`${crudStyles.input} ${styles.dateInput}`}
+                      value={periodEnd}
+                      min={compareTo}
+                      max={today}
+                      onChange={(e) => e.target.value && setPeriod(compareTo, e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className={styles.preset}
+                      onClick={() => setPeriod(startOfMonth(new Date()), today)}
+                    >
+                      этот месяц
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.preset}
+                      onClick={() =>
+                        setPeriod(startOfMonth(new Date(), -1), endOfMonth(new Date(), -1))
+                      }
+                    >
+                      прошлый месяц
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.preset}
+                      onClick={() => setPeriod(daysAgo(30), today)}
+                    >
+                      последние 30 дней
+                    </button>
+                  </>
+                )}
+                {mode === 'date' && compareTo != null && (
                   <>
                     <input
                       type="date"
@@ -204,13 +286,20 @@ export function PriceMatrixPage() {
                 <span className={styles.summaryDown}>▼ подешевело: {matrix.summary.down}</span>
                 <span className={styles.summaryUp}>▲ подорожало: {matrix.summary.up}</span>
                 <span className={styles.summaryNeutral}>
-                  {compareTo != null ? 'новых после даты' : 'без истории'}: {matrix.summary.new}
+                  {mode === 'period'
+                    ? 'появились за период'
+                    : mode === 'date'
+                      ? 'новых после даты'
+                      : 'без истории'}
+                  : {matrix.summary.new}
                 </span>
                 <span className={styles.summaryNeutral}>без изменений: {matrix.summary.same}</span>
                 <span className={styles.summaryHint}>
-                  {compareTo != null
-                    ? `сравнение с ценами на ${formatDate(compareTo)}`
-                    : 'сравнение с предыдущей ценой каждого поставщика'}
+                  {mode === 'period' && compareTo != null && periodEnd != null
+                    ? `цены на ${formatDate(periodEnd)} против цен на ${formatDate(compareTo)}`
+                    : mode === 'date' && compareTo != null
+                      ? `сравнение с ценами на ${formatDate(compareTo)}`
+                      : 'сравнение с предыдущей ценой каждого поставщика'}
                 </span>
               </div>
             )}
@@ -229,7 +318,7 @@ export function PriceMatrixPage() {
                 <Matrix
                   matrix={matrix}
                   groups={groups}
-                  compareMode={compareTo != null}
+                  mode={mode}
                   onOpenCell={(row, supplier, anchor) => setOpenCell({ row, supplier, anchor })}
                 />
               )}
@@ -269,12 +358,12 @@ export function PriceMatrixPage() {
 function Matrix({
   matrix,
   groups,
-  compareMode,
+  mode,
   onOpenCell,
 }: {
   matrix: PriceMatrix;
   groups: { category: string | null; items: PriceMatrixRow[] }[];
-  compareMode: boolean;
+  mode: CompareMode;
   onOpenCell: (row: PriceMatrixRow, supplier: PriceMatrixSupplier, anchor: DOMRect) => void;
 }) {
   const columnCount = matrix.suppliers.length + 1;
@@ -297,7 +386,7 @@ function Matrix({
               rows={group.items}
               suppliers={matrix.suppliers}
               columnCount={columnCount}
-              compareMode={compareMode}
+              mode={mode}
               onOpenCell={onOpenCell}
             />
           ))}
@@ -338,14 +427,14 @@ function GroupRows({
   rows,
   suppliers,
   columnCount,
-  compareMode,
+  mode,
   onOpenCell,
 }: {
   category: string | null;
   rows: PriceMatrixRow[];
   suppliers: PriceMatrixSupplier[];
   columnCount: number;
-  compareMode: boolean;
+  mode: CompareMode;
   onOpenCell: (row: PriceMatrixRow, supplier: PriceMatrixSupplier, anchor: DOMRect) => void;
 }) {
   return (
@@ -371,7 +460,7 @@ function GroupRows({
                 <PriceCell
                   key={supplier.id}
                   cell={cell}
-                  compareMode={compareMode}
+                  mode={mode}
                   onOpen={(anchor) => onOpenCell(row, supplier, anchor)}
                 />
               ) : (
@@ -387,24 +476,24 @@ function GroupRows({
 
 function PriceCell({
   cell,
-  compareMode,
+  mode,
   onOpen,
 }: {
   cell: PriceMatrixCell;
-  compareMode: boolean;
+  mode: CompareMode;
   onOpen: (anchor: DOMRect) => void;
 }) {
   const changeClass =
     cell.change === 'down' ? styles.cellDown : cell.change === 'up' ? styles.cellUp : '';
   const arrow = cell.change === 'down' ? '▼' : cell.change === 'up' ? '▲' : null;
-  const showNew = compareMode && cell.change === 'new';
+  const showNew = mode !== 'previous' && cell.change === 'new';
 
   return (
     <td className={styles.priceTd}>
       <button
         type="button"
         className={`${styles.priceButton} ${changeClass} ${cell.is_cheapest ? styles.cheapest : ''}`}
-        title={cellTitle(cell, compareMode)}
+        title={cellTitle(cell, mode)}
         onClick={(e) => onOpen(e.currentTarget.getBoundingClientRect())}
       >
         {formatMoney(cell.price)}
@@ -415,13 +504,33 @@ function PriceCell({
   );
 }
 
-function cellTitle(cell: PriceMatrixCell, compareMode: boolean): string {
+function cellTitle(cell: PriceMatrixCell, mode: CompareMode): string {
   const since = `Действует с ${formatDate(cell.valid_from)}`;
   if (cell.baseline_price == null || cell.baseline_valid_from == null) {
-    return compareMode ? `${since}. На дату сравнения цены не было.` : `${since}. Предыдущих цен нет.`;
+    if (mode === 'period') return `${since}. На начало периода цены не было.`;
+    return mode === 'date' ? `${since}. На дату сравнения цены не было.` : `${since}. Предыдущих цен нет.`;
   }
   const pct = cell.change_pct != null ? ` (${formatPct(cell.change_pct)})` : '';
   return `${since}. Было ${formatMoney(cell.baseline_price)} с ${formatDate(cell.baseline_valid_from)}${pct}.`;
+}
+
+type CompareMode = 'previous' | 'date' | 'period';
+
+function localIsoDate(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+/** YYYY-MM-DD последнего числа месяца (offset — сдвиг в месяцах). */
+function endOfMonth(date: Date, offset = 0): string {
+  return localIsoDate(new Date(date.getFullYear(), date.getMonth() + offset + 1, 0));
+}
+
+function daysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return localIsoDate(d);
 }
 
 /** YYYY-MM-DD первого числа месяца (offset — сдвиг в месяцах) по локальному

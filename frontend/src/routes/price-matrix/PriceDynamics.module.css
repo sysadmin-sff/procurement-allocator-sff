@@ -1,0 +1,228 @@
+/* Динамика цен (ADR-0057). Цвета серий приходят из dynamicsPalette.ts через
+   --swatch / stroke; текст всегда в текстовых токенах, не в цвете серии. */
+
+.explain {
+  margin: 0;
+  max-width: 720px;
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-secondary);
+}
+
+.chartHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-8);
+  margin-bottom: var(--space-5);
+}
+
+.chartTitle {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-secondary);
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.swatch {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--swatch);
+}
+
+.swatchDashed {
+  background: repeating-linear-gradient(
+    90deg,
+    var(--swatch) 0 5px,
+    transparent 5px 8px
+  );
+}
+
+.chartWrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.chartSvg {
+  display: block;
+}
+
+.gridLine {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+}
+
+.zeroLine {
+  stroke: var(--color-text-tertiary);
+  stroke-width: 1;
+}
+
+.crosshair {
+  stroke: var(--color-text-tertiary);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.axisText {
+  font-size: 12px;
+  fill: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip {
+  position: absolute;
+  top: var(--space-4);
+  z-index: 2;
+  min-width: 200px;
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-popover-sm);
+  pointer-events: none;
+  font-size: var(--text-sm-alt2);
+}
+
+.tooltipTitle {
+  margin-bottom: var(--space-3);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.tooltipRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.tooltipLabel {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.tooltipValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.chartHint {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-tertiary-alt);
+}
+
+/* --- таблица --- */
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm-alt2);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  white-space: nowrap;
+}
+
+.nameHeader,
+.monthHeader {
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-subtle);
+}
+
+.nameHeader {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  text-align: left;
+}
+
+.monthHeader {
+  text-align: right;
+}
+
+.nameCell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--color-surface);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overallRow td {
+  background: var(--color-surface-subtle);
+  font-weight: 600;
+}
+
+.rowToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+}
+
+.valueCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.valueLink {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.valueLink:hover {
+  text-decoration: underline;
+}
+
+.noValue {
+  color: var(--color-text-tertiary-alt);
+}
+
+.partialMark {
+  color: var(--color-text-tertiary-alt);
+}
+
+.tableNote {
+  margin: 0;
+  padding: var(--space-4);
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-tertiary-alt);
+}

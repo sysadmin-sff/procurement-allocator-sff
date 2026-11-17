@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { pricesApi } from '../../api/prices';
 import type { PriceHistoryEntry } from '../../api/types';
 import crudStyles from '../../components/CrudScreen.module.css';
-import { formatDate, formatMoney } from './format';
+import { formatDate, formatMoney, formatPct } from './format';
 import styles from './PriceMatrix.module.css';
 
 const POPUP_WIDTH = 380;
@@ -96,6 +96,9 @@ export function PriceHistoryPopover({
                   {formatMoney(entry.price)}
                   {entry.change === 'down' && ' ▼'}
                   {entry.change === 'up' && ' ▲'}
+                  {entry.change_pct != null && entry.change !== 'same' && (
+                    <span className={styles.historyPct}>{formatPct(entry.change_pct)}</span>
+                  )}
                 </span>
                 <span className={styles.historyDates}>
                   {formatDate(entry.valid_from)} — {entry.valid_to ? formatDate(entry.valid_to) : 'сейчас'}

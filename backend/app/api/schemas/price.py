@@ -124,6 +124,7 @@ class PriceMatrixOut(BaseModel):
 
     as_of: date
     compare_to: date | None
+    period_end: date | None
     stale_after_days: int
     suppliers: list[MatrixSupplierOut]
     rows: list[MatrixRowOut]
@@ -145,3 +146,41 @@ class PriceHistoryEntryOut(BaseModel):
     order_title: str | None
     created_by_name: str | None
     change: ChangeKind | None
+    change_pct: float | None = None
+
+
+class DynamicsMonthOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    month: str
+    start: date
+    end: date
+    is_partial: bool
+
+
+class DynamicsPointOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    month: str
+    avg_change_pct: float | None
+    compared: int
+    up: int
+    down: int
+
+
+class DynamicsSeriesOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    supplier_id: uuid.UUID
+    name: str
+    short_name: str | None
+    points: list[DynamicsPointOut]
+
+
+class PriceDynamicsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    as_of: date
+    months: list[DynamicsMonthOut]
+    overall: list[DynamicsPointOut]
+    suppliers: list[DynamicsSeriesOut]

@@ -88,6 +88,7 @@ class MatrixSupplier:
 class PriceMatrix:
     as_of: datetime.date
     compare_to: datetime.date | None
+    period_end: datetime.date | None
     stale_after_days: int
     suppliers: list[MatrixSupplier]
     rows: list[MatrixRow]
@@ -104,6 +105,15 @@ def _version_sort_key(price: Price) -> tuple:
     )
 
 
+def _effective_on(history: list[Price], day: datetime.date) -> Price | None:
+    """Версия, действовавшая на дату: valid_from <= day < valid_to (NULL — бессрочно).
+    valid_to — день, с которого действует следующая версия."""
+    effective = [
+        p for p in history if p.valid_from <= day and (p.valid_to is None or p.valid_to > day)
+    ]
+    return effective[-1] if effective else None
+
+
 def _baseline(
     history: list[Price], active: Price, compare_to: datetime.date | None
 ) -> Price | None:
@@ -111,13 +121,7 @@ def _baseline(
     if compare_to is None:
         older = [p for p in history if p.id != active.id and p.valid_to is not None]
         return older[-1] if older else None
-
-    effective = [
-        p
-        for p in history
-        if p.valid_from <= compare_to and (p.valid_to is None or p.valid_to > compare_to)
-    ]
-    return effective[-1] if effective else None
+    return _effective_on(history, compare_to)
 
 
 def _classify(current: Decimal, baseline: Price | None) -> tuple[Change, Decimal | None]:
@@ -140,8 +144,14 @@ def build_price_matrix(
     db: Session,
     *,
     compare_to: datetime.date | None = None,
+    period_end: datetime.date | None = None,
     today: datetime.date | None = None,
 ) -> PriceMatrix:
+    """compare_to — база сравнения (цена на эту дату), без неё — предыдущая
+    версия пары. period_end (только вместе с compare_to, ADR-0056) — в ячейке
+    цена, действовавшая на эту дату, а не текущая: режим «за период»."""
+    if period_end is not None and (compare_to is None or compare_to > period_end):
+        raise ValueError("period_end requires compare_to <= period_end")
     today = today or datetime.date.today()
 
     by_pair: dict[tuple[uuid.UUID, uuid.UUID], list[Price]] = defaultdict(list)
@@ -159,12 +169,19 @@ def build_price_matrix(
 
     for (material_id, supplier_id), history in by_pair.items():
         history.sort(key=_version_sort_key)
-        active_rows = [p for p in history if p.valid_to is None]
-        if not active_rows:
+        if period_end is None:
+            active_rows = [p for p in history if p.valid_to is None]
+            active = active_rows[-1] if active_rows else None
+            baseline_day = compare_to
+        else:
+            active = _effective_on(history, period_end)
+            # «с X» включительно: изменение, сделанное в день X, входит в
+            # период, поэтому база — цена на конец предыдущего дня (ADR-0056).
+            baseline_day = compare_to - datetime.timedelta(days=1)
+        if active is None:
             continue
-        active = active_rows[-1]
         current = Decimal(active.price)
-        baseline = _baseline(history, active, compare_to)
+        baseline = _baseline(history, active, baseline_day)
         change, pct = _classify(current, baseline)
 
         cells_by_material[material_id].append(
@@ -234,6 +251,7 @@ def build_price_matrix(
     return PriceMatrix(
         as_of=today,
         compare_to=compare_to,
+        period_end=period_end,
         stale_after_days=STALE_AFTER_DAYS,
         suppliers=suppliers,
         rows=rows,
@@ -256,6 +274,7 @@ class PriceHistoryEntry:
     created_by_name: str | None
     change: Change | None
     """Относительно предыдущей (более старой) версии; None у самой первой."""
+    change_pct: Decimal | None = None
 
 
 def price_history(
@@ -312,8 +331,9 @@ def price_history(
             source = "manual"
 
         change: Change | None = None
+        change_pct: Decimal | None = None
         if previous is not None:
-            change, _ = _classify(Decimal(version.price), previous)
+            change, change_pct = _classify(Decimal(version.price), previous)
 
         order = orders_by_item.get(version.source_order_item_id) if source == "order" else None
         import_ = imports.get(version.source_import_id) if source == "import" else None
@@ -332,9 +352,173 @@ def price_history(
                 order_title=order[1] if order is not None else None,
                 created_by_name=(user.name or user.email) if user is not None else None,
                 change=change,
+                change_pct=change_pct,
             )
         )
         previous = version
 
     entries.reverse()
     return entries
+
+
+# --- Динамика цен по месяцам (ADR-0057) --------------------------------------
+
+MAX_DYNAMICS_MONTHS = 36
+
+
+@dataclass
+class DynamicsMonth:
+    month: str
+    """YYYY-MM."""
+    start: datetime.date
+    end: datetime.date
+    """Последний день месяца или сегодня для текущего месяца."""
+    is_partial: bool
+
+
+@dataclass
+class DynamicsPoint:
+    month: str
+    avg_change_pct: Decimal | None
+    """Среднее изменение по всем сравнимым материалам, None — сравнить нечего."""
+    compared: int
+    up: int
+    down: int
+
+
+@dataclass
+class DynamicsSeries:
+    supplier_id: uuid.UUID
+    name: str
+    short_name: str | None
+    points: list[DynamicsPoint]
+
+
+@dataclass
+class PriceDynamics:
+    as_of: datetime.date
+    months: list[DynamicsMonth]
+    overall: list[DynamicsPoint]
+    suppliers: list[DynamicsSeries]
+
+
+def _month_add(month: datetime.date, delta: int) -> datetime.date:
+    index = month.year * 12 + (month.month - 1) + delta
+    return datetime.date(index // 12, index % 12 + 1, 1)
+
+
+def _dynamics_months(
+    start: datetime.date, end: datetime.date, today: datetime.date
+) -> list[DynamicsMonth]:
+    months: list[DynamicsMonth] = []
+    month = start
+    while month <= end:
+        last_day = _month_add(month, 1) - datetime.timedelta(days=1)
+        months.append(
+            DynamicsMonth(
+                month=f"{month.year:04d}-{month.month:02d}",
+                start=month,
+                end=min(last_day, today),
+                is_partial=last_day > today,
+            )
+        )
+        month = _month_add(month, 1)
+    return months
+
+
+class _Acc:
+    __slots__ = ("total", "compared", "up", "down")
+
+    def __init__(self) -> None:
+        self.total = Decimal(0)
+        self.compared = 0
+        self.up = 0
+        self.down = 0
+
+    def add(self, pct: Decimal) -> None:
+        self.total += pct
+        self.compared += 1
+        if pct > 0:
+            self.up += 1
+        elif pct < 0:
+            self.down += 1
+
+    def point(self, month: str) -> DynamicsPoint:
+        avg = (self.total / self.compared).quantize(Decimal("0.01")) if self.compared else None
+        return DynamicsPoint(
+            month=month, avg_change_pct=avg, compared=self.compared, up=self.up, down=self.down
+        )
+
+
+def default_dynamics_range(today: datetime.date) -> tuple[datetime.date, datetime.date]:
+    """Последние 12 месяцев, включая текущий."""
+    end = today.replace(day=1)
+    return _month_add(end, -11), end
+
+
+def price_dynamics(
+    db: Session,
+    *,
+    start_month: datetime.date,
+    end_month: datetime.date,
+    today: datetime.date | None = None,
+) -> PriceDynamics:
+    """Среднее изменение цен поставщика за каждый месяц (ADR-0057).
+
+    Для месяца M и пары материал + поставщик: цена на конец предыдущего
+    месяца против цены на конец M (для текущего месяца — на сегодня). Процент
+    усредняется по всем парам, у которых цена есть в обеих точках, включая
+    неизменившиеся (0%). «В среднем по всем» — среднее по всем таким парам
+    всех поставщиков, а не среднее средних."""
+    today = today or datetime.date.today()
+    start_month, end_month = start_month.replace(day=1), end_month.replace(day=1)
+    if start_month > end_month:
+        raise ValueError("start month is after end month")
+    if end_month > today.replace(day=1):
+        raise ValueError("end month is in the future")
+    months = _dynamics_months(start_month, end_month, today)
+    if len(months) > MAX_DYNAMICS_MONTHS:
+        raise ValueError(f"at most {MAX_DYNAMICS_MONTHS} months")
+
+    by_pair: dict[tuple[uuid.UUID, uuid.UUID], list[Price]] = defaultdict(list)
+    for price in db.scalars(select(Price)):
+        by_pair[(price.material_id, price.supplier_id)].append(price)
+
+    overall = [_Acc() for _ in months]
+    by_supplier: dict[uuid.UUID, list[_Acc]] = {}
+    for (_material_id, supplier_id), history in by_pair.items():
+        history.sort(key=_version_sort_key)
+        for index, month in enumerate(months):
+            base = _effective_on(history, month.start - datetime.timedelta(days=1))
+            current = _effective_on(history, month.end)
+            if base is None or current is None:
+                continue
+            base_price = Decimal(base.price)
+            if base_price == 0:
+                continue
+            pct = (Decimal(current.price) - base_price) / base_price * 100
+            overall[index].add(pct)
+            if supplier_id not in by_supplier:
+                by_supplier[supplier_id] = [_Acc() for _ in months]
+            by_supplier[supplier_id][index].add(pct)
+
+    series: list[DynamicsSeries] = []
+    if by_supplier:
+        for supplier in db.scalars(select(Supplier).where(Supplier.id.in_(list(by_supplier)))):
+            accs = by_supplier[supplier.id]
+            series.append(
+                DynamicsSeries(
+                    supplier_id=supplier.id,
+                    name=supplier.name,
+                    short_name=supplier.short_name,
+                    points=[acc.point(m.month) for acc, m in zip(accs, months, strict=True)],
+                )
+            )
+    series.sort(key=lambda s: (s.short_name or s.name).lower())
+
+    return PriceDynamics(
+        as_of=today,
+        months=months,
+        overall=[acc.point(m.month) for acc, m in zip(overall, months, strict=True)],
+        suppliers=series,
+    )

@@ -85,7 +85,9 @@ flowchart LR
 
 - **Матрица цен** (`app/services/price_matrix.py`, ADR-0054) — только чтение
   `Price`: `GET /prices/matrix` (материалы × поставщики, сравнение с предыдущей
-  версией или с датой, «давно не обновлялся») и `GET /prices/history` (версии
+  версией, с датой или за период — ADR-0056, «давно не обновлялся»),
+  `GET /prices/dynamics` (среднее изменение цен по поставщикам и месяцам,
+  ADR-0057) и `GET /prices/history` (версии
   пары с источником). Admin-роутер `app/api/price_matrix.py` (ADR-0055),
   подключён до `price.py`. Экран — `/prices`
   (`frontend/src/routes/price-matrix/`).

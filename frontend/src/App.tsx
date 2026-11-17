@@ -12,6 +12,7 @@ import {
   OrderDetailPage,
   PriceComparisonPage,
   PriceListImportReviewPage,
+  PriceDynamicsPage,
   PriceMatrixPage,
   ProjectBuilderPage,
   ProjectRouterPage,
@@ -44,6 +45,7 @@ function App() {
         <Route path="/orders/:orderId" element={<OrderDetailPage />} />
         <Route path="/price-list-imports/:importId" element={<PriceListImportReviewPage />} />
         <Route path="/prices" element={<RequireAdmin><PriceMatrixPage /></RequireAdmin>} />
+        <Route path="/prices/dynamics" element={<RequireAdmin><PriceDynamicsPage /></RequireAdmin>} />
         <Route path="/materials" element={<MaterialsPage />} />
         <Route path="/categories" element={<RequireAdmin><CategoriesPage /></RequireAdmin>} />
         <Route path="/suppliers" element={<SuppliersPage />} />

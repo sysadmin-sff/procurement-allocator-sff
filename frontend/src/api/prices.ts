@@ -1,5 +1,12 @@
 import { diff, http } from './client';
-import type { Price, PriceCreate, PriceHistoryEntry, PriceMatrix, PriceUpdate } from './types';
+import type {
+  Price,
+  PriceCreate,
+  PriceDynamics,
+  PriceHistoryEntry,
+  PriceMatrix,
+  PriceUpdate,
+} from './types';
 
 export interface PriceListFilter {
   material_id?: string;
@@ -31,9 +38,24 @@ export const pricesApi = {
   remove: (id: string) => http.delete<void>(`/prices/${id}`),
   /** Матрица «все материалы × все поставщики» (ADR-0054). Без compareTo —
    * сравнение с предыдущей версией каждой цены, с compareTo (YYYY-MM-DD) —
-   * с ценой, действовавшей на эту дату. */
-  matrix: (compareTo?: string | null) =>
-    http.get<PriceMatrix>(`/prices/matrix${compareTo ? `?compare_to=${compareTo}` : ''}`),
+   * с ценой, действовавшей на эту дату. С periodEnd — режим «за период»
+   * (ADR-0056): в ячейке цена на periodEnd, база — цена на compareTo. */
+  matrix: (compareTo?: string | null, periodEnd?: string | null) => {
+    const params = new URLSearchParams();
+    if (compareTo) params.set('compare_to', compareTo);
+    if (compareTo && periodEnd) params.set('period_end', periodEnd);
+    const query = params.toString();
+    return http.get<PriceMatrix>(`/prices/matrix${query ? `?${query}` : ''}`);
+  },
+  /** Среднее изменение цен по поставщикам и месяцам (ADR-0057). Месяцы —
+   * YYYY-MM; без них — последние 12 месяцев, включая текущий. */
+  dynamics: (start?: string | null, end?: string | null) => {
+    const params = new URLSearchParams();
+    if (start) params.set('start', start);
+    if (end) params.set('end', end);
+    const query = params.toString();
+    return http.get<PriceDynamics>(`/prices/dynamics${query ? `?${query}` : ''}`);
+  },
   /** Все версии пары материал + поставщик с источником, новые первыми. */
   history: (materialId: string, supplierId: string) =>
     http.get<PriceHistoryEntry[]>(

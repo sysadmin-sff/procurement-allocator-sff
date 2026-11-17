@@ -52,6 +52,7 @@ function fixture(): PriceMatrix {
   return {
     as_of: '2026-11-12',
     compare_to: null,
+    period_end: null,
     stale_after_days: 30,
     summary: { up: 1, down: 1, new: 0, same: 1 },
     suppliers: [
@@ -129,7 +130,7 @@ describe('PriceMatrixPage', () => {
     renderPage();
 
     expect(await screen.findByText('Door Blank 36x80')).toBeInTheDocument();
-    expect(matrixMock).toHaveBeenCalledWith(null);
+    expect(matrixMock).toHaveBeenCalledWith(null, null);
     expect(screen.getByRole('link', { name: 'EMS' })).toHaveAttribute('href', '/suppliers/ems');
     expect(screen.getAllByText('Doors').length).toBeGreaterThan(0);
 
@@ -168,9 +169,46 @@ describe('PriceMatrixPage', () => {
     await screen.findByText('Door Blank 36x80');
     fireEvent.click(screen.getByRole('button', { name: 'ценой на дату' }));
     await waitFor(() =>
-      expect(matrixMock).toHaveBeenLastCalledWith(expect.stringMatching(/^\d{4}-\d{2}-01$/)),
+      expect(matrixMock).toHaveBeenLastCalledWith(expect.stringMatching(/^\d{4}-\d{2}-01$/), null),
     );
     expect(screen.getByLabelText('Дата сравнения')).toBeInTheDocument();
+  });
+
+  it('switches to period mode and refetches with start and end dates', async () => {
+    renderPage();
+    await screen.findByText('Door Blank 36x80');
+    fireEvent.click(screen.getByRole('button', { name: 'за период' }));
+    await waitFor(() =>
+      expect(matrixMock).toHaveBeenLastCalledWith(
+        expect.stringMatching(/^\d{4}-\d{2}-01$/),
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      ),
+    );
+    expect(screen.getByLabelText('Начало периода')).toBeInTheDocument();
+    expect(screen.getByLabelText('Конец периода')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Дата сравнения')).not.toBeInTheDocument();
+  });
+
+  it('reads the period from the URL and shows it in the header and summary', async () => {
+    matrixMock.mockResolvedValue({
+      ...fixture(),
+      compare_to: '2026-09-01',
+      period_end: '2026-09-30',
+    });
+    renderPage('/prices?compare_to=2026-09-01&period_end=2026-09-30');
+
+    await screen.findByText('Door Blank 36x80');
+    expect(matrixMock).toHaveBeenCalledWith('2026-09-01', '2026-09-30');
+    expect(screen.getByText('за 01.09.2026 — 30.09.2026')).toBeInTheDocument();
+    expect(screen.getByText('цены на 30.09.2026 против цен на 01.09.2026')).toBeInTheDocument();
+    expect(screen.getByText(/появились за период/)).toBeInTheDocument();
+  });
+
+  it('a start date after the end pulls the start back to the end', async () => {
+    renderPage('/prices?compare_to=2026-09-01&period_end=2026-09-30');
+    await screen.findByText('Door Blank 36x80');
+    fireEvent.change(screen.getByLabelText('Начало периода'), { target: { value: '2026-10-15' } });
+    await waitFor(() => expect(matrixMock).toHaveBeenLastCalledWith('2026-09-30', '2026-09-30'));
   });
 
   it('opens price history with sources on cell click', async () => {
@@ -188,6 +226,7 @@ describe('PriceMatrixPage', () => {
         order_title: 'Project X — EMS',
         created_by_name: 'Мария',
         change: 'down',
+        change_pct: -4,
       },
       {
         id: 'h1',
@@ -202,6 +241,7 @@ describe('PriceMatrixPage', () => {
         order_title: null,
         created_by_name: null,
         change: null,
+        change_pct: null,
       },
     ]);
     renderPage();
@@ -212,6 +252,7 @@ describe('PriceMatrixPage', () => {
     expect(await within(dialog).findByText(/прайс-лист от 01\.09\.2026/)).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Project X — EMS' })).toHaveAttribute('href', '/orders/o1');
     expect(within(dialog).getByText('активна')).toBeInTheDocument();
+    expect(within(dialog).getByText('-4.0%')).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

@@ -461,3 +461,38 @@ th .staleText {
     width: 180px;
   }
 }
+
+/* --- вкладки раздела «Цены» (ADR-0057) --- */
+
+.tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab {
+  padding: var(--space-3) var(--space-6);
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-heading);
+  font-size: var(--text-sm-alt2);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+
+.tab:hover {
+  color: var(--color-brand);
+}
+
+.tabActive {
+  color: var(--color-brand);
+  border-bottom-color: var(--color-brand);
+}
+
+.historyPct {
+  margin-left: var(--space-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}

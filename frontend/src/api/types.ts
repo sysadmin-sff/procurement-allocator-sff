@@ -746,6 +746,8 @@ export interface PriceMatrixSupplier {
 export interface PriceMatrix {
   as_of: string;
   compare_to: string | null;
+  /** Конец периода (ADR-0056): в ячейках цены на эту дату, а не текущие. */
+  period_end: string | null;
   stale_after_days: number;
   suppliers: PriceMatrixSupplier[];
   rows: PriceMatrixRow[];
@@ -765,4 +767,39 @@ export interface PriceHistoryEntry {
   order_title: string | null;
   created_by_name: string | null;
   change: PriceChange | null;
+  /** % к предыдущей версии, округлён до 0.1; null у первой версии. */
+  change_pct: number | null;
+}
+
+/** Динамика цен по месяцам (ADR-0057). */
+export interface PriceDynamicsMonth {
+  /** YYYY-MM */
+  month: string;
+  start: string;
+  /** Последний день месяца или сегодня для текущего. */
+  end: string;
+  is_partial: boolean;
+}
+
+export interface PriceDynamicsPoint {
+  month: string;
+  /** Среднее изменение по всем сравнимым позициям, % (0.01); null — нечего сравнить. */
+  avg_change_pct: number | null;
+  compared: number;
+  up: number;
+  down: number;
+}
+
+export interface PriceDynamicsSeries {
+  supplier_id: string;
+  name: string;
+  short_name: string | null;
+  points: PriceDynamicsPoint[];
+}
+
+export interface PriceDynamics {
+  as_of: string;
+  months: PriceDynamicsMonth[];
+  overall: PriceDynamicsPoint[];
+  suppliers: PriceDynamicsSeries[];
 }

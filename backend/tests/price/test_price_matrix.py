@@ -171,6 +171,80 @@ def test_compare_to_before_first_price_is_new(db_session, make_material, make_su
     assert cell.change == "new"
 
 
+# --- режим «за период» (ADR-0056) -------------------------------------------
+
+
+def test_period_compares_price_at_end_with_price_at_start(
+    db_session, make_material, make_supplier, make_price
+):
+    """В ячейке цена на конец периода, а не текущая; база — цена на начало."""
+    session, *_ = db_session
+    material, supplier = make_material(), make_supplier()
+    make_price(material, supplier, price=30, valid_from=_d(90), valid_to=_d(60))
+    make_price(material, supplier, price=20, valid_from=_d(60), valid_to=_d(5))
+    make_price(material, supplier, price=25, valid_from=_d(5))
+
+    matrix = build_price_matrix(session, compare_to=_d(70), period_end=_d(30), today=TODAY)
+    cell = _cell(matrix, material, supplier)
+
+    assert matrix.period_end == _d(30)
+    assert cell.price == Decimal("20")
+    assert cell.valid_from == _d(60)
+    assert cell.baseline_price == Decimal("30")
+    assert cell.change == "down"
+
+
+def test_period_counts_a_change_made_on_its_first_day(
+    db_session, make_material, make_supplier, make_price
+):
+    """«с X» включительно: база — цена на конец дня перед X."""
+    session, *_ = db_session
+    material, supplier = make_material(), make_supplier()
+    make_price(material, supplier, price=30, valid_from=_d(90), valid_to=_d(40))
+    make_price(material, supplier, price=33, valid_from=_d(40))
+
+    matrix = build_price_matrix(session, compare_to=_d(40), period_end=_d(10), today=TODAY)
+    cell = _cell(matrix, material, supplier)
+
+    assert cell.baseline_price == Decimal("30")
+    assert cell.change == "up"
+
+
+def test_period_without_change_inside_is_same(db_session, make_material, make_supplier, make_price):
+    session, *_ = db_session
+    material, supplier = make_material(), make_supplier()
+    make_price(material, supplier, price=30, valid_from=_d(90), valid_to=_d(60))
+    make_price(material, supplier, price=20, valid_from=_d(60), valid_to=_d(5))
+    make_price(material, supplier, price=25, valid_from=_d(5))
+
+    matrix = build_price_matrix(session, compare_to=_d(50), period_end=_d(10), today=TODAY)
+
+    assert _cell(matrix, material, supplier).change == "same"
+
+
+def test_period_price_appeared_inside_is_new_and_closed_before_end_has_no_cell(
+    db_session, make_material, make_supplier, make_price
+):
+    session, *_ = db_session
+    m_new, m_gone = make_material(), make_material()
+    supplier = make_supplier()
+    make_price(m_new, supplier, price=10, valid_from=_d(40))
+    make_price(m_gone, supplier, price=10, valid_from=_d(90), valid_to=_d(40))
+
+    matrix = build_price_matrix(session, compare_to=_d(60), period_end=_d(20), today=TODAY)
+
+    assert _cell(matrix, m_new, supplier).change == "new"
+    assert _row(matrix, m_gone).cells == []
+
+
+def test_period_end_without_valid_start_is_rejected(db_session):
+    session, *_ = db_session
+    with pytest.raises(ValueError):
+        build_price_matrix(session, period_end=_d(1), today=TODAY)
+    with pytest.raises(ValueError):
+        build_price_matrix(session, compare_to=_d(1), period_end=_d(2), today=TODAY)
+
+
 # --- строки, ячейки, поставщики --------------------------------------------
 
 
@@ -268,6 +342,7 @@ def test_history_newest_first_with_sources_and_changes(
     assert [h.id for h in history] == [edited.id, imported.id, first.id]
     assert [h.source for h in history] == ["manual", "import", "manual"]
     assert [h.change for h in history] == ["down", "up", None]
+    assert [h.change_pct for h in history] == [Decimal("-7.7"), Decimal("4.0"), None]
     assert history[1].import_id == imp.id
     assert history[1].import_uploaded_at is not None
     assert history[0].import_id is None
@@ -317,6 +392,31 @@ def test_matrix_endpoint_returns_cell_and_supplier(
     assert cell["baseline_price"] == 50
     assert cell["change"] == "down"
     assert any(s["id"] == str(supplier.id) for s in body["suppliers"])
+
+
+def test_matrix_endpoint_period(
+    db_session, make_material, make_supplier, make_price, make_user, make_session
+):
+    material, supplier = make_material(), make_supplier()
+    make_price(material, supplier, price=50, valid_from=_d(60), valid_to=_d(10))
+    make_price(material, supplier, price=48, valid_from=_d(10))
+    client = _client(make_user, make_session, "admin")
+
+    body = client.get(
+        "/prices/matrix", params={"compare_to": str(_d(30)), "period_end": str(_d(20))}
+    ).json()
+
+    assert body["period_end"] == str(_d(20))
+    row = next(r for r in body["rows"] if r["material_id"] == str(material.id))
+    cell = next(c for c in row["cells"] if c["supplier_id"] == str(supplier.id))
+    assert (cell["price"], cell["change"]) == (50, "same")
+
+    bad = [
+        {"period_end": str(_d(20))},
+        {"compare_to": str(_d(10)), "period_end": str(_d(20))},
+    ]
+    for params in bad:
+        assert client.get("/prices/matrix", params=params).status_code == 422
 
 
 def test_history_endpoint(

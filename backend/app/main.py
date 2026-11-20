@@ -64,9 +64,12 @@ app.include_router(price_ingestion_router)
 # Imported inside the condition so that the module's code stays unloaded while
 # the flag is off (ADR-0051 §1).
 if MeasurementsFlags().enabled:
+    from app.measurements.report_router import router as measurements_report_router
     from app.measurements.router import router as measurements_router
 
     app.include_router(measurements_router)
+    # Token-guarded report for the reporting bot, outside /measurements (ADR-0058).
+    app.include_router(measurements_report_router)
 
 
 @app.on_event("startup")

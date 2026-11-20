@@ -117,6 +117,12 @@ flowchart LR
   пиксельной высоты столбиков графика. Пункт меню показывается по
   `GET /measurements/access` (`useMeasurementsAccess`), а не по роли
   (`docs/ui-reference.md` §9).
+  Отчёт для отчётного Telegram-бота (ADR-0058) — `daily_report.py` на тех же
+  выборке и правилах, что `metrics.py`, маршрут
+  `GET /integrations/measurements/daily-report` (`report_router.py`) вне
+  `/measurements`: закрыт bearer-токеном `MEASUREMENTS_REPORT_TOKEN`, а не
+  сессией, отдаёт только количества по замерщикам. Подключается под тем же
+  флагом `MEASUREMENTS_ENABLED`.
 
 ## Связанные документы
 

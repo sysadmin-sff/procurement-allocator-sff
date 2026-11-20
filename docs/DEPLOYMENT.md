@@ -243,6 +243,7 @@ Read-only синхронизация с amoCRM. Работает в отдель
 |---|---|---|---|
 | `MEASUREMENTS_ENABLED` | `backend/.env` | `false` | API `/measurements`; меняется пересозданием `backend` |
 | `MEASUREMENTS_SYNC_ENABLED` | `backend/.env.measurements` | `false` | опрос amo; `backend` не затрагивается |
+| `MEASUREMENTS_REPORT_TOKEN` | `backend/.env` | не задан | токен отчётного бота для `GET /integrations/measurements/daily-report` (ADR-0058); не задан — 404. Длинная случайная строка, тот же токен в `.env` бота; меняется пересозданием `backend` |
 
 ### Отдельная интеграция amo
 

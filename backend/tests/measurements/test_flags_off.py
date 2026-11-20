@@ -48,10 +48,14 @@ def test_every_measurements_route_returns_404(disabled_app, on_app):
         assert client.request(method, path).status_code == 404, path
 
 
+REPORT_PATH = "/integrations/measurements/daily-report"
+"""Token-guarded report for the reporting bot (ADR-0058), outside /measurements."""
+
+
 def test_enabling_adds_only_measurements_paths(disabled_app, on_app):
     assert set(on_app.openapi()["paths"]) - set(disabled_app.openapi()["paths"]) == {
         path for path, _ in measurements_routes(on_app)
-    }
+    } | {REPORT_PATH}
     assert set(disabled_app.openapi()["paths"]) <= set(on_app.openapi()["paths"])
 
 

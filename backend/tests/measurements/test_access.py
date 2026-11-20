@@ -23,7 +23,9 @@ NOW = datetime(2026, 11, 10, 12, tzinfo=timezone.utc)
 def _assert_every_route_returns(client, enabled_app, expected: int, cookie=None) -> None:
     routes = measurements_routes(enabled_app)
     assert {path for path, _ in routes} >= {"/measurements/access", "/measurements/status"}
-    documented = {path for path in enabled_app.openapi()["paths"] if "measurements" in path}
+    documented = {
+        path for path in enabled_app.openapi()["paths"] if path.startswith("/measurements")
+    }
     assert {path for path, _ in routes} >= documented
     client.cookies.clear()
     if cookie is not None:
@@ -63,6 +65,24 @@ def test_every_route_has_the_guard_in_its_dependency_chain(enabled_app):
     assert_every_route_guarded(
         _synthetic_app(Depends(require_measurements_access)), require_measurements_access
     )
+
+
+def test_report_integration_is_token_guarded_not_session_guarded(enabled_app):
+    """The one route the flag adds outside /measurements (ADR-0058)."""
+    from app.measurements.report_router import require_report_token
+    from tests.measurements.helpers import _depends_on
+
+    [context] = [
+        c
+        for route in enabled_app.routes
+        for c in (
+            route.effective_route_contexts()
+            if hasattr(route, "effective_route_contexts")
+            else [route]
+        )
+        if getattr(c, "path", "").startswith("/integrations/measurements")
+    ]
+    assert _depends_on(context.dependant, require_report_token)
 
 
 def test_without_session_every_route_returns_401(client, enabled_app):

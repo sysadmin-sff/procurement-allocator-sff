@@ -90,6 +90,8 @@ export interface MeasurementsVisitRow {
   is_duplicate: boolean;
   /** amo field «Deal Number» (ADR-0053, change 2026-11-11); null when empty. */
   deal_number: string | null;
+  /** amo field «Structure Cost $», USD (ADR-0053, change 2026-11-23); null when empty. */
+  structure_cost: number | null;
 }
 
 export interface MeasurementsMetricsQuery {

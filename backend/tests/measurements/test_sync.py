@@ -1,6 +1,7 @@
 """Ingestion against a fake amo (ADR-0051 §3, §4); real test database."""
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -619,6 +620,82 @@ def test_a_newer_snapshot_replaces_the_deal_number(env):
     )
     env.db.commit()
     assert env.lead().deal_number == "SF-2"
+
+
+STRUCTURE_COST_FIELD = 990002
+
+
+def structure_cost_field(*values) -> dict:
+    return {
+        "field_id": STRUCTURE_COST_FIELD,
+        "field_name": "Structure Cost $",
+        "field_code": None,
+        "field_type": "numeric",
+        "values": [{"value": value} for value in values],
+        "is_masked": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("raw", "stored"),
+    [
+        ("14620", Decimal("14620.00")),
+        (14620, Decimal("14620.00")),
+        ("14620.5", Decimal("14620.50")),
+        (" $14,620 ", Decimal("14620.00")),
+    ],
+)
+def test_lead_snapshot_stores_the_structure_cost(env, raw, stored):
+    env.settings.structure_cost_field_id = STRUCTURE_COST_FIELD
+    env.amo.add_task(make_task())
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=[structure_cost_field(raw)])
+    env.cycle()
+    assert env.lead().structure_cost == stored
+
+
+@pytest.mark.parametrize(
+    "custom_fields",
+    [
+        None,
+        [],
+        [structure_cost_field()],
+        [structure_cost_field("  ")],
+        [structure_cost_field("n/a")],
+        [structure_cost_field("1e20")],
+    ],
+    ids=["null", "no-fields", "no-values", "blank", "text", "too-large"],
+)
+def test_missing_or_bad_structure_cost_is_null(env, custom_fields):
+    env.settings.structure_cost_field_id = STRUCTURE_COST_FIELD
+    env.amo.add_task(make_task())
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=custom_fields)
+    env.cycle()
+    assert env.lead().structure_cost is None
+
+
+def test_structure_cost_field_defaults_to_the_amo_field():
+    assert MeasurementsSettings(_env_file=None).structure_cost_field_id == 756521
+
+
+def test_structure_cost_is_not_read_while_the_field_id_is_unset(env):
+    env.settings.structure_cost_field_id = None
+    env.amo.add_task(make_task())
+    env.amo.leads[LEAD] = lead_snapshot(custom_fields_values=[structure_cost_field("14620")])
+    env.cycle()
+    assert env.lead().structure_cost is None
+
+
+def test_a_newer_snapshot_replaces_the_structure_cost(env):
+    env.settings.structure_cost_field_id = STRUCTURE_COST_FIELD
+    _upsert_lead(
+        env.ctx, lead_snapshot(updated_at=T0, custom_fields_values=[structure_cost_field("100")])
+    )
+    _upsert_lead(
+        env.ctx,
+        lead_snapshot(updated_at=T0 + 60, custom_fields_values=[structure_cost_field("250")]),
+    )
+    env.db.commit()
+    assert env.lead().structure_cost == Decimal("250.00")
 
 
 def test_lead_with_null_custom_fields_has_no_result(env):

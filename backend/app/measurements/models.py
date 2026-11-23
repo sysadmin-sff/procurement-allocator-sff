@@ -69,6 +69,8 @@ class MeasurementsLead(Base):
     status_id: Mapped[int | None] = mapped_column(BigInteger)
     site_visit_enum_id: Mapped[int | None] = mapped_column(BigInteger)
     deal_number: Mapped[str | None] = mapped_column(String(64))
+    structure_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    """amo field «Structure Cost $» (ADR-0053, 2026-11-23 change); None when empty."""
     """Snapshot of the amo field «Deal Number» (ADR-0053, 2026-11-11 change)."""
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     price: Mapped[Decimal | None] = mapped_column(Numeric(12, 3))

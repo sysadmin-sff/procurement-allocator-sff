@@ -1,6 +1,7 @@
 """GET /measurements/metrics and /metrics/visits (ADR-0053 §5)."""
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -90,7 +91,7 @@ def test_month_reference_values_through_the_api(seeded):
         company["visit_days"],
         company["per_visit_day"],
         company["per_week_avg"],
-    ) == (17, 15, "1.13", "2.64")
+    ) == (16, 15, "1.07", "2.49")  # without L15, not a measurer (ADR-0059)
     october = {item["measurer_key"]: item for item in body["periods"][0]["measurers"]}
     assert october[NAZAR]["per_week_avg"] == "1.58"
     assert october[MATT_KEY]["per_week_avg"] == "0.90"
@@ -121,6 +122,7 @@ def test_visits_detail(seeded):
         "is_completed": True,
         "is_duplicate": False,
         "deal_number": None,
+        "structure_cost": None,
     }
 
 
@@ -138,6 +140,24 @@ def test_visits_detail_carries_the_deal_number_of_the_lead(seeded):
     ).json()
     assert [(row["lead_id"], row["deal_number"]) for row in rows] == [
         (1003, "SF-1003"),
+        (rows[1]["lead_id"], None),
+    ]
+
+
+def test_visits_detail_carries_the_structure_cost_of_the_lead(seeded):
+    with SessionLocal() as db:
+        db.execute(
+            update(MeasurementsLead)
+            .where(MeasurementsLead.lead_id == 1003)
+            .values(structure_cost=Decimal("14620.00"))
+        )
+        db.commit()
+    rows = seeded.get(
+        "/measurements/metrics/visits",
+        params={"from": "2026-10-01", "to": "2026-10-31", "measurer": MATT_KEY, "limit": 2},
+    ).json()
+    assert [(row["lead_id"], row["structure_cost"]) for row in rows] == [
+        (1003, 14620),
         (rows[1]["lead_id"], None),
     ]
 

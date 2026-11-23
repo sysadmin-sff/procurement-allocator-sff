@@ -311,13 +311,13 @@ def test_october_and_partial_november(reference):
     october, november = body["periods"]
     assert core(by_key(october)["company"]) == (11, 10, "1.10", "2.48")
     assert (november["days"], november["is_partial"]) == (14, True)
-    assert [item["measurer_key"] for item in november["measurers"]] == [MATT_KEY, NAZAR, None]
+    # L15 (U, not a measurer) is left out everywhere (ADR-0059).
+    assert [item["measurer_key"] for item in november["measurers"]] == [MATT_KEY, NAZAR]
     blocks = by_key(november)
     expected = {
         NAZAR: ((2, 2, "1.00", "1.00"), 1, 1, 1),
         MATT_KEY: ((3, 3, "1.00", "1.50"), 0, 0, 0),
-        None: ((1, 1, "1.00", "0.50"), 0, 1, 0),
-        "company": ((6, 5, "1.20", "3.00"), 1, 2, 1),
+        "company": ((5, 5, "1.00", "2.50"), 1, 1, 1),
     }
     for key, (numbers, upcoming, without_result, no_outcome) in expected.items():
         block = blocks[key]
@@ -328,8 +328,8 @@ def test_october_and_partial_november(reference):
         assert quality["without_site_visit_result"]["not_completed"] == 0, key
         assert quality["no_outcome"] == no_outcome, key
     assert blocks["company"]["conducted"] == {
-        "total": 6,
-        "primary": 3,
+        "total": 5,
+        "primary": 2,
         "additional": 1,
         "legacy": 2,
     }
@@ -339,7 +339,7 @@ def test_october_and_partial_november(reference):
 
     total = body["total"]
     assert (total["days"], total["is_partial"]) == (45, True)
-    assert core(total["company"]) == (17, 15, "1.13", "2.64")
+    assert core(total["company"]) == (16, 15, "1.07", "2.49")
 
 
 # --- the week of the spring time change
@@ -361,7 +361,7 @@ def test_future_period_has_no_days_and_no_weekly_average(reference):
     november, december = body["periods"]
     assert (december["days"], december["is_partial"]) == (0, False)
     assert december["company"]["per_week_avg"] is None
-    assert november["company"]["per_week_avg"] == "3.00"
+    assert november["company"]["per_week_avg"] == "2.50"
 
 
 def test_no_visit_days_gives_null_per_visit_day(reference):
@@ -448,6 +448,7 @@ def test_visits_detail_has_no_client_data(reference):
         "is_completed",
         "is_duplicate",
         "deal_number",  # an amo identifier, ADR-0053 change 2026-11-11
+        "structure_cost",  # owner's decision, ADR-0053 change 2026-11-23
     }
     assert {row["lead_id"] for row in found}.isdisjoint({1009, L22, L26})
     assert [row["local_date"] for row in found] == sorted(row["local_date"] for row in found)
@@ -513,3 +514,30 @@ def test_elapsed_days():
     assert elapsed_days(start, end, date(2026, 11, 14)) == 14
     assert elapsed_days(start, end, date(2026, 11, 1)) == 1
     assert elapsed_days(start, end, date(2026, 10, 31)) == 0
+
+
+# --- only measurers from the map (ADR-0059)
+
+
+def test_visits_of_non_measurers_are_left_out_everywhere(reference):
+    """L15 is a completed primary on 12.11 by U, who is not in measurer_map."""
+    from app.measurements.daily_report import daily_report
+
+    rows = list_visits(
+        reference,
+        date_from=date(2026, 11, 1),
+        date_to=date(2026, 11, 30),
+        measurer=None,
+        kind=None,
+        limit=1000,
+    )
+    assert rows
+    assert all(row["measurer_key"] is not None for row in rows)
+    assert 1015 not in {row["lead_id"] for row in rows}
+
+    body = metrics(reference, date(2026, 11, 1), date(2026, 11, 30))
+    assert None not in by_key(body["total"])
+
+    report = daily_report(reference, day=date(2026, 11, 12), now=NOW)
+    assert [m["measurer_key"] for m in report["day"]["measurers"]] == [MATT_KEY, NAZAR]
+    assert report["day"]["conducted"] == 1  # Matt's L14 only

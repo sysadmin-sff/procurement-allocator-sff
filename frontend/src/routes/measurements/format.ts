@@ -93,11 +93,6 @@ export const KIND_LABEL: Record<MeasurementsVisitKind, string> = {
   legacy: 'Встреча',
 };
 
-export const RESULT_SOURCE_LABEL: Record<string, string> = {
-  funnel: 'Воронка',
-  site_visit: 'Site Visit Result',
-};
-
 /** Funnel outcomes (ADR-0053 §3) and Site Visit Result types (ADR-0051 §3). */
 export const OUTCOME_LABEL: Record<string, string> = {
   produced: 'Передан в продажу',

@@ -3,6 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   MEASUREMENTS_VISITS_LIMIT_DEFAULT,
   measurementsApi,
+  type MeasurementsVisitRow,
   type MeasurementsVisitsQuery,
 } from '../../api/measurements';
 import { Alert } from '../../components/Alert';
@@ -11,7 +12,6 @@ import crud from '../../components/CrudScreen.module.css';
 import { CopyableId } from './CopyableId';
 import {
   KIND_LABEL,
-  RESULT_SOURCE_LABEL,
   formatDate,
   formatRange,
   formatUsd,
@@ -29,6 +29,14 @@ import styles from './Measurements.module.css';
    conducted ones: the API has no such filter (docs/known-issues.md). Deal
    Number and lead id are text; no amo link — the backend does not expose the
    amo base URL. */
+
+/** Why an outcome came from the funnel; null — it is the Site Visit Result. */
+function funnelOutcomeHint(visit: MeasurementsVisitRow): string | null {
+  if (visit.outcome == null) return null;
+  if (visit.outcome_by_funnel) return 'Site Visit Result не заполнен — исход по воронке';
+  if (visit.result_source === 'funnel') return 'Замер до перехода на Site Visit Result — исход по воронке';
+  return null;
+}
 
 function describeQuery(query: MeasurementsVisitsQuery): string {
   const parts = [
@@ -95,7 +103,6 @@ export function MeasurementVisitsPage() {
                       <th>Дата</th>
                       <th>Замерщик</th>
                       <th>Тип</th>
-                      <th>Источник результата</th>
                       <th>Исход</th>
                       <th>Выполнен</th>
                       <th>Дубль</th>
@@ -105,34 +112,33 @@ export function MeasurementVisitsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {request.data.map((visit) => (
-                      <tr key={visit.task_id}>
-                        <td>{formatDate(visit.local_date)}</td>
-                        <td>{measurerLabel(visit.measurer_key)}</td>
-                        <td>{KIND_LABEL[visit.kind] ?? visit.kind}</td>
-                        <td>{RESULT_SOURCE_LABEL[visit.result_source] ?? visit.result_source}</td>
-                        <td>
-                          {outcomeLabel(visit.outcome)}
-                          {visit.outcome_by_funnel && (
-                            <span
-                              className={styles.outcomeFallback}
-                              title="Site Visit Result не заполнен — исход по воронке"
-                            >
-                              {' '}· по воронке
-                            </span>
-                          )}
-                        </td>
-                        <td>{visit.is_completed ? 'Да' : 'Нет'}</td>
-                        <td>{visit.is_duplicate ? 'Дубль' : '—'}</td>
-                        <td>
-                          {visit.deal_number == null ? '—' : <CopyableId value={visit.deal_number} />}
-                        </td>
-                        <td className={styles.numCell}>{formatUsd(visit.structure_cost)}</td>
-                        <td>
-                          <CopyableId value={visit.lead_id} />
-                        </td>
-                      </tr>
-                    ))}
+                    {request.data.map((visit) => {
+                      const funnelHint = funnelOutcomeHint(visit);
+                      return (
+                        <tr key={visit.task_id}>
+                          <td>{formatDate(visit.local_date)}</td>
+                          <td>{measurerLabel(visit.measurer_key)}</td>
+                          <td>{KIND_LABEL[visit.kind] ?? visit.kind}</td>
+                          <td>
+                            {outcomeLabel(visit.outcome)}
+                            {funnelHint != null && (
+                              <span className={styles.outcomeFallback} title={funnelHint}>
+                                {' '}· по воронке
+                              </span>
+                            )}
+                          </td>
+                          <td>{visit.is_completed ? 'Да' : 'Нет'}</td>
+                          <td>{visit.is_duplicate ? 'Дубль' : '—'}</td>
+                          <td>
+                            {visit.deal_number == null ? '—' : <CopyableId value={visit.deal_number} />}
+                          </td>
+                          <td className={styles.numCell}>{formatUsd(visit.structure_cost)}</td>
+                          <td>
+                            <CopyableId value={visit.lead_id} />
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

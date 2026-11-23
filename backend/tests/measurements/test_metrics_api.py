@@ -90,7 +90,7 @@ def test_month_reference_values_through_the_api(seeded):
         company["visit_days"],
         company["per_visit_day"],
         company["per_week_avg"],
-    ) == (17, 15, "1.13", "2.64")
+    ) == (16, 15, "1.07", "2.49")  # without L15, not a measurer (ADR-0059)
     october = {item["measurer_key"]: item for item in body["periods"][0]["measurers"]}
     assert october[NAZAR]["per_week_avg"] == "1.58"
     assert october[MATT_KEY]["per_week_avg"] == "0.90"

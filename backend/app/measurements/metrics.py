@@ -34,6 +34,10 @@ _VISITS = MeasurementsVisit.__table__
 _LEADS = MeasurementsLead.__table__
 _DAY = _OUTCOMES.c.local_date
 """The New York day of a visit, materialized by the worker."""
+_KNOWN_MEASURER = _OUTCOMES.c.measurer_key.is_not(None)
+"""Only visits of measurers from `measurer_map` count anywhere (ADR-0059):
+a task whose responsible is outside the map is left out of the company
+total, the measurer list and the visits list."""
 
 
 class InvalidRange(ValueError):
@@ -159,7 +163,7 @@ def _rows_cte(start: date, end: date, measurer: str | None):
             group_completed.label("completed"),
         )
         .select_from(_OUTCOMES.join(_VISITS, _VISITS.c.task_id == _OUTCOMES.c.task_id))
-        .where(_VISITS.c.deleted_at.is_(None), _DAY.between(start, end))
+        .where(_VISITS.c.deleted_at.is_(None), _DAY.between(start, end), _KNOWN_MEASURER)
     )
     if measurer is not None:
         statement = statement.where(_OUTCOMES.c.measurer_key == measurer)
@@ -341,7 +345,7 @@ def list_visits(
                 _LEADS, _LEADS.c.lead_id == _OUTCOMES.c.lead_id
             )
         )
-        .where(_VISITS.c.deleted_at.is_(None), _DAY.between(date_from, date_to))
+        .where(_VISITS.c.deleted_at.is_(None), _DAY.between(date_from, date_to), _KNOWN_MEASURER)
         .order_by(_DAY, _VISITS.c.scheduled_at, _OUTCOMES.c.task_id)
         .limit(limit)
     )

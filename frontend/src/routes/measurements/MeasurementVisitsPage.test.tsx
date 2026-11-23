@@ -99,9 +99,9 @@ describe('MeasurementVisitsPage', () => {
       'Передан в продажу',
       'Да',
       '—',
-      'SF-1042Копировать',
+      'SF-1042',
       '$14,620',
-      '24681357Копировать',
+      '24681357',
     ]);
     expect(within(second).getAllByRole('cell').map((c) => c.textContent)).toEqual([
       '05.10.2026',
@@ -113,7 +113,7 @@ describe('MeasurementVisitsPage', () => {
       'Дубль',
       '—',
       '—',
-      '13572468Копировать',
+      '13572468',
     ]);
   });
 
@@ -150,8 +150,7 @@ describe('MeasurementVisitsPage', () => {
     visitsMock.mockResolvedValue([row()]);
     renderPage('/measurements/visits?from=2026-10-01&to=2026-10-31');
 
-    const [dealNumberCopy] = await screen.findAllByRole('button', { name: 'Копировать' });
-    await user.click(dealNumberCopy);
+    await user.click(await screen.findByRole('button', { name: 'Копировать SF-1042' }));
 
     expect(await navigator.clipboard.readText()).toBe('SF-1042');
   });
@@ -161,11 +160,10 @@ describe('MeasurementVisitsPage', () => {
     visitsMock.mockResolvedValue([row()]);
     renderPage('/measurements/visits?from=2026-10-01&to=2026-10-31');
 
-    const copyButtons = await screen.findAllByRole('button', { name: 'Копировать' });
-    await user.click(copyButtons[1]);
+    await user.click(await screen.findByRole('button', { name: 'Копировать 24681357' }));
 
     expect(await navigator.clipboard.readText()).toBe('24681357');
-    expect(screen.getByRole('button', { name: 'Скопировано' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Скопировано 24681357' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /24681357/ })).not.toBeInTheDocument();
   });
 

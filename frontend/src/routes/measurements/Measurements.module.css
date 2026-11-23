@@ -440,27 +440,39 @@
   color: var(--color-text-secondary);
 }
 
+/* Значение-кнопка: клик копирует, иконка рядом подсказывает. */
 .copyable {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 6px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-}
-
-.copyButton {
-  padding: 2px var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-control-fill);
-  font-family: var(--font-body);
-  font-size: var(--text-xs-alt);
-  color: var(--color-text-secondary);
+  color: inherit;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.copyButton:hover {
+.copyable:hover {
   background: var(--color-control-fill-hover);
+}
+
+.copyIcon {
+  flex: none;
+  color: var(--color-text-tertiary-alt);
+}
+
+.copyable:hover .copyIcon {
+  color: var(--color-text-secondary);
+}
+
+.copyIconDone {
+  flex: none;
+  color: var(--color-success);
 }
 
 /* Исход замера без Site Visit Result, взятый по воронке (ADR-0060). */

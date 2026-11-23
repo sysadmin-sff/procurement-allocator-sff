@@ -1,6 +1,7 @@
 """GET /measurements/metrics and /metrics/visits (ADR-0053 §5)."""
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
@@ -121,6 +122,7 @@ def test_visits_detail(seeded):
         "is_completed": True,
         "is_duplicate": False,
         "deal_number": None,
+        "structure_cost": None,
     }
 
 
@@ -138,6 +140,24 @@ def test_visits_detail_carries_the_deal_number_of_the_lead(seeded):
     ).json()
     assert [(row["lead_id"], row["deal_number"]) for row in rows] == [
         (1003, "SF-1003"),
+        (rows[1]["lead_id"], None),
+    ]
+
+
+def test_visits_detail_carries_the_structure_cost_of_the_lead(seeded):
+    with SessionLocal() as db:
+        db.execute(
+            update(MeasurementsLead)
+            .where(MeasurementsLead.lead_id == 1003)
+            .values(structure_cost=Decimal("14620.00"))
+        )
+        db.commit()
+    rows = seeded.get(
+        "/measurements/metrics/visits",
+        params={"from": "2026-10-01", "to": "2026-10-31", "measurer": MATT_KEY, "limit": 2},
+    ).json()
+    assert [(row["lead_id"], row["structure_cost"]) for row in rows] == [
+        (1003, 14620),
         (rows[1]["lead_id"], None),
     ]
 

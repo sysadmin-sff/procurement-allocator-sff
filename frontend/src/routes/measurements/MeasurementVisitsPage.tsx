@@ -14,6 +14,7 @@ import {
   RESULT_SOURCE_LABEL,
   formatDate,
   formatRange,
+  formatUsd,
   measurerLabel,
   outcomeLabel,
 } from './format';
@@ -99,6 +100,7 @@ export function MeasurementVisitsPage() {
                       <th>Выполнен</th>
                       <th>Дубль</th>
                       <th>Deal Number</th>
+                      <th className={styles.numHead}>Structure Cost $</th>
                       <th>ID сделки</th>
                     </tr>
                   </thead>
@@ -115,6 +117,7 @@ export function MeasurementVisitsPage() {
                         <td>
                           {visit.deal_number == null ? '—' : <CopyableId value={visit.deal_number} />}
                         </td>
+                        <td className={styles.numCell}>{formatUsd(visit.structure_cost)}</td>
                         <td>
                           <CopyableId value={visit.lead_id} />
                         </td>

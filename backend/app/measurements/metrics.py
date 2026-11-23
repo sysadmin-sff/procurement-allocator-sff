@@ -339,6 +339,7 @@ def list_visits(
             _VISITS.c.is_completed,
             _OUTCOMES.c.is_duplicate,
             _LEADS.c.deal_number,
+            _LEADS.c.structure_cost,
         )
         .select_from(
             _OUTCOMES.join(_VISITS, _VISITS.c.task_id == _OUTCOMES.c.task_id).outerjoin(

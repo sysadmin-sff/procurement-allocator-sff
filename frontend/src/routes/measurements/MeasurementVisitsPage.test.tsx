@@ -29,6 +29,7 @@ function row(overrides: Partial<MeasurementsVisitRow> = {}): MeasurementsVisitRo
     is_completed: true,
     is_duplicate: false,
     deal_number: 'SF-1042',
+    structure_cost: 14620,
     ...overrides,
   };
 }
@@ -82,6 +83,7 @@ describe('MeasurementVisitsPage', () => {
         is_completed: false,
         is_duplicate: true,
         deal_number: null,
+        structure_cost: null,
       }),
     ]);
     renderPage('/measurements/visits?from=2026-10-01&to=2026-10-31');
@@ -97,6 +99,7 @@ describe('MeasurementVisitsPage', () => {
       'Да',
       '—',
       'SF-1042Копировать',
+      '$14,620',
       '24681357Копировать',
     ]);
     expect(within(second).getAllByRole('cell').map((c) => c.textContent)).toEqual([
@@ -107,6 +110,7 @@ describe('MeasurementVisitsPage', () => {
       '—',
       'Нет',
       'Дубль',
+      '—',
       '—',
       '13572468Копировать',
     ]);

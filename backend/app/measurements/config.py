@@ -44,6 +44,8 @@ class MeasurementsSettings(MeasurementsFlags):
     field_id: int = 784029
     deal_number_field_id: int | None = 530977
     """amo lead field «Deal Number:» (ADR-0053, 2026-11-11 change); None — not read."""
+    structure_cost_field_id: int | None = None
+    """amo lead field «Structure Cost $» (ADR-0053, 2026-11-23 change); None — not read."""
     task_type_primary: int = 4410970
     task_type_additional: int = 4410974
     task_type_legacy: int = 2

@@ -429,6 +429,30 @@ dry-run → `--apply` → включение API.
 Откат: колонку можно оставить (код без неё её не читает) или
 `alembic downgrade a83d51c07e94`.
 
+### Выкат Structure Cost $ (ADR-0053, изменение 2026-11-23)
+
+Поле сделки amo «Structure Cost $» хранится в
+`measurements_leads.structure_cost` и отдаётся в
+`/measurements/metrics/visits` (колонка на странице «Замеры за период»).
+
+1. **Миграция** (ревизия `c7e2a9d40b15`, nullable-колонка, данных не
+   переносит). Перед ней — дамп БД.
+   ```
+   docker compose run --rm backend alembic upgrade head
+   ```
+2. **Id поля.** Если в коде ещё нет значения по умолчанию, задать
+   `MEASUREMENTS_STRUCTURE_COST_FIELD_ID=<id>` в `backend/.env.measurements`.
+3. **Выкат кода** `backend`, `measurements-worker` и frontend.
+4. **Заполнение у уже загруженных сделок** — как у Deal Number: бэкфилл или
+   ближайшая ночная сверка (03:30 NY).
+5. **Проверка:**
+   ```
+   docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+     "select count(*), count(structure_cost) from measurements_leads"'
+   ```
+
+Откат: колонку можно оставить или `alembic downgrade b5d3e8a17f42`.
+
 ### Ротация токена
 
 1. Выпустить новый токен в той же интеграции и обновить таблицу дат выше.

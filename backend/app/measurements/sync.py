@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import case, func, or_, select, tuple_, union, update
 from sqlalchemy.dialects.postgresql import insert
@@ -176,6 +177,29 @@ def _deal_number(raw: dict, field_id: int | None) -> str | None:
     return None
 
 
+def _structure_cost(raw: dict, field_id: int | None) -> Decimal | None:
+    """Amount of the «Structure Cost $» field. amo returns it as a string or a
+    number; "$14,620" is accepted too. Blank, absent or unparsable is None."""
+    if field_id is None:
+        return None
+    for field in raw.get("custom_fields_values") or []:
+        if field.get("field_id") == field_id:
+            values = field.get("values") or []
+            value = values[0].get("value") if values else None
+            text = "" if value is None else str(value).strip().replace("$", "").replace(",", "")
+            text = text.replace(" ", "")
+            if not text:
+                return None
+            try:
+                amount = Decimal(text).quantize(Decimal("0.01"))
+            except InvalidOperation:
+                return None
+            if not amount.is_finite() or abs(amount) >= Decimal("1e10"):
+                return None
+            return amount
+    return None
+
+
 def _upsert_lead(ctx: SyncContext, raw: dict) -> None:
     table = MeasurementsLead.__table__
     values = {
@@ -183,6 +207,7 @@ def _upsert_lead(ctx: SyncContext, raw: dict) -> None:
         "status_id": raw.get("status_id"),
         "site_visit_enum_id": _site_visit_enum(raw, ctx.settings.field_id),
         "deal_number": _deal_number(raw, ctx.settings.deal_number_field_id),
+        "structure_cost": _structure_cost(raw, ctx.settings.structure_cost_field_id),
         "closed_at": _as_datetime(raw.get("closed_at")),
         "price": raw.get("price"),
         "amo_updated_at": _as_datetime(raw.get("updated_at")),

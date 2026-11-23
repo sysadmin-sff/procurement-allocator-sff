@@ -124,7 +124,13 @@ def drift() -> list[tuple[str, str, str]]:
         return [_drift_key(diff) for diff in compare_metadata(context, Base.metadata)]
 
 
-MODULE_REVISIONS = ["c4a7e19d2b60", "f2b9d6a41c83", "a83d51c07e94", "b5d3e8a17f42"]
+MODULE_REVISIONS = [
+    "c4a7e19d2b60",
+    "f2b9d6a41c83",
+    "a83d51c07e94",
+    "b5d3e8a17f42",
+    "c7e2a9d40b15",  # Structure Cost $ on leads (ADR-0053, 2026-11-23 change)
+]
 OUTCOMES_REVISION = "a83d51c07e94"
 
 

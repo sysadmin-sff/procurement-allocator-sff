@@ -72,6 +72,17 @@ export function formatRatio(value: string | null): string {
   return value ?? '—';
 }
 
+/** «Structure Cost $»: $14,620 or $14,620.50; null — dash. */
+export function formatUsd(value: number | null): string {
+  if (value == null) return '—';
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export function measurerLabel(key: string | null): string {
   return key ?? 'Без замерщика';
 }

@@ -448,6 +448,7 @@ def test_visits_detail_has_no_client_data(reference):
         "is_completed",
         "is_duplicate",
         "deal_number",  # an amo identifier, ADR-0053 change 2026-11-11
+        "structure_cost",  # owner's decision, ADR-0053 change 2026-11-23
     }
     assert {row["lead_id"] for row in found}.isdisjoint({1009, L22, L26})
     assert [row["local_date"] for row in found] == sorted(row["local_date"] for row in found)

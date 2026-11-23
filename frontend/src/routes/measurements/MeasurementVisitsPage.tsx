@@ -111,7 +111,17 @@ export function MeasurementVisitsPage() {
                         <td>{measurerLabel(visit.measurer_key)}</td>
                         <td>{KIND_LABEL[visit.kind] ?? visit.kind}</td>
                         <td>{RESULT_SOURCE_LABEL[visit.result_source] ?? visit.result_source}</td>
-                        <td>{outcomeLabel(visit.outcome)}</td>
+                        <td>
+                          {outcomeLabel(visit.outcome)}
+                          {visit.outcome_by_funnel && (
+                            <span
+                              className={styles.outcomeFallback}
+                              title="Site Visit Result не заполнен — исход по воронке"
+                            >
+                              {' '}· по воронке
+                            </span>
+                          )}
+                        </td>
                         <td>{visit.is_completed ? 'Да' : 'Нет'}</td>
                         <td>{visit.is_duplicate ? 'Дубль' : '—'}</td>
                         <td>

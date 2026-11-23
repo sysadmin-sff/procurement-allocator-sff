@@ -26,6 +26,7 @@ function row(overrides: Partial<MeasurementsVisitRow> = {}): MeasurementsVisitRo
     kind: 'additional',
     result_source: 'funnel',
     outcome: 'produced',
+    outcome_by_funnel: false,
     is_completed: true,
     is_duplicate: false,
     deal_number: 'SF-1042',
@@ -114,6 +115,17 @@ describe('MeasurementVisitsPage', () => {
       '—',
       '13572468Копировать',
     ]);
+  });
+
+  it('marks an outcome taken from the funnel when Site Visit Result is empty', async () => {
+    visitsMock.mockResolvedValue([
+      row({ result_source: 'site_visit', outcome: 'not_held', outcome_by_funnel: true }),
+    ]);
+    renderPage('/measurements/visits?from=2026-11-01&to=2026-11-30');
+
+    const table = await screen.findByRole('table', { name: 'Замеры' });
+    const marker = within(table).getByText(/по воронке/);
+    expect(marker).toHaveAttribute('title', 'Site Visit Result не заполнен — исход по воронке');
   });
 
   it('calls a legacy visit «Встреча» (amo task type 2)', async () => {

@@ -445,6 +445,7 @@ def test_visits_detail_has_no_client_data(reference):
         "kind",
         "result_source",
         "outcome",
+        "outcome_by_funnel",  # fallback marker, ADR-0060
         "is_completed",
         "is_duplicate",
         "deal_number",  # an amo identifier, ADR-0053 change 2026-11-11
@@ -541,3 +542,43 @@ def test_visits_of_non_measurers_are_left_out_everywhere(reference):
     report = daily_report(reference, day=date(2026, 11, 12), now=NOW)
     assert [m["measurer_key"] for m in report["day"]["measurers"]] == [MATT_KEY, NAZAR]
     assert report["day"]["conducted"] == 1  # Matt's L14 only
+
+
+# --- funnel fallback for site_visit visits without a result (ADR-0060)
+
+
+def test_site_visit_without_result_follows_the_funnel_fallback(db):
+    s = Seed(db)
+    # Held: no result, the lead went to Sales after the visit.
+    s.visit(2001, 1, "primary", N, ny(11, 10))
+    s.status(2001, ny(11, 10, 15), (SALES, 1))
+    # Not held: no result, the lead went back to Qualification.
+    s.visit(2002, 1, "primary", N, ny(11, 10, 12))
+    s.status(2002, ny(11, 10, 16), (Q, Q_STAGE))
+    # The result field wins: «completed» although the funnel says not held.
+    s.visit(2003, 1, "primary", MATT, ny(11, 11))
+    s.status(2003, ny(11, 11, 15), (Q, Q_STAGE))
+    s.result(2003, ny(11, 11, 12), COMPLETED)
+    s.recompute()
+
+    body = metrics(db, date(2026, 11, 10), date(2026, 11, 11), "week")
+    blocks = by_key(body["total"])
+    assert blocks[NAZAR]["conducted"]["total"] == 1
+    assert blocks[MATT_KEY]["conducted"]["total"] == 1
+    # The data quality signal stays: two visits still lack the field.
+    assert blocks["company"]["data_quality"]["without_site_visit_result"]["completed"] == 2
+
+    rows = {
+        row["lead_id"]: row
+        for row in list_visits(
+            db,
+            date_from=date(2026, 11, 10),
+            date_to=date(2026, 11, 11),
+            measurer=None,
+            kind=None,
+            limit=100,
+        )
+    }
+    assert (rows[2001]["outcome"], rows[2001]["outcome_by_funnel"]) == ("produced", True)
+    assert (rows[2002]["outcome"], rows[2002]["outcome_by_funnel"]) == ("not_held", True)
+    assert (rows[2003]["outcome"], rows[2003]["outcome_by_funnel"]) == ("completed", False)

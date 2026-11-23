@@ -119,6 +119,7 @@ def test_visits_detail(seeded):
         "kind": "legacy",
         "result_source": "funnel",
         "outcome": "closed",
+        "outcome_by_funnel": False,
         "is_completed": True,
         "is_duplicate": False,
         "deal_number": None,

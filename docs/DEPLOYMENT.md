@@ -429,6 +429,21 @@ dry-run → `--apply` → включение API.
 Откат: колонку можно оставить (код без неё её не читает) или
 `alembic downgrade a83d51c07e94`.
 
+### Выкат запасного исхода по воронке (ADR-0060)
+
+Меняются только код и правила исходов (`OUTCOME_RULE_VERSION` 2 → 3),
+миграции нет. После выката `backend` и `measurements-worker` все строки
+исходов устаревшие — пересчёт (воркер остановлен, тот же advisory lock):
+```
+docker compose --profile measurements stop measurements-worker
+docker compose --profile measurements run --rm measurements-worker \
+  python -m app.measurements.scripts.recompute
+docker compose --profile measurements run --rm measurements-worker \
+  python -m app.measurements.scripts.recompute --apply
+docker compose --profile measurements up -d measurements-worker
+```
+Проверка: `outcomes_stale` в `/measurements/status` — `0`.
+
 ### Выкат Structure Cost $ (ADR-0053, изменение 2026-11-23)
 
 Поле сделки amo «Structure Cost $» хранится в

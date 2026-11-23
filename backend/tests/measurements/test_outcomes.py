@@ -162,10 +162,36 @@ def test_l10_only_the_current_deadline_counts():
 
 
 def test_l11_legacy_after_cutover_uses_site_visit_without_result():
+    """No Site Visit Result: the funnel gives a fallback outcome (ADR-0060)."""
     rows = by_task(run([visit(11, ny(11, 10))], [status("e1", ny(11, 10, 12), (M, WON))]))
     assert rows[11].result_source == "site_visit"
-    assert (rows[11].funnel_outcome, rows[11].no_data_reason) == (None, None)
     assert rows[11].site_visit_outcome is None
+    assert (rows[11].funnel_outcome, rows[11].no_data_reason) == ("produced", None)
+    assert rows[11].funnel_exit_event_id == "e1"
+
+
+def test_site_visit_fallback_not_held_and_no_data():
+    rows = by_task(
+        run(
+            [visit(21, ny(11, 10), kind="primary"), visit(22, ny(11, 12), who=MATT)],
+            [status("e1", ny(11, 10, 15), (Q, Q_STAGE))],
+        )
+    )
+    assert (rows[21].result_source, rows[21].funnel_outcome) == ("site_visit", "not_held")
+    # Lead 1 left Measurements on the 10th, so the 12th has no exit in its window.
+    assert (rows[22].funnel_outcome, rows[22].no_data_reason) == ("no_data", "window")
+
+
+def test_filled_site_visit_result_wins_over_the_funnel():
+    rows = by_task(
+        run(
+            [visit(31, ny(11, 10), kind="primary")],
+            [status("e1", ny(11, 10, 15), (Q, Q_STAGE))],
+            results={31: "completed"},
+        )
+    )
+    assert rows[31].site_visit_outcome == "completed"
+    assert (rows[31].funnel_outcome, rows[31].no_data_reason) == (None, None)
 
 
 def test_l12_to_l14_effective_results_are_copied():

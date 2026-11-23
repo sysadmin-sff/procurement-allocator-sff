@@ -95,8 +95,7 @@ describe('MeasurementVisitsPage', () => {
       '05.10.2026',
       MATT,
       'Доп. замер',
-      'Воронка',
-      'Передан в продажу',
+      'Передан в продажу · по воронке',
       'Да',
       '—',
       'SF-1042',
@@ -107,7 +106,6 @@ describe('MeasurementVisitsPage', () => {
       '05.10.2026',
       'Без замерщика',
       'Замер',
-      'Site Visit Result',
       '—',
       'Нет',
       'Дубль',
@@ -126,6 +124,23 @@ describe('MeasurementVisitsPage', () => {
     const table = await screen.findByRole('table', { name: 'Замеры' });
     const marker = within(table).getByText(/по воронке/);
     expect(marker).toHaveAttribute('title', 'Site Visit Result не заполнен — исход по воронке');
+  });
+
+  it('marks a pre-cutover funnel outcome and leaves a Site Visit Result unmarked', async () => {
+    visitsMock.mockResolvedValue([
+      row(),
+      row({ task_id: 2, result_source: 'site_visit', outcome: 'completed' }),
+    ]);
+    renderPage('/measurements/visits?from=2026-10-01&to=2026-11-30');
+
+    const table = await screen.findByRole('table', { name: 'Замеры' });
+    expect(screen.queryByRole('columnheader', { name: /Источник/ })).not.toBeInTheDocument();
+    const [funnel, siteVisit] = within(table).getAllByRole('row').slice(1);
+    expect(within(funnel).getByText(/по воронке/)).toHaveAttribute(
+      'title',
+      'Замер до перехода на Site Visit Result — исход по воронке',
+    );
+    expect(within(siteVisit).queryByText(/по воронке/)).not.toBeInTheDocument();
   });
 
   it('calls a legacy visit «Встреча» (amo task type 2)', async () => {

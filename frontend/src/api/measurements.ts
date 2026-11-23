@@ -86,6 +86,8 @@ export interface MeasurementsVisitRow {
   kind: MeasurementsVisitKind;
   result_source: string;
   outcome: string | null;
+  /** Site Visit Result is empty and `outcome` comes from the funnel (ADR-0060). */
+  outcome_by_funnel: boolean;
   is_completed: boolean;
   is_duplicate: boolean;
   /** amo field «Deal Number» (ADR-0053, change 2026-11-11); null when empty. */

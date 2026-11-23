@@ -462,3 +462,10 @@
 .copyButton:hover {
   background: var(--color-control-fill-hover);
 }
+
+/* Исход замера без Site Visit Result, взятый по воронке (ADR-0060). */
+.outcomeFallback {
+  color: var(--color-text-tertiary-alt);
+  font-size: var(--text-sm-alt2);
+  white-space: nowrap;
+}

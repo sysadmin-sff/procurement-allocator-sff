@@ -113,12 +113,21 @@ def _aggregates(rows, now: datetime) -> _Columns:
     site_visit = rows.c.result_source == "site_visit"
     past = rows.c.scheduled_at < now
     completed = rows.c.completed
+    # site_visit: the result field decides; without it the funnel fallback
+    # (ADR-0060) — only «not held» there excludes the visit, as for legacy ones.
+    site_visit_held = or_(
+        and_(rows.c.site_visit_outcome.is_not(None), rows.c.site_visit_outcome != "declined"),
+        and_(
+            rows.c.site_visit_outcome.is_(None),
+            func.coalesce(rows.c.funnel_outcome, "") != "not_held",
+        ),
+    )
     conducted = and_(
         first,
         completed,
         or_(
             and_(funnel, rows.c.funnel_outcome != "not_held"),
-            and_(site_visit, func.coalesce(rows.c.site_visit_outcome, "") != "declined"),
+            and_(site_visit, site_visit_held),
         ),
     )
     planned = and_(
@@ -333,9 +342,16 @@ def list_visits(
             _OUTCOMES.c.measurer_key,
             _VISITS.c.kind,
             _OUTCOMES.c.result_source,
-            func.coalesce(_OUTCOMES.c.funnel_outcome, _OUTCOMES.c.site_visit_outcome).label(
+            # The result field first; the funnel gives legacy outcomes and the
+            # fallback of a site_visit visit without a result (ADR-0060).
+            func.coalesce(_OUTCOMES.c.site_visit_outcome, _OUTCOMES.c.funnel_outcome).label(
                 "outcome"
             ),
+            and_(
+                _OUTCOMES.c.result_source == "site_visit",
+                _OUTCOMES.c.site_visit_outcome.is_(None),
+                _OUTCOMES.c.funnel_outcome.is_not(None),
+            ).label("outcome_by_funnel"),
             _VISITS.c.is_completed,
             _OUTCOMES.c.is_duplicate,
             _LEADS.c.deal_number,

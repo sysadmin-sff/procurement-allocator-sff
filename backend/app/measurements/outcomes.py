@@ -12,8 +12,10 @@ from zoneinfo import ZoneInfo
 
 from app.measurements.zone import ZONE
 
-OUTCOME_RULE_VERSION = 2
-"""2: a site_visit group takes the latest effective result of any of its visits."""
+OUTCOME_RULE_VERSION = 3
+"""2: a site_visit group takes the latest effective result of any of its visits.
+3: a site_visit group without an effective result gets the funnel outcome as a
+fallback (ADR-0060)."""
 
 WON, LOST = 142, 143
 """amo's closing statuses, the same ids in every pipeline."""
@@ -225,6 +227,19 @@ def compute_outcomes(
             result_source = "site_visit"
             funnel = None
             site_visit_outcome = _group_site_visit_outcome(members, site_visit_results)
+            if site_visit_outcome is None:
+                # Fallback (ADR-0060): Site Visit Result is empty, so the funnel
+                # rules of a legacy visit give the outcome. The result field
+                # still wins whenever it is filled.
+                funnel = _funnel_outcome(
+                    day,
+                    later_days[0] if later_days else None,
+                    changes,
+                    pipelines,
+                    ever_in_measurements,
+                    zone,
+                )
+                other_exit += int(funnel.other_exit)
         else:
             result_source = "funnel"
             funnel = _funnel_outcome(

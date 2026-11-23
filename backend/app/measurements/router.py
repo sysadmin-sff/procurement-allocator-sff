@@ -192,6 +192,8 @@ class MeasurementsVisitRowOut(BaseModel):
     kind: str
     result_source: str
     outcome: str | None
+    outcome_by_funnel: bool
+    """Site Visit Result is empty and `outcome` comes from the funnel (ADR-0060)."""
     is_completed: bool
     is_duplicate: bool
     deal_number: str | None

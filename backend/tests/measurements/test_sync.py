@@ -673,6 +673,10 @@ def test_missing_or_bad_structure_cost_is_null(env, custom_fields):
     assert env.lead().structure_cost is None
 
 
+def test_structure_cost_field_defaults_to_the_amo_field():
+    assert MeasurementsSettings(_env_file=None).structure_cost_field_id == 756521
+
+
 def test_structure_cost_is_not_read_while_the_field_id_is_unset(env):
     env.settings.structure_cost_field_id = None
     env.amo.add_task(make_task())

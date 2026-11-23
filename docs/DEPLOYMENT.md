@@ -440,8 +440,8 @@ dry-run → `--apply` → включение API.
    ```
    docker compose run --rm backend alembic upgrade head
    ```
-2. **Id поля.** Если в коде ещё нет значения по умолчанию, задать
-   `MEASUREMENTS_STRUCTURE_COST_FIELD_ID=<id>` в `backend/.env.measurements`.
+2. **Id поля** — `756521`, значение по умолчанию в коде; в `.env` ничего
+   задавать не нужно.
 3. **Выкат кода** `backend`, `measurements-worker` и frontend.
 4. **Заполнение у уже загруженных сделок** — как у Deal Number: бэкфилл или
    ближайшая ночная сверка (03:30 NY).

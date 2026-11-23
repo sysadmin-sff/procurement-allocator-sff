@@ -501,9 +501,9 @@ D = 7:
   числом; `$` и разделители тысяч убираются. Пустое, нечисловое или больше
   10^10 — `NULL`. Ревизия `c7e2a9d40b15` поверх `b5d3e8a17f42`.
 - **Конфиг воркера.** `MeasurementsSettings.structure_cost_field_id` (env
-  `MEASUREMENTS_STRUCTURE_COST_FIELD_ID`) — id поля в amo. Пока он не задан, поле
-  не читается и колонка пуста. Значение по умолчанию заменяется на реальный id
-  после того, как он прочитан из `GET /leads/custom_fields` на сервере.
+  `MEASUREMENTS_STRUCTURE_COST_FIELD_ID`) — id поля в amo. По умолчанию
+  `756521` (поле «Structure Cost $», тип `numeric`, по `GET /leads/custom_fields`
+  2026-11-23). `None` — поле не читается, колонка остаётся `NULL`.
 - **API.** `GET /measurements/metrics/visits` отдаёт `structure_cost`
   (число USD или `null`). Экран — колонка «Structure Cost $» после Deal Number.
 - **Метрики не меняются**: сумма только отображается в детализации.

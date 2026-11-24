@@ -72,6 +72,17 @@ function SummaryCard({
           </span>
         ))}
       </div>
+      <div className={styles.salesLine} title="Сделка передана в отдел монтажа после замера — в зачёт замерщику (ADR-0062)">
+        Продажи{' '}
+        <span className={styles.salesValue} data-testid="sales">
+          {block.sales}
+        </span>
+        {block.sales_percent != null && (
+          <span className={styles.salesPercent} data-testid="sales-percent">
+            {' '}· {block.sales_percent}% проведённых
+          </span>
+        )}
+      </div>
       <dl className={styles.stats}>
         <div>
           <dt>Замерных дней</dt>

@@ -1,8 +1,8 @@
-"""Metrics of visits v1 (ADR-0053 §2, §4, §5).
+"""Metrics of visits v1 (ADR-0053 В§2, В§4, В§5; sales credit вЂ” ADR-0062).
 
 Counts come from SQL over `measurements_visit_outcomes` joined to
 `measurements_visits`; ratios are finished in Python with `Decimal`. The unit
-is a duplicate group (§1): its first visit carries the group's outcome, the
+is a duplicate group (В§1): its first visit carries the group's outcome, the
 group is completed if any of its visits is.
 """
 
@@ -11,15 +11,18 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import Date, and_, cast, distinct, func, or_, select
+from sqlalchemy import BigInteger, Date, and_, cast, distinct, func, or_, select, union_all
 from sqlalchemy.orm import Session
 
+from app.measurements.config import MeasurementsSettings
 from app.measurements.models import (
+    MeasurementsAmoEvent,
     MeasurementsLead,
     MeasurementsSyncState,
     MeasurementsVisit,
     MeasurementsVisitOutcome,
 )
+from app.measurements.outcomes import WON
 from app.measurements.stale import count_stale_outcomes
 from app.measurements.zone import TIMEZONE_NAME, ZONE
 
@@ -32,12 +35,16 @@ _TWO_PLACES = Decimal("0.01")
 _OUTCOMES = MeasurementsVisitOutcome.__table__
 _VISITS = MeasurementsVisit.__table__
 _LEADS = MeasurementsLead.__table__
+_EVENTS = MeasurementsAmoEvent.__table__
 _DAY = _OUTCOMES.c.local_date
 """The New York day of a visit, materialized by the worker."""
 _KNOWN_MEASURER = _OUTCOMES.c.measurer_key.is_not(None)
 """Only visits of measurers from `measurer_map` count anywhere (ADR-0059):
 a task whose responsible is outside the map is left out of the company
 total, the measurer list and the visits list."""
+SALE_PIPELINE_ID: int = MeasurementsSettings.model_fields["pipeline_sales_id"].default
+"""A sale is the lead's first move to В«РџРµСЂРµРґР°С‚СЊ РІ РѕС‚РґРµР» РјРѕРЅС‚Р°Р¶Р°В» (142) of the
+Sales pipeline (ADR-0062)."""
 
 
 class InvalidRange(ValueError):
@@ -51,12 +58,20 @@ def ratio(numerator: int, denominator: Decimal | int) -> str | None:
     return str(value.quantize(_TWO_PLACES, rounding=ROUND_HALF_UP))
 
 
+def percent(numerator: int, denominator: int) -> int | None:
+    """Whole percent, ROUND_HALF_UP; None for a zero denominator."""
+    if not denominator:
+        return None
+    value = Decimal(numerator * 100) / Decimal(denominator)
+    return int(value.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
 def today_new_york(now: datetime) -> date:
     return now.astimezone(ZONE).date()
 
 
 def validate_range(date_from: date, date_to: date) -> None:
-    """Checked on the requested range, before alignment (§5)."""
+    """Checked on the requested range, before alignment (В§5)."""
     if date_from > date_to:
         raise InvalidRange("from is after to")
     if (date_to - date_from).days + 1 > MAX_RANGE_DAYS:
@@ -92,7 +107,7 @@ def periods(start: date, end: date, group_by: str) -> list[tuple[date, date]]:
 
 
 def elapsed_days(start: date, end: date, today: date) -> int:
-    """D of §2: the full length of a past period, days up to today inclusive
+    """D of В§2: the full length of a past period, days up to today inclusive
     for the period containing today, 0 for a future one."""
     if today > end:
         return (end - start).days + 1
@@ -107,14 +122,12 @@ class _Columns:
     expressions: tuple
 
 
-def _aggregates(rows, now: datetime) -> _Columns:
-    first = ~rows.c.is_duplicate
+def _conducted(rows):
+    """M1: the group's first visit, completed, not В«not heldВ»/В«declinedВ»."""
     funnel = rows.c.result_source == "funnel"
     site_visit = rows.c.result_source == "site_visit"
-    past = rows.c.scheduled_at < now
-    completed = rows.c.completed
     # site_visit: the result field decides; without it the funnel fallback
-    # (ADR-0060) — only «not held» there excludes the visit, as for legacy ones.
+    # (ADR-0060) вЂ” only В«not heldВ» there excludes the visit, as for legacy ones.
     site_visit_held = or_(
         and_(rows.c.site_visit_outcome.is_not(None), rows.c.site_visit_outcome != "declined"),
         and_(
@@ -122,14 +135,23 @@ def _aggregates(rows, now: datetime) -> _Columns:
             func.coalesce(rows.c.funnel_outcome, "") != "not_held",
         ),
     )
-    conducted = and_(
-        first,
-        completed,
+    return and_(
+        ~rows.c.is_duplicate,
+        rows.c.completed,
         or_(
             and_(funnel, rows.c.funnel_outcome != "not_held"),
             and_(site_visit, site_visit_held),
         ),
     )
+
+
+def _aggregates(rows, now: datetime) -> _Columns:
+    first = ~rows.c.is_duplicate
+    funnel = rows.c.result_source == "funnel"
+    site_visit = rows.c.result_source == "site_visit"
+    past = rows.c.scheduled_at < now
+    completed = rows.c.completed
+    conducted = _conducted(rows)
     planned = and_(
         first,
         ~completed,
@@ -151,16 +173,20 @@ def _aggregates(rows, now: datetime) -> _Columns:
             and_(first, funnel, completed, rows.c.funnel_outcome == "no_data", past)
         ),
         "duplicates": func.count().filter(rows.c.is_duplicate),
+        "sales": func.count().filter(and_(conducted, rows.c.sold_at.is_not(None))),
     }
     return _Columns(tuple(columns), tuple(columns.values()))
 
 
-def _rows_cte(start: date, end: date, measurer: str | None):
+def _visit_rows():
+    """Visits of known measurers with the columns of the M1 rule."""
     group_completed = func.bool_or(_VISITS.c.is_completed).over(
         partition_by=_OUTCOMES.c.group_task_id
     )
-    statement = (
+    return (
         select(
+            _OUTCOMES.c.task_id,
+            _OUTCOMES.c.lead_id,
             _DAY.label("day"),
             _OUTCOMES.c.measurer_key,
             _OUTCOMES.c.is_duplicate,
@@ -172,11 +198,71 @@ def _rows_cte(start: date, end: date, measurer: str | None):
             group_completed.label("completed"),
         )
         .select_from(_OUTCOMES.join(_VISITS, _VISITS.c.task_id == _OUTCOMES.c.task_id))
-        .where(_VISITS.c.deleted_at.is_(None), _DAY.between(start, end), _KNOWN_MEASURER)
+        .where(_VISITS.c.deleted_at.is_(None), _KNOWN_MEASURER)
     )
+
+
+def _sales_cte():
+    """The moment of each lead's sale (ADR-0062 В§1): the earliest move to
+    Sales/142; without such an event, `closed_at` of a lead now in Sales/142."""
+    status = _EVENTS.c.value_after[(0, "lead_status")]
+    from_events = select(
+        _EVENTS.c.lead_id.label("lead_id"), _EVENTS.c.occurred_at.label("sold_at")
+    ).where(
+        _EVENTS.c.event_type == "lead_status_changed",
+        _EVENTS.c.lead_id.is_not(None),
+        cast(status["pipeline_id"].astext, BigInteger) == SALE_PIPELINE_ID,
+        cast(status["id"].astext, BigInteger) == WON,
+    )
+    from_snapshot = select(
+        _LEADS.c.lead_id.label("lead_id"), _LEADS.c.closed_at.label("sold_at")
+    ).where(
+        _LEADS.c.pipeline_id == SALE_PIPELINE_ID,
+        _LEADS.c.status_id == WON,
+        _LEADS.c.closed_at.is_not(None),
+    )
+    moments = union_all(from_events, from_snapshot).subquery("sale_moments")
+    return (
+        select(moments.c.lead_id, func.min(moments.c.sold_at).label("sold_at"))
+        .group_by(moments.c.lead_id)
+        .cte("sales")
+    )
+
+
+def _credits_cte():
+    """One visit per sold lead (ADR-0062 В§2): its last conducted visit not
+    later than the sale. Not bounded by the requested period."""
+    visits = _visit_rows().cte("all_visit_rows")
+    sales = _sales_cte()
+    ranked = (
+        select(
+            visits.c.task_id,
+            sales.c.sold_at,
+            func.row_number()
+            .over(
+                partition_by=visits.c.lead_id,
+                order_by=(visits.c.scheduled_at.desc(), visits.c.task_id.desc()),
+            )
+            .label("place"),
+        )
+        .select_from(visits.join(sales, sales.c.lead_id == visits.c.lead_id))
+        .where(_conducted(visits), visits.c.scheduled_at <= sales.c.sold_at)
+        .subquery("ranked_credits")
+    )
+    return select(ranked.c.task_id, ranked.c.sold_at).where(ranked.c.place == 1).cte("sale_credits")
+
+
+def _rows_cte(start: date, end: date, measurer: str | None):
+    visits = _visit_rows().where(_DAY.between(start, end))
     if measurer is not None:
-        statement = statement.where(_OUTCOMES.c.measurer_key == measurer)
-    return statement.cte("metric_rows")
+        visits = visits.where(_OUTCOMES.c.measurer_key == measurer)
+    period = visits.subquery("period_rows")
+    credits = _credits_cte()
+    return (
+        select(period, credits.c.sold_at)
+        .select_from(period.outerjoin(credits, credits.c.task_id == period.c.task_id))
+        .cte("metric_rows")
+    )
 
 
 _COMPANY = object()
@@ -217,6 +303,7 @@ _ZERO = {
         "without_result_not_completed",
         "no_outcome",
         "duplicates",
+        "sales",
     )
 }
 
@@ -233,6 +320,8 @@ def _block(counts: dict | None, days: int) -> dict:
         },
         "planned": {"upcoming": counts["upcoming"], "overdue": counts["overdue"]},
         "visit_days": counts["visit_days"],
+        "sales": counts["sales"],
+        "sales_percent": percent(counts["sales"], conducted),
         "per_visit_day": ratio(conducted, counts["visit_days"]),
         "per_week_avg": ratio(conducted * 7, days),
         "data_quality": {
@@ -332,8 +421,9 @@ def list_visits(
     kind: str | None,
     limit: int,
 ) -> list[dict]:
-    """Per-visit detail without alignment. Identifiers and outcomes only (§5)."""
+    """Per-visit detail without alignment. Identifiers and outcomes only (В§5)."""
     validate_range(date_from, date_to)
+    credits = _credits_cte()
     statement = (
         select(
             _OUTCOMES.c.task_id,
@@ -356,11 +446,14 @@ def list_visits(
             _OUTCOMES.c.is_duplicate,
             _LEADS.c.deal_number,
             _LEADS.c.structure_cost,
+            # ADR-0062: the visit the lead's sale is credited to.
+            credits.c.task_id.is_not(None).label("sale_credited"),
+            cast(credits.c.sold_at.op("AT TIME ZONE")(TIMEZONE_NAME), Date).label("sold_on"),
         )
         .select_from(
-            _OUTCOMES.join(_VISITS, _VISITS.c.task_id == _OUTCOMES.c.task_id).outerjoin(
-                _LEADS, _LEADS.c.lead_id == _OUTCOMES.c.lead_id
-            )
+            _OUTCOMES.join(_VISITS, _VISITS.c.task_id == _OUTCOMES.c.task_id)
+            .outerjoin(_LEADS, _LEADS.c.lead_id == _OUTCOMES.c.lead_id)
+            .outerjoin(credits, credits.c.task_id == _OUTCOMES.c.task_id)
         )
         .where(_VISITS.c.deleted_at.is_(None), _DAY.between(date_from, date_to), _KNOWN_MEASURER)
         .order_by(_DAY, _VISITS.c.scheduled_at, _OUTCOMES.c.task_id)

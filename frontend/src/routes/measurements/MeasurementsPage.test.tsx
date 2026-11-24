@@ -88,6 +88,29 @@ describe('MeasurementsPage — сводка', () => {
     expect(within(matt).getByTestId('per-week-avg')).toHaveTextContent(/^6\.77$/);
   });
 
+  it('shows sales credited to each card with the share from the API (ADR-0062)', async () => {
+    metricsMock.mockResolvedValue(monthMetrics());
+    renderPage();
+
+    const company = await screen.findByRole('article', { name: 'Компания' });
+    expect(within(company).getByTestId('sales')).toHaveTextContent(/^16$/);
+    expect(within(company).getByTestId('sales-percent')).toHaveTextContent('· 25% проведённых');
+    const nazar = screen.getByRole('article', { name: NAZAR });
+    expect(within(nazar).getByTestId('sales')).toHaveTextContent(/^9$/);
+    expect(within(nazar).getByTestId('sales-percent')).toHaveTextContent('26%');
+  });
+
+  it('shows zero sales without a share when nothing was conducted', async () => {
+    const data = monthMetrics();
+    data.total.company = block();
+    metricsMock.mockResolvedValue(data);
+    renderPage();
+
+    const company = await screen.findByRole('article', { name: 'Компания' });
+    expect(within(company).getByTestId('sales')).toHaveTextContent(/^0$/);
+    expect(within(company).queryByTestId('sales-percent')).not.toBeInTheDocument();
+  });
+
   it('shows decimal strings as they came, trailing zeros included', async () => {
     const data = monthMetrics();
     data.total.company = { ...data.total.company, per_visit_day: '3.10', per_week_avg: '2.50' };

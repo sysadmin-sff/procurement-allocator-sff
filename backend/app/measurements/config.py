@@ -3,7 +3,7 @@
 from datetime import datetime
 from urllib.parse import urlsplit
 
-from pydantic import SecretStr
+from pydantic import SecretStr, field_validator
 from pydantic_settings import SettingsConfigDict
 
 from app.measurements.flags import MeasurementsFlags
@@ -56,11 +56,20 @@ class MeasurementsSettings(MeasurementsFlags):
     pipeline_qualification_id: int = 8740374
     """Qualification: a visit whose lead leaves Measurements for it was not held (ADR-0053 §3)."""
     cutover_at: datetime = datetime(2026, 11, 9, tzinfo=ZONE)
-    legacy_meetings_until: datetime | None = None
-    """Unset while the transition period is open."""
+    legacy_meetings_until: datetime | None = datetime(2026, 11, 24, tzinfo=ZONE)
+    """Close of the transition period (ADR-0061): a measurer's «Встреча» due at
+    or after it is not a visit. None reopens the transition."""
     excluded_lead_ids: frozenset[int] = frozenset()
     poll_interval_seconds: int = 300
     """ADR-0051 §4: polling every 5 minutes."""
+
+    @field_validator("legacy_meetings_until", mode="before")
+    @classmethod
+    def _empty_reopens_transition(cls, value: object) -> object:
+        """`MEASUREMENTS_LEGACY_MEETINGS_UNTIL=` (empty) reopens the transition."""
+        if isinstance(value, str) and value.strip().lower() in ("", "none", "null"):
+            return None
+        return value
 
     @property
     def field_event_type(self) -> str:

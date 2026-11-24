@@ -429,6 +429,18 @@ dry-run → `--apply` → включение API.
 Откат: колонку можно оставить (код без неё её не читает) или
 `alembic downgrade a83d51c07e94`.
 
+### Закрытие переходного периода «Встреч» (ADR-0061)
+
+Только код, миграции и пересчёта исходов нет. Дата закрытия —
+значение по умолчанию (2026-11-24 00:00 NY); если в `backend/.env.measurements`
+задан `MEASUREMENTS_LEGACY_MEETINGS_UNTIL`, он её переопределяет. После выката
+`measurements-worker` новые «Встречи» со сроком с 24.11 не сохраняются сразу,
+уже сохранённые снимает ночная сверка (03:30 NY): счётчики
+`reclassified_retyped` и `post_cutover_meeting_ignored` потока `reconcile`.
+Откат без кода: `MEASUREMENTS_LEGACY_MEETINGS_UNTIL=` (пусто) в
+`backend/.env.measurements` и пересоздание воркера — следующая сверка
+восстановит строки (`reclassified_restored`).
+
 ### Выкат запасного исхода по воронке (ADR-0060)
 
 Меняются только код и правила исходов (`OUTCOME_RULE_VERSION` 2 → 3),

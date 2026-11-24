@@ -18,6 +18,8 @@ export function block(overrides: Partial<MeasurementsMetricsBlock> = {}): Measur
     conducted: { total: 0, primary: 0, additional: 0, legacy: 0 },
     planned: { upcoming: 0, overdue: 0 },
     visit_days: 0,
+    sales: 0,
+    sales_percent: null,
     per_visit_day: null,
     per_week_avg: null,
     data_quality: {
@@ -40,6 +42,8 @@ const companyTotal = block({
   conducted: { total: 64, primary: 41, additional: 6, legacy: 17 },
   planned: { upcoming: 5, overdue: 2 },
   visit_days: 15,
+  sales: 16,
+  sales_percent: 25,
   per_visit_day: '4.27',
   per_week_avg: '14.45',
   data_quality: {
@@ -53,6 +57,8 @@ const nazarTotal = measurer(NAZAR, {
   conducted: { total: 34, primary: 22, additional: 3, legacy: 9 },
   planned: { upcoming: 3, overdue: 1 },
   visit_days: 9,
+  sales: 9,
+  sales_percent: 26,
   per_visit_day: '3.78',
   per_week_avg: '7.68',
   data_quality: {
@@ -66,6 +72,8 @@ const mattTotal = measurer(MATT, {
   conducted: { total: 30, primary: 19, additional: 3, legacy: 8 },
   planned: { upcoming: 2, overdue: 1 },
   visit_days: 7,
+  sales: 7,
+  sales_percent: 23,
   per_visit_day: '4.29',
   per_week_avg: '6.77',
   data_quality: {

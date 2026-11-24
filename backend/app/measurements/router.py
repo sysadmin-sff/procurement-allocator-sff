@@ -132,6 +132,10 @@ class MeasurementsMetricsBlockOut(BaseModel):
     conducted: MeasurementsConductedOut
     planned: MeasurementsPlannedOut
     visit_days: int
+    sales: int
+    """Conducted visits a lead's sale is credited to (ADR-0062)."""
+    sales_percent: int | None
+    """sales / conducted.total in whole percent, ROUND_HALF_UP; null with no conducted visits."""
     per_visit_day: str | None
     """Decimal with 2 places, ROUND_HALF_UP; null when there are no visit days."""
     per_week_avg: str | None
@@ -198,6 +202,10 @@ class MeasurementsVisitRowOut(BaseModel):
     is_duplicate: bool
     deal_number: str | None
     structure_cost: float | None
+    sale_credited: bool
+    """The lead's sale is credited to this visit (ADR-0062)."""
+    sold_on: date | None
+    """New York day of the sale, only on the credited visit."""
 
 
 def _default_range(

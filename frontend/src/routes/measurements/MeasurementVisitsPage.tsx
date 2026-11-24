@@ -126,6 +126,16 @@ export function MeasurementVisitsPage() {
                                 {' '}· по воронке
                               </span>
                             )}
+                            {visit.sale_credited && (
+                              <span
+                                className={styles.saleMark}
+                                title={`Продажа: сделка передана в отдел монтажа${
+                                  visit.sold_on != null ? ` ${formatDate(visit.sold_on)}` : ''
+                                } — в зачёт замерщику`}
+                              >
+                                ✓ Продажа
+                              </span>
+                            )}
                           </td>
                           <td>{visit.is_completed ? 'Да' : 'Нет'}</td>
                           <td>{visit.is_duplicate ? 'Дубль' : '—'}</td>

@@ -31,6 +31,8 @@ function row(overrides: Partial<MeasurementsVisitRow> = {}): MeasurementsVisitRo
     is_duplicate: false,
     deal_number: 'SF-1042',
     structure_cost: 14620,
+    sale_credited: false,
+    sold_on: null,
     ...overrides,
   };
 }
@@ -141,6 +143,22 @@ describe('MeasurementVisitsPage', () => {
       'Замер до перехода на Site Visit Result — исход по воронке',
     );
     expect(within(siteVisit).queryByText(/по воронке/)).not.toBeInTheDocument();
+  });
+
+  it('marks the visit a sale is credited to, with the sale day', async () => {
+    visitsMock.mockResolvedValue([
+      row({ sale_credited: true, sold_on: '2026-11-06' }),
+      row({ task_id: 2, lead_id: 13572468 }),
+    ]);
+    renderPage('/measurements/visits?from=2026-11-01&to=2026-11-30');
+
+    const table = await screen.findByRole('table', { name: 'Замеры' });
+    const [credited, other] = within(table).getAllByRole('row').slice(1);
+    expect(within(credited).getByText('✓ Продажа')).toHaveAttribute(
+      'title',
+      'Продажа: сделка передана в отдел монтажа 06.11.2026 — в зачёт замерщику',
+    );
+    expect(within(other).queryByText(/Продажа/)).not.toBeInTheDocument();
   });
 
   it('calls a legacy visit «Встреча» (amo task type 2)', async () => {

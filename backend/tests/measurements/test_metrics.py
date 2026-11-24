@@ -30,7 +30,7 @@ from app.measurements.models import (
     MeasurementsVisit,
     MeasurementsVisitOutcome,
 )
-from app.measurements.outcomes import OUTCOME_RULE_VERSION
+from app.measurements.outcomes import OUTCOME_RULE_VERSION, WON
 from app.measurements.zone import ZONE
 
 NOW = datetime(2026, 11, 14, 12, tzinfo=ZONE)
@@ -450,6 +450,8 @@ def test_visits_detail_has_no_client_data(reference):
         "is_duplicate",
         "deal_number",  # an amo identifier, ADR-0053 change 2026-11-11
         "structure_cost",  # owner's decision, ADR-0053 change 2026-11-23
+        "sale_credited",  # sales credit, ADR-0062
+        "sold_on",
     }
     assert {row["lead_id"] for row in found}.isdisjoint({1009, L22, L26})
     assert [row["local_date"] for row in found] == sorted(row["local_date"] for row in found)
@@ -582,3 +584,93 @@ def test_site_visit_without_result_follows_the_funnel_fallback(db):
     assert (rows[2001]["outcome"], rows[2001]["outcome_by_funnel"]) == ("produced", True)
     assert (rows[2002]["outcome"], rows[2002]["outcome_by_funnel"]) == ("not_held", True)
     assert (rows[2003]["outcome"], rows[2003]["outcome_by_funnel"]) == ("completed", False)
+
+
+# --- sales credited to measurers (ADR-0062)
+
+
+def seed_sales(s: Seed) -> None:
+    # 3001: Nazar, then Matt's extra visit, sale on 06.11 -> Matt (the last
+    # conducted visit before the sale); Nazar's visit after the sale is not.
+    s.visit(3001, 1, "primary", N, ny(11, 3))
+    s.status(3001, ny(11, 3, 15), (SALES, 1))
+    s.visit(3001, 2, "additional", MATT, ny(11, 5))
+    s.status(3001, ny(11, 6), (SALES, WON), before=(SALES, 1))
+    s.visit(3001, 3, "additional", N, ny(11, 8))
+    # 3002: the only visit was not held -> the sale is credited to nobody.
+    s.visit(3002, 1, "primary", N, ny(11, 4))
+    s.status(3002, ny(11, 4, 15), (Q, Q_STAGE))
+    s.status(3002, ny(11, 7), (SALES, WON), before=(Q, Q_STAGE))
+    # 3003: 142 of Measurements is «produced», not a sale.
+    s.visit(3003, 1, "legacy", MATT, ny(11, 2))
+    s.status(3003, ny(11, 2, 15), (M, WON))
+    # 3004: no status event, the snapshot is in Sales/142 -> closed_at.
+    s.visit(3004, 1, "primary", N, ny(11, 3, 12))
+    # 3005: won 12.11, moved back, won again 14.11 -> the first move counts.
+    s.visit(3005, 1, "primary", N, ny(11, 10))
+    s.result(3005, ny(11, 10, 12), COMPLETED)
+    s.status(3005, ny(11, 12), (SALES, WON), before=(SALES, 1))
+    s.status(3005, ny(11, 13), (SALES, 1), before=(SALES, WON))
+    s.status(3005, ny(11, 14, 9), (SALES, WON), before=(SALES, 1))
+    # 3006: October visit, November sale -> counted in October.
+    s.visit(3006, 1, "legacy", MATT, ny(10, 20))
+    s.status(3006, ny(10, 20, 15), (SALES, 1))
+    s.status(3006, ny(11, 10), (SALES, WON), before=(SALES, 1))
+    s.db.flush()
+    s.db.execute(
+        update(MeasurementsLead)
+        .where(MeasurementsLead.lead_id == 3004)
+        .values(pipeline_id=SALES, status_id=WON, closed_at=ny(11, 9, 13))
+    )
+    s.recompute()
+
+
+@pytest.fixture
+def sales(db):
+    seed_sales(Seed(db))
+    return db
+
+
+def sales_and_share(block) -> tuple:
+    return block["sales"], block["sales_percent"], block["conducted"]["total"]
+
+
+def test_sales_are_credited_to_the_last_conducted_visit_before_the_sale(sales):
+    body = metrics(sales, date(2026, 10, 1), date(2026, 11, 14))
+    october, november = body["periods"]
+    nov = by_key(november)
+    assert sales_and_share(nov[NAZAR]) == (2, 50, 4)
+    assert sales_and_share(nov[MATT_KEY]) == (1, 50, 2)
+    assert sales_and_share(nov["company"]) == (3, 50, 6)
+    # The sale of 10.11 belongs to the October visit's period.
+    assert sales_and_share(by_key(october)[MATT_KEY]) == (1, 100, 1)
+    assert by_key(body["total"])["company"]["sales"] == 4
+
+
+def test_visits_list_marks_the_credited_visit_with_the_sale_day(sales):
+    rows = {
+        row["task_id"]: (row["sale_credited"], row["sold_on"])
+        for row in list_visits(
+            sales,
+            date_from=date(2026, 10, 1),
+            date_to=date(2026, 11, 14),
+            measurer=None,
+            kind=None,
+            limit=100,
+        )
+    }
+    assert rows == {
+        30011: (False, None),
+        30012: (True, date(2026, 11, 6)),
+        30013: (False, None),
+        30021: (False, None),
+        30031: (False, None),
+        30041: (True, date(2026, 11, 9)),
+        30051: (True, date(2026, 11, 12)),
+        30061: (True, date(2026, 11, 10)),
+    }
+
+
+def test_no_conducted_visits_gives_a_null_sales_percent(reference):
+    period = metrics(reference, date(2026, 12, 1), date(2026, 12, 31))["periods"][0]
+    assert (period["company"]["sales"], period["company"]["sales_percent"]) == (0, None)

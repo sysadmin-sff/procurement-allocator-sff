@@ -34,6 +34,10 @@ export interface MeasurementsMetricsBlock {
   conducted: { total: number; primary: number; additional: number; legacy: number };
   planned: { upcoming: number; overdue: number };
   visit_days: number;
+  /** Conducted visits a lead's sale is credited to (ADR-0062). */
+  sales: number;
+  /** sales / conducted.total in whole percent; null with no conducted visits. */
+  sales_percent: number | null;
   /** Decimal string, 2 places; null when there are no visit days. */
   per_visit_day: string | null;
   /** Decimal string, 2 places; null for a period with no elapsed days. */
@@ -94,6 +98,10 @@ export interface MeasurementsVisitRow {
   deal_number: string | null;
   /** amo field «Structure Cost $», USD (ADR-0053, change 2026-11-23); null when empty. */
   structure_cost: number | null;
+  /** The lead's sale is credited to this visit (ADR-0062). */
+  sale_credited: boolean;
+  /** New York day of the sale, only on the credited visit. */
+  sold_on: string | null;
 }
 
 export interface MeasurementsMetricsQuery {

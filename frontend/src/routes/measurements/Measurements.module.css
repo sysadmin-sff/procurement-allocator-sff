@@ -481,3 +481,31 @@
   font-size: var(--text-sm-alt2);
   white-space: nowrap;
 }
+
+/* Продажа в зачёт замерщику (ADR-0062). */
+.salesLine {
+  font-size: var(--text-sm-alt2);
+  color: var(--color-text-secondary);
+}
+
+.salesValue {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-success-alt);
+}
+
+.salesPercent {
+  color: var(--color-text-tertiary);
+}
+
+.saleMark {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-success-tint);
+  color: var(--color-success-alt);
+  font-size: var(--text-xs-alt);
+  font-weight: 600;
+  white-space: nowrap;
+}

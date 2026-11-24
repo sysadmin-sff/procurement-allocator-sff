@@ -124,6 +124,8 @@ def test_visits_detail(seeded):
         "is_duplicate": False,
         "deal_number": None,
         "structure_cost": None,
+        "sale_credited": False,
+        "sold_on": None,
     }
 
 

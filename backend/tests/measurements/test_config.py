@@ -39,8 +39,20 @@ def test_defaults_match_the_adr_table():
     assert settings.pipeline_measurements_id == 8740486
     assert settings.pipeline_sales_id == 8740490
     assert settings.cutover_at == datetime(2026, 11, 9, 5, tzinfo=timezone.utc)
-    assert settings.legacy_meetings_until is None
+    # Transition closed on 24.11.2026 00:00 New York (ADR-0061).
+    assert settings.legacy_meetings_until == datetime(2026, 11, 24, 5, tzinfo=timezone.utc)
     assert settings.excluded_lead_ids == frozenset()
+
+
+@pytest.mark.parametrize("value", ["", "null", "None"])
+def test_an_empty_value_reopens_the_transition(monkeypatch, value):
+    monkeypatch.setenv("MEASUREMENTS_LEGACY_MEETINGS_UNTIL", value)
+    assert _settings().legacy_meetings_until is None
+
+
+def test_the_close_can_be_moved_by_env(monkeypatch):
+    monkeypatch.setenv("MEASUREMENTS_LEGACY_MEETINGS_UNTIL", "2026-12-01T00:00:00-05:00")
+    assert _settings().legacy_meetings_until == datetime(2026, 12, 1, 5, tzinfo=timezone.utc)
 
 
 def test_backend_can_build_settings_without_worker_values():

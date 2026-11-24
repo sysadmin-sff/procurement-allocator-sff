@@ -1,4 +1,4 @@
-"""Which amo tasks count as visits (ADR-0051 §3, 2026-11-10 change).
+"""Which amo tasks count as visits (ADR-0051 §3, 2026-11-10 change; ADR-0061).
 
 `created_at` is amo's task creation time, stored as `amo_created_at`, so the
 result can be reproduced from our own data.
@@ -12,8 +12,11 @@ from app.measurements.config import MeasurementsSettings
 def _transition_covers(
     settings: MeasurementsSettings, complete_till: datetime, created_at: datetime
 ) -> bool:
+    """A meeting counts only if it is due before the close (ADR-0061): the
+    creation time no longer keeps a later meeting set before the close."""
+    del created_at  # kept in the signature: callers pass amo's task facts as is
     until = settings.legacy_meetings_until
-    return until is None or complete_till < until or created_at < until
+    return until is None or complete_till < until
 
 
 def classify_kind(
@@ -44,7 +47,7 @@ def is_post_cutover_meeting_ignored(
     complete_till: datetime,
     created_at: datetime,
 ) -> bool:
-    """A measurer's meeting created and scheduled after the transition closed."""
+    """A measurer's meeting due at or after the transition close (ADR-0061)."""
     return (
         task_type_id == settings.task_type_legacy
         and responsible_amo_user_id in settings.measurer_map
